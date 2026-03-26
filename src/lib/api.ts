@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { InventoryLot, Silo, MasterProfile, DailyRoastOrder, RoastTask } from '../App';
+import type { InventoryLot, Silo, MasterProfile, DailyRoastOrder } from '../App';
 
 // =======================
 // INVENTORY LOTS

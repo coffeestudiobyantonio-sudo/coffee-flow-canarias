@@ -369,7 +369,7 @@ function App() {
             />}
           {activeTab === 'silos' && <SiloManager silos={silos} setSilos={setSilos} inventoryLots={inventoryLots} setInventoryLots={setInventoryLots} roastOrders={roastOrders} />}
           {activeTab === 'mgmt' && <ManagementDashboard />}
-          {activeTab === 'roast' && <LiveRoastControl activeLot={activeLot} onRoastComplete={(data) => handleBatchComplete(activeLot?.batchWeight || 0)} />}
+          {activeTab === 'roast' && <LiveRoastControl activeLot={activeLot} onRoastComplete={() => handleBatchComplete(activeLot?.batchWeight || 0)} />}
           {activeTab === 'manual_roast' && <ManualRoastControl activeLot={activeLot} onBatchComplete={handleBatchComplete} allOrders={roastOrders} setAllOrders={setRoastOrders} silos={silos} setSilos={setSilos} />}
           {activeTab === 'inventory' && <Inventory inventoryLots={inventoryLots} setInventoryLots={setInventoryLots} silos={silos} />}
           {activeTab === 'lab' && <QualityLab activeLot={activeLot} onQualityValidated={handleQualityValidated} />}
