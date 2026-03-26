@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } from 'recharts';
-import { AlertTriangle, CheckCircle, Flame, Thermometer, Clock, Activity, Target, Droplets, ArrowDown, CheckCircle2, TestTube2, Wind, Plus, Minus } from 'lucide-react';
+import { AlertTriangle, Flame, Activity, Target, Droplets, ArrowDown, CheckCircle2, TestTube2, Wind, Plus, Minus } from 'lucide-react';
 import type { ActiveLot } from '../App';
 
 interface RoastData {
@@ -53,14 +53,6 @@ const LiveRoastControl: React.FC<LiveRoastControlProps> = ({ activeLot, onRoastC
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const parseTimeStrToSec = (str: string) => {
-    const parts = str.split(':');
-    if (parts.length === 2) {
-      return parseInt(parts[0]) * 60 + parseInt(parts[1]);
-    }
-    return 0;
   };
 
   // DTR Calculation

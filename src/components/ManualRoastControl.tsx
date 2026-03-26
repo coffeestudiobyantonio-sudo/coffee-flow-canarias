@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Square, TrendingUp, AlertCircle, Flame, Timer as TimerIcon, BarChart3, CheckCircle, QrCode, Wrench, History, ArchiveRestore, TestTube2, Info, Database, Lock, Target } from 'lucide-react';
+import { Play, Square, TrendingUp, AlertCircle, Flame, Timer as TimerIcon, BarChart3, CheckCircle, QrCode, Wrench, History, ArchiveRestore, TestTube2, Info, Lock, Target } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot, CartesianGrid } from 'recharts';
-import type { MasterProfile } from '../App';
 import { ROASTING_MACHINES } from '../App';
+import { updateSilo, updateTaskStatus, updateOrderStatus } from '../lib/api';
 
 interface RoastDataPoint {
   time: number; // seconds
@@ -36,11 +36,9 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   const [chargeTempInput, setChargeTempInput] = useState<string>("150");
   const [checklist, setChecklist] = useState({ silo: false, coffee: false, temp: false, discharge: false });
   const [selectedSiloId, setSelectedSiloId] = useState<number | null>(null);
-  const [inputMoisture, setInputMoisture] = useState<string>("");
   const [pendingMilestone, setPendingMilestone] = useState<{ type: RoastDataPoint['type'], time: number } | null>(null);
   const [showMilestoneModal, setShowMilestoneModal] = useState(false);
   const [consistencyAlert, setConsistencyAlert] = useState<string | null>(null);
-  const [showStaleAlert, setShowStaleAlert] = useState(false);
   const [showBlendingOverlay, setShowBlendingOverlay] = useState(false);
   const [finalMixWeight, setFinalMixWeight] = useState<string>("");
   const [showSamplePrompt, setShowSamplePrompt] = useState(false);
@@ -78,24 +76,12 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     if (activeLot?.assignedSilos && activeLot.assignedSilos.length > 0) {
        const sId = activeLot.assignedSilos[0];
        setSelectedSiloId(sId);
-       const silo = silos.find(s => s.id === sId);
-       if (silo && silo.moisture) setInputMoisture(silo.moisture.toString());
        
        // Phase 16: Auto-Validate all checks when coming from Operator Hub
        setChecklist({ silo: true, coffee: true, temp: true, discharge: true });
-
-       if (silo && silo.lastFillDate) {
-          const daysOld = (Date.now() - new Date(silo.lastFillDate).getTime()) / (1000 * 60 * 60 * 24);
-          if (daysOld > 5) {
-             setShowStaleAlert(true);
-          } else {
-             setShowStaleAlert(false);
-          }
-       }
     } else {
        setSelectedSiloId(null);
        setChecklist(prev => ({ ...prev, silo: false }));
-       setShowStaleAlert(false);
     }
   }, [activeLot]);
 
@@ -144,10 +130,14 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
       return;
     }
 
-    const selectedSilo = silos.find(s => s.id === selectedSiloId);
-    if (!selectedSilo || selectedSilo.currentKg < (activeLot?.batchWeight || ROASTING_MACHINES[1].maxCapacity)) {
-      alert(`⚠️ El Silo ${selectedSiloId} no tiene suficiente stock para esta tostada (${activeLot?.batchWeight || ROASTING_MACHINES[1].maxCapacity}kg requeridos).`);
-      return;
+    if (activeLot?.assignedSilos) {
+       for (let sId of activeLot.assignedSilos) {
+          const s = silos.find(s => s.id === sId);
+          if (!s || s.currentKg <= 0) {
+             alert(`⚠️ Error Crítico: El Silo asignado (${sId}) está vacío o no se encuentra.`);
+             return;
+          }
+       }
     }
     
     setIsRunning(true);
@@ -233,7 +223,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     return 'bg-gray-700';
   };
 
-  const handleFinalizeBatch = () => {
+  const handleFinalizeBatch = async () => {
     const weight = parseFloat(finalWeight);
     
     // Calculate BBP Cooldown based on machine inertia
@@ -241,9 +231,29 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     const cooldownSeconds = machine.bbpCooldownBase + (weight * machine.bbpCoefficient);
     setBbpTimeLeft(Math.round(cooldownSeconds));
 
-    // Deduct from Silo
-    if (selectedSiloId) {
-      setSilos(prev => prev.map(s => s.id === selectedSiloId ? { ...s, currentKg: Math.max(0, s.currentKg - (activeLot?.batchWeight || machine.maxCapacity)) } : s));
+    // Deduct from Assigned Silos proportionally
+    if (activeLot?.assignedSilos && activeLot?.origins) {
+       for (let i = 0; i < activeLot.origins.length; i++) {
+          const sId = activeLot.assignedSilos[i];
+          const originName = activeLot.origins[i];
+          
+          let percentage = 100;
+          if (activeLot.masterProfile?.blend) {
+             const b = activeLot.masterProfile.blend.find((b: any) => b.origin === originName);
+             if (b) percentage = b.percentage;
+          }
+          
+          const totalWeight = activeLot.targetWeightKg || machine.maxCapacity;
+          const deductionAmount = totalWeight * (percentage / 100);
+          
+          const targetSilo = silos.find(s => s.id === sId);
+          if (targetSilo) {
+             const newKg = Math.max(0, targetSilo.currentKg - deductionAmount);
+             // Phase 19: Push Silo deduction to Supabase
+             await updateSilo(sId, { currentKg: newKg });
+             setSilos(prev => prev.map(s => s.id === sId ? { ...s, currentKg: newKg } : s));
+          }
+       }
     }
 
     // Handle Post-Batch Logic
@@ -264,12 +274,24 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     }
   };
 
-  const handleConfirmMix = () => {
+  const handleConfirmMix = async () => {
     if (!finalMixWeight) {
       alert("Por favor, introduce el Peso Total de la Mezcla Final.");
       return;
     }
-    // Update parent order status to COMPLETED and tasks to ROASTED
+    
+    // Sync POST-BLEND components to Supabase
+    const parentOrder = allOrders.find(o => o.id === activeLot?.parentOrderId);
+    const blendTask = parentOrder?.tasks.find((t: any) => t.type === 'BLEND');
+    
+    if (blendTask) {
+       await updateTaskStatus(blendTask.id, 'ROASTED', { actualWeightKg: parseFloat(finalMixWeight), roastedAt: Date.now() });
+    }
+    if (activeLot?.parentOrderId) {
+       await updateOrderStatus(activeLot.parentOrderId, 'COMPLETED');
+    }
+
+    // Update parent order status to COMPLETED locally
     setAllOrders(prev => prev.map(o => o.id === activeLot?.parentOrderId ? { ...o, status: 'COMPLETED' } : o));
     setShowBlendingOverlay(false);
     setShowSamplePrompt(true);
@@ -295,21 +317,6 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   return (
     <div className="p-6 bg-[#0f1114] min-h-full text-white font-sans overflow-hidden">
       
-      {/* Visual Indicator Corner HUD (Phase 9) */}
-      {selectedSiloId && isRunning && (
-        <div className="absolute top-6 left-6 z-50 bg-[#14161a]/95 backdrop-blur-md border border-blue-500/30 rounded-2xl p-4 flex items-center shadow-2xl ring-1 ring-blue-500/20">
-           <Database className="w-8 h-8 text-blue-400 mr-4" />
-           <div className="flex flex-col">
-              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Silo {selectedSiloId} (Origen)</span>
-              <span className="text-xl font-black text-white">{silos.find(s => s.id === selectedSiloId)?.currentKg} <span className="text-[10px] text-gray-500">KG</span></span>
-           </div>
-           <div className="ml-6 pl-6 border-l border-white/10 flex flex-col items-end">
-              <span className="text-[10px] font-bold text-coffee-light uppercase">En Tueste</span>
-              <span className="text-xl font-black text-coffee-light">-{activeLot?.batchWeight || currentMachine.maxCapacity} KG</span>
-           </div>
-        </div>
-      )}
-
       {/* Artisan 2.0 Header */}
       <div className={`flex justify-between items-start mb-6 ${selectedSiloId && isRunning ? 'pt-14' : ''}`}>
         <div className="flex-1">
@@ -410,70 +417,19 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                     {activeLot ? `Check de Verificación: ${activeLot.id}` : 'Check de Preparación'}
                  </h2>
 
-                 {/* Silo Selection (Phase 11 Auto-Locking) */}
-                 <div className="bg-[#1e222b] p-4 rounded-2xl border border-dashboard-border mb-4 relative z-20">
-                   <label className="text-xs font-black text-blue-400 uppercase tracking-widest mb-2 flex items-center">
-                     <Database className="w-4 h-4 mr-2" /> 1. Silo Asignado (Hub)
-                   </label>
-                   
-                   {activeLot?.assignedSilos?.length ? (
-                      <div className="w-full bg-[#0f1114] border border-blue-500/50 rounded-xl p-3 flex justify-between items-center opacity-80 cursor-not-allowed mb-3 shadow-[0_0_15px_rgba(59,130,246,0.1)]">
-                         <span className="text-white font-black uppercase tracking-widest text-[11px]">
-                           SILO {activeLot.assignedSilos[0]} — {silos.find(s => s.id === activeLot.assignedSilos![0])?.origin || 'ORIGEN DESCONOCIDO'}
-                         </span>
-                         <Lock className="w-4 h-4 text-blue-500 line-through" />
-                      </div>
-                   ) : (
-                       <select
-                         value={selectedSiloId || ''}
-                         onChange={(e) => {
-                           const sId = parseInt(e.target.value);
-                           setSelectedSiloId(sId);
-                           const silo = silos.find(s => s.id === sId);
-                           if (silo && silo.moisture) setInputMoisture(silo.moisture.toString());
-                           setChecklist(prev => ({ ...prev, silo: true }));
-                         }}
-                         className="w-full bg-[#14161a] border border-dashboard-border rounded-xl p-3 text-white font-bold appearance-none outline-none focus:border-blue-500 mb-3"
-                       >
-                         <option value="" disabled>Selecciona Silo libre...</option>
-                         {silos.filter(s => s.currentKg > 0).map(s => (
-                           <option key={s.id} value={s.id}>Silo {s.id} - {s.origin} ({s.currentKg} kg)</option>
-                         ))}
-                       </select>
-                   )}
-                   
-                   <div className="flex flex-col space-y-3">
-                     <div className="flex items-center justify-between">
-                       <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block">Humedad Entrada (%)</label>
-                       <input 
-                         disabled={!!activeLot?.assignedSilos?.length} 
-                         type="number" step="0.1" value={inputMoisture} 
-                         onChange={e => setInputMoisture(e.target.value)} 
-                         className="w-24 bg-[#14161a] rounded-lg p-2 text-white font-mono text-sm border border-dashboard-border focus:border-coffee-light outline-none disabled:opacity-50 text-right" placeholder="11.0" 
-                       />
-                     </div>
-                     {showStaleAlert && (
-                       <div className="bg-orange-500/10 border border-orange-500/30 p-3 rounded-lg text-[10px] text-orange-400 uppercase font-black tracking-widest flex items-start shadow-inner">
-                         <AlertCircle className="w-4 h-4 mr-2 shrink-0 mt-0.5" /> ATENCIÓN: CAFÉ EXTIENDE 5 DÍAS EN TOLVA SUPERIOR. VERIFIQUE MERMA DE HUMEDAD ANTES DEL TUESTE LIMITANDO TEMPERATURA INICIAL.
-                       </div>
-                     )}
-                   </div>
-                 </div>
-
                  <div className="space-y-4">
                     <CheckItem 
-                      label={`2. Café verde (${activeLot?.batchWeight || '---'} kg) descargado`} 
+                      label={`1. Café verde (${activeLot?.batchWeight || '---'} kg) descargado`} 
                       checked={checklist.coffee} 
                       onChange={() => setChecklist(prev => ({ ...prev, coffee: !prev.coffee }))} 
                     />
                     <CheckItem 
-                      label={`Máquina en ${chargeTempInput}°C (Termostato OK)`} 
+                      label={`2. Máquina en ${chargeTempInput}°C (Termostato OK)`} 
                       checked={checklist.temp} 
                       onChange={() => setChecklist(prev => ({ ...prev, temp: !prev.temp }))} 
                     />
                     <CheckItem 
-                      label="4. Destino de descarga despejado" 
-                      checked={checklist.discharge} 
+                      label={"3. Compuerta de descarga completamente verificada y asegurada"}                    checked={checklist.discharge} 
                       onChange={() => setChecklist(prev => ({ ...prev, discharge: !prev.discharge }))} 
                     />
                  </div>
@@ -494,13 +450,13 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
 
                  <button 
                    onClick={handleStartRoast}
-                   disabled={!checklist.silo || !checklist.coffee || !checklist.temp || !checklist.discharge}
+                   disabled={!checklist.coffee || !checklist.temp || !checklist.discharge}
                    className={`group relative w-full h-32 rounded-[32px] font-black text-4xl uppercase tracking-tighter transition-all shadow-2xl flex items-center justify-center border-b-8 
-                     ${(!checklist.silo || !checklist.coffee || !checklist.temp || !checklist.discharge) 
+                     ${(!checklist.coffee || !checklist.temp || !checklist.discharge) 
                        ? 'bg-gray-800 text-gray-600 border-gray-900 cursor-not-allowed opacity-50' 
                        : 'bg-green-600 hover:bg-green-500 text-white border-green-800 hover:scale-105 active:scale-95 active:border-b-0'}`}
                  >
-                    <Play className={`w-10 h-10 mr-4 ${(!checklist.silo || !checklist.coffee || !checklist.temp || !checklist.discharge) ? '' : 'fill-current'}`} /> 
+                    <Play className={`w-10 h-10 mr-4 ${(!checklist.coffee || !checklist.temp || !checklist.discharge) ? '' : 'fill-current'}`} /> 
                     START ROAST
                  </button>
               </div>
@@ -980,7 +936,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                <button 
                  onClick={() => {
                    setShowSamplePrompt(false);
-                   onBatchComplete(parseFloat(finalMixWeight));
+                   onBatchComplete(parseFloat(finalWeight));
                  }}
                  className="w-full bg-blue-600 hover:bg-blue-500 text-white py-6 rounded-3xl font-black text-xl uppercase tracking-widest transition-all active:scale-95"
                >

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Target, Play, Plus, Trash2, Box, Coffee, AlertTriangle, Calculator, Activity } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import type { MasterProfile, InventoryLot } from '../App';
+import { createMasterProfile } from '../lib/api';
 
 interface MasterProfilesProps {
   onLaunchProduction: (profile: MasterProfile) => void;
@@ -23,8 +24,8 @@ const getLotColor = (origin: string, index: number) => PIE_COLORS[origin] || ['#
 const BATCH_SIZE_KG = 120; // Standard roaster capacity for calculations
 
 const MasterProfiles: React.FC<MasterProfilesProps> = ({ onLaunchProduction, inventoryLots, masterProfiles, setMasterProfiles }) => {
-  // SSOT Filter base
-  const baseValidLots = inventoryLots.filter(l => l.status === 'VALIDATED' && l.stock_kg > 0);
+  // SSOT Filter base: allow validated lots regardless of current raw stock kg
+  const baseValidLots = inventoryLots.filter(l => l.status === 'VALIDATED');
 
   const [isCreating, setIsCreating] = useState(false);
   const [profileToDelete, setProfileToDelete] = useState<number | null>(null);
@@ -70,8 +71,10 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ onLaunchProduction, inv
   const insufficientStockOrigins = newProfile.blend.filter(b => {
     const lot = availableLots.find(l => l.origin === b.origin);
     if (!lot) return true;
-    const requiredKg = (b.percentage / 100) * BATCH_SIZE_KG;
-    return requiredKg > lot.stock_kg;
+    
+    // Phase 19 fix: Don't block recipe creation based on stock, as it may be in Silos.
+    // Real physical constraints are handled by the Hub.
+    return false;
   });
 
   const estimatedCostPerKg = newProfile.blend.reduce((sum, b) => {
@@ -86,9 +89,16 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ onLaunchProduction, inv
     return <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" title="Últimos Sacos"></span>;
   };
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newProfile.name.trim() !== '' && isBlendValid) {
+      
+      const isSuccess = await createMasterProfile(newProfile);
+      if (!isSuccess) {
+        alert("Error de red: No se pudo guardar el nuevo perfil en Supabase.");
+        return;
+      }
+
       setMasterProfiles([newProfile, ...masterProfiles]);
       setIsCreating(false);
       setNewProfile({
@@ -247,7 +257,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ onLaunchProduction, inv
                    <div className="space-y-4 mb-6 relative z-20">
                      {availableLots.length === 0 && (
                         <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-bold flex items-center">
-                           <AlertTriangle className="w-5 h-5 mr-3" /> No hay stock validado en Inventario.
+                           <AlertTriangle className="w-5 h-5 mr-3" /> No hay datos de origen validados en el sistema.
                         </div>
                      )}
 

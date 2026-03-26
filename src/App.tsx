@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import LiveRoastControl from './components/LiveRoastControl';
 import Inventory from './components/Inventory';
 import QualityLab from './components/QualityLab';
@@ -9,6 +9,7 @@ import DailyRoastOrders from './components/DailyRoastOrders';
 import ManualRoastControl from './components/ManualRoastControl';
 import SiloManager from './components/SiloManager';
 import { Database, Activity, LayoutDashboard, Target, Truck, TestTube2, Flame, CheckCircle, Lock, FileSearch, ClipboardList, Timer } from 'lucide-react';
+import { fetchSilos, fetchInventoryLots, fetchMasterProfiles, fetchDailyOrders, updateTaskStatus } from './lib/api';
 
 export interface MachineSpecificProfile {
   targetAgtron: number;
@@ -131,24 +132,41 @@ function App() {
   const [activeLot, setActiveLot] = useState<ActiveLot | null>(null);
 
   const [masterProfiles, setMasterProfiles] = useState<MasterProfile[]>([]);
-
   const [roastOrders, setRoastOrders] = useState<DailyRoastOrder[]>([]);
-
   const [inventoryLots, setInventoryLots] = useState<InventoryLot[]>([]);
+  const [silos, setSilos] = useState<Silo[]>([]);
+  const [isDbLoaded, setIsDbLoaded] = useState(false);
 
-  // Phase 9: Global Silo State
-  const [silos, setSilos] = useState<Silo[]>([
-    { id: 1, lotId: null, origin: null, moisture: null, currentKg: 0, maxKg: 4000, lastFillDate: null },
-    { id: 2, lotId: null, origin: null, moisture: null, currentKg: 0, maxKg: 4000, lastFillDate: null },
-    { id: 3, lotId: null, origin: null, moisture: null, currentKg: 0, maxKg: 4000, lastFillDate: null },
-    { id: 4, lotId: null, origin: null, moisture: null, currentKg: 0, maxKg: 4000, lastFillDate: null },
-    { id: 5, lotId: null, origin: null, moisture: null, currentKg: 0, maxKg: 4000, lastFillDate: null },
-    { id: 6, lotId: null, origin: null, moisture: null, currentKg: 0, maxKg: 4000, lastFillDate: null },
-    { id: 7, lotId: null, origin: null, moisture: null, currentKg: 0, maxKg: 4000, lastFillDate: null },
-    { id: 8, lotId: null, origin: null, moisture: null, currentKg: 0, maxKg: 4000, lastFillDate: null },
-    { id: 9, lotId: null, origin: null, moisture: null, currentKg: 0, maxKg: 4000, lastFillDate: null },
-    { id: 10, lotId: null, origin: null, moisture: null, currentKg: 0, maxKg: 4000, lastFillDate: null }
-  ]);
+  // Phase 18: Hydrate Initial State from Supabase
+  useEffect(() => {
+    const loadData = async () => {
+      console.log("Fetching DB State from Supabase...");
+      const [dbSilos, dbLots, dbProfiles, dbOrders] = await Promise.all([
+        fetchSilos(),
+        fetchInventoryLots(),
+        fetchMasterProfiles(),
+        fetchDailyOrders()
+      ]);
+      
+      setSilos(dbSilos);
+      setInventoryLots(dbLots);
+      setMasterProfiles(dbProfiles);
+      setRoastOrders(dbOrders);
+      setIsDbLoaded(true);
+    };
+    loadData();
+  }, []);
+
+  if (!isDbLoaded) {
+    return (
+      <div className="min-h-screen bg-[#0a0c10] flex items-center justify-center text-white">
+        <div className="flex flex-col items-center animate-pulse">
+           <Database className="w-12 h-12 text-blue-500 mb-4 animate-bounce" />
+           <p className="font-bold tracking-widest uppercase text-sm text-gray-400">Sincronizando con Supabase...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleLaunchProduction = (profile: MasterProfile) => {
     // Redirigir directamente al Hub de Planificación
@@ -180,12 +198,25 @@ function App() {
     setActiveTab('manual_roast');
   };
 
-  const handleBatchComplete = (actualWeight: number) => {
+  const handleBatchComplete = async (actualWeight: number) => {
     if (activeLot && activeLot.parentOrderId) {
+      const roastedTimestamp = Date.now();
+      
+      // Phase 19: Push DROP event to Supabase Cloud
+      const isSuccess = await updateTaskStatus(activeLot.id, 'ROASTED', { 
+        actualWeightKg: actualWeight, 
+        roastedAt: roastedTimestamp 
+      });
+
+      if (!isSuccess) {
+        alert("Error de red: No se pudo registrar el tueste en Supabase.");
+        return;
+      }
+
       setRoastOrders(prev => prev.map(order => {
         if (order.id === activeLot.parentOrderId) {
           const updatedTasks = order.tasks.map(t => 
-            t.id === activeLot.id ? { ...t, status: 'ROASTED' as const, actualWeightKg: actualWeight, roastedAt: Date.now() } : t
+            t.id === activeLot.id ? { ...t, status: 'ROASTED' as const, actualWeightKg: actualWeight, roastedAt: roastedTimestamp } : t
           );
           return { ...order, tasks: updatedTasks };
         }

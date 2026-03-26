@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import type { MasterProfile, InventoryLot, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
-import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, Thermometer, Box, KeyRound, Wrench, CheckCircle, Zap, Scale, Info, AlertTriangle, Lock } from 'lucide-react';
+import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, Scale, Info, AlertTriangle, Lock } from 'lucide-react';
 import { ROASTING_MACHINES } from '../App';
+import { createDailyOrder } from '../lib/api';
 
 interface DailyRoastOrdersProps {
    masterProfiles: MasterProfile[];
@@ -13,7 +14,7 @@ interface DailyRoastOrdersProps {
    onLaunchManualRoast: (task: RoastTask) => void;
 }
 
-const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, inventoryLots, setInventoryLots, roastOrders, setRoastOrders, silos, onLaunchManualRoast }) => {
+const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roastOrders, setRoastOrders, silos, onLaunchManualRoast }) => {
    const [viewMode, setViewMode] = useState<'MANAGER' | 'OPERATOR'>('MANAGER');
 
    // Manager Form State
@@ -24,12 +25,9 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, inv
    const [selectedMachineId, setSelectedMachineId] = useState<string>('TOST-B');
    const [fragmentationMode, setFragmentationMode] = useState<'BALANCED' | 'MAX_CAPACITY'>('BALANCED');
    // Operator Form State
-   const [roastCycles, setRoastCycles] = useState(0);
-   const [activeTaskQR, setActiveTaskQR] = useState<string | null>(null);
-   const [validatedScales, setValidatedScales] = useState<string[]>([]);
-
+   
    // Lógica D: Energy Efficiency Thermic Routing (MDD Specialized)
-   const [thermalSortEnabled, setThermalSortEnabled] = useState(false);
+   const thermalSortEnabled = false;
 
    const pendingTasks = roastOrders
       .flatMap(o => o.tasks.map(t => ({ ...t, parentOrderPriority: o.priority, parentProfile: o.profileName, parentBusinessUnit: (o.tasks[0]?.masterProfile as any)?.businessUnit })))
@@ -50,11 +48,10 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, inv
 
    const selectedProfile = masterProfiles.find(p => p.name === selectedProfileName);
 
-   // Shrinkage Estimation (Mock 15% moisture loss)
    const SHRINKAGE_PCT = 0.15;
    const estimatedYield = targetKg * (1 - SHRINKAGE_PCT);
 
-   const handleCreateOrder = (e: React.FormEvent) => {
+   const handleCreateOrder = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!selectedProfile) {
          alert("Selecciona un perfil de tueste válido.");
@@ -177,8 +174,12 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, inv
          category: orderCategory
       };
 
-      // Note: In a real system, we'd tag the order with the machineId here
-      // For this prototype, the machine is selected at fragmentation time.
+      // Phase 18: Push to Supabase
+      const isSuccess = await createDailyOrder(newOrder);
+      if (!isSuccess) {
+         alert("Error de sincronización con Supabase al intentar crear la Orden de Tueste.");
+         return;
+      }
 
       setRoastOrders([...roastOrders, newOrder]);
 
@@ -439,8 +440,8 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, inv
                            </div>
                         ) : (
                            <div className="space-y-4">
-                              {roastOrders.map((order) => (
-                                 <div key={order.id} className="bg-dashboard-panel border border-dashboard-border rounded-2xl p-6 shadow-xl relative overflow-hidden transition-all hover:border-coffee-light/30">
+                              {roastOrders.map((order, oIdx) => (
+                                 <div key={`${order.id}-${oIdx}`} className="bg-dashboard-panel border border-dashboard-border rounded-2xl p-6 shadow-xl relative overflow-hidden transition-all hover:border-coffee-light/30">
                                     {order.priority === 'URGENTE' && <div className="absolute top-0 right-0 w-16 h-16 bg-red-500/10 rounded-full blur-2xl pointer-events-none"></div>}
 
                                     <div className="flex justify-between items-start mb-4">
@@ -492,7 +493,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, inv
                                                 : '⚠️ SIN ASIGNACIÓN DE SILO';
 
                                              return (
-                                                <div key={task.id} className="flex flex-col bg-[#1e222b] px-4 py-2 rounded-lg border border-dashboard-border/50 text-sm overflow-hidden">
+                                                <div key={`${task.id}-${idx}`} className="flex flex-col bg-[#1e222b] px-4 py-2 rounded-lg border border-dashboard-border/50 text-sm overflow-hidden">
                                                    <div className="flex items-center justify-between">
                                                       <div className="flex items-center space-x-3 w-1/2">
                                                          <div className="w-6 h-6 rounded-full bg-dashboard-bg flex items-center justify-center text-[10px] font-black text-gray-500 border border-dashboard-border">
@@ -500,7 +501,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, inv
                                                          </div>
                                                          <div className="flex flex-col">
                                                             <span className="font-bold text-gray-300 truncate">
-                                                               {task.type === 'ROAST' ? `Tostada ${task.batchIndex} de ${task.totalBatches} para MDD` : task.origins.join(' + ')}
+                                                               {task.type === 'ROAST' ? `Tostada ${task.batchIndex} de ${task.totalBatches}` : task.origins.join(' + ')}
                                                             </span>
                                                             {task.type === 'ROAST' && (
                                                                <span className={`text-[10px] font-bold tracking-widest uppercase mt-0.5 ${matchingSilos.length > 0 ? 'text-blue-400' : 'text-orange-500 animate-pulse'}`}>
@@ -561,12 +562,15 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, inv
 
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                      {pendingTasks.map((task, idx) => {
-                        const taskOrigin = task.origins[0];
-                        const assignedSilo = silos.find(s => s.origin === taskOrigin && s.currentKg > 0);
                         const machine = ROASTING_MACHINES.find(m => m.id === task.machineId);
+                        
+                        // Validate that all required silos are assigned and have coffee
+                        const isReadyToRoast = task.origins && task.assignedSilos && 
+                                               task.assignedSilos.length === task.origins.length && 
+                                               task.assignedSilos.every((sId: React.Key | null | undefined) => sId !== null && sId !== undefined);
 
                         return (
-                           <div key={task.id} className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col group hover:border-blue-500/50 transition-all">
+                           <div key={`${task.id}-${idx}`} className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col group hover:border-blue-500/50 transition-all">
                               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                               
                               <div className="flex justify-between items-start mb-6">
@@ -579,10 +583,10 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, inv
                               </div>
 
                               <div className="mb-6 flex-1">
-                                 <h3 className="text-xl font-black text-white leading-tight mb-2 truncate" title={taskOrigin}>{taskOrigin}</h3>
+                                 <h3 className="text-xl font-black text-white leading-tight mb-2 truncate" title={task.parentProfile}>{task.parentProfile}</h3>
                                  <div className="flex items-center space-x-2 text-xs text-coffee-light font-bold uppercase tracking-widest">
-                                    <Target className="w-4 h-4" />
-                                    <span>{task.parentProfile}</span>
+                                    <Target className="w-4 h-4 shrink-0" />
+                                    <span className="truncate">{task.origins ? task.origins.join(' + ') : 'Blend'}</span>
                                  </div>
                               </div>
 
@@ -593,30 +597,38 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, inv
                                  </div>
                                  <div className="bg-[#14161a] p-3 rounded-xl border border-dashboard-border text-center">
                                     <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">CARGA</span>
-                                    <span className="text-sm font-black text-coffee-light">{task.targetWeightKg.toFixed(1)}kg</span>
+                                    <span className="text-sm font-black text-coffee-light">{(task.targetWeightKg || 0).toFixed(1)}kg</span>
                                  </div>
                               </div>
 
-                              <div className="bg-blue-600/10 border border-blue-500/30 rounded-2xl p-4 mb-6 flex items-center justify-between">
-                                 <div className="flex items-center space-x-3">
-                                    <div className="bg-blue-600/20 p-2 rounded-lg">
-                                       <Database className="w-4 h-4 text-blue-400" />
-                                    </div>
-                                    <div className="flex flex-col">
-                                       <span className="text-[9px] font-black text-gray-500 uppercase tracking-tighter">Silo de Origen</span>
-                                       <span className="text-xs font-black text-white">
-                                          {assignedSilo ? `Silo ${assignedSilo.id} (${assignedSilo.currentKg}kg)` : 'SIN ASIGNACIÓN'}
-                                       </span>
-                                    </div>
-                                 </div>
-                                 {assignedSilo && <CheckCircle className="w-5 h-5 text-green-500" />}
+                              <div className="bg-blue-600/10 border border-blue-500/30 rounded-2xl p-4 mb-6 flex flex-col space-y-3">
+                                 <span className="text-[9px] font-black text-gray-500 uppercase tracking-tighter border-b border-blue-500/20 pb-1">Suministro de Silos</span>
+                                 
+                                 {task.origins?.map((org: string, orgIdx: number) => {
+                                    const sId = task.assignedSilos ? task.assignedSilos[orgIdx] : null;
+                                    const assignedSiloObj = silos.find(s => s.id === sId);
+                                    return (
+                                       <div key={orgIdx} className="flex items-center justify-between">
+                                          <div className="flex items-center space-x-3">
+                                             <Database className="w-4 h-4 text-blue-400" />
+                                             <div className="flex flex-col">
+                                                <span className="text-[10px] text-gray-400 truncate w-24 md:w-32" title={org}>{org}</span>
+                                                <span className="text-xs font-black text-white">
+                                                   {assignedSiloObj ? `Silo ${assignedSiloObj.id} (${assignedSiloObj.currentKg}kg)` : 'SIN ASIGNAR'}
+                                                </span>
+                                             </div>
+                                          </div>
+                                          {assignedSiloObj ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertTriangle className="w-4 h-4 text-orange-500" />}
+                                       </div>
+                                    )
+                                 })}
                               </div>
 
                               <button
                                  onClick={() => onLaunchManualRoast(task)}
-                                 disabled={!assignedSilo}
+                                 disabled={!isReadyToRoast}
                                  className={`w-full py-4 rounded-xl font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center space-x-3 
-                                    ${assignedSilo ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.3)] active:scale-95' : 'bg-[#14161a] border border-dashboard-border text-gray-600 cursor-not-allowed'}`}
+                                    ${isReadyToRoast ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.3)] active:scale-95' : 'bg-[#14161a] border border-dashboard-border text-gray-600 cursor-not-allowed'}`}
                               >
                                  <Cpu className="w-5 h-5" />
                                  <span>INICIAR TUESTE</span>

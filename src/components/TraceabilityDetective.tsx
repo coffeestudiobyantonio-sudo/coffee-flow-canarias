@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Download, FileSignature, Thermometer, Droplets, Target, Truck, Flame, Coffee, PackageCheck, AlertTriangle, ChevronRight, CheckCircle2, QrCode } from 'lucide-react';
+import { Search, Download, FileSignature, Droplets, Truck, Flame, Coffee, PackageCheck, AlertTriangle, CheckCircle2, QrCode } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts';
 
 import type { ActiveLot } from '../App';
@@ -305,7 +305,6 @@ const TraceabilityDetective: React.FC<TraceabilityProps> = ({ activeLot }) => {
                 statusColor="text-blue-400"
                 borderColor="border-dashboard-border"
                 bgColor="bg-dashboard-panel"
-                isLast={true}
               >
                 <div className="bg-[#14161a] p-5 rounded-xl border border-dashboard-border mt-4 flex flex-col sm:flex-row justify-between items-center">
                    <div className="flex items-center text-gray-300 mb-4 sm:mb-0">
@@ -337,7 +336,7 @@ const TraceabilityDetective: React.FC<TraceabilityProps> = ({ activeLot }) => {
 };
 
 // Subcomponent for Timeline block
-const TimelineCard = ({ icon, title, status, statusColor, borderColor, bgColor, isLast = false, children }: { icon: React.ReactNode, title: string, status: string, statusColor: string, borderColor: string, bgColor: string, isLast?: boolean, children: React.ReactNode }) => (
+const TimelineCard = ({ icon, title, status, statusColor, borderColor, bgColor, children }: { icon: React.ReactNode, title: string, status: string, statusColor: string, borderColor: string, bgColor: string, children: React.ReactNode }) => (
   <div className="relative">
     {/* Milestone Icon */}
     <div className={`absolute -left-16 top-0 w-12 h-12 rounded-full border-4 border-[#0a0a0b] flex items-center justify-center shadow-lg block mx-auto z-10 ${bgColor} text-white`}>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Truck, CheckCircle, Database, Trash2, AlertTriangle, ShieldAlert, ArchiveRestore, History, Lock, Activity } from 'lucide-react';
 
 import type { InventoryLot, Silo } from '../App';
+import { createInventoryLot, updateInventoryLot } from '../lib/api';
 
 interface AuditLog {
   id: string;
@@ -49,7 +50,13 @@ const Inventory: React.FC<InventoryProps> = ({ inventoryLots, setInventoryLots, 
     if (!lotToDelete) return;
     
     // Soft Delete (Mark as INACTIVE + set timestamp)
-    setInventoryLots(inventoryLots.map(l => l.id === lotToDelete.id ? { ...l, status: 'INACTIVE', deletedAt: Date.now() } : l));
+    const newStatus = 'INACTIVE';
+    const deletedTime = Date.now();
+    
+    // Phase 19: Supabase Sync
+    updateInventoryLot(lotToDelete.id, { status: newStatus, deletedAt: deletedTime });
+
+    setInventoryLots(inventoryLots.map(l => l.id === lotToDelete.id ? { ...l, status: newStatus, deletedAt: deletedTime } : l));
     setLotToDelete(null);
 
     // Notify Data Weaver
@@ -71,6 +78,7 @@ const Inventory: React.FC<InventoryProps> = ({ inventoryLots, setInventoryLots, 
   };
 
   const handleRestore = (id: string) => {
+    updateInventoryLot(id, { status: 'VALIDATED', deletedAt: null as any });
     setInventoryLots(inventoryLots.map(l => l.id === id ? { ...l, status: 'VALIDATED', deletedAt: undefined } : l));
   };
 
@@ -87,7 +95,7 @@ const Inventory: React.FC<InventoryProps> = ({ inventoryLots, setInventoryLots, 
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newLot: InventoryLot = {
       id: formData.shippingMark.trim() || `LOTE-${String(inventoryLots.length + 1).padStart(3, '0')}`,
@@ -103,6 +111,13 @@ const Inventory: React.FC<InventoryProps> = ({ inventoryLots, setInventoryLots, 
       price_per_kg: 5.0, 
       exclusiveFor: formData.exclusiveFor
     };
+    
+    const ok = await createInventoryLot(newLot);
+    if (!ok) {
+        alert("Error al registrar el lote en la base de datos.");
+        return;
+    }
+
     setInventoryLots([newLot, ...inventoryLots]);
     setFormData({ shippingMark: '', arrivalNotes: '', origin: '', moisture: '', density: '', totalKg: '', arrivalDate: new Date().toISOString().split('T')[0], exclusiveFor: 'NONE' });
   };

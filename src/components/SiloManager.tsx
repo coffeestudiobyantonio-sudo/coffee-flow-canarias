@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Database, AlertTriangle, ArrowRight, Truck, Calendar, AlertCircle, Timer } from 'lucide-react';
 import type { Silo, InventoryLot, DailyRoastOrder } from '../App';
+import { updateSilo, updateInventoryLot } from '../lib/api';
 
 interface SiloManagerProps {
   silos: Silo[];
@@ -46,9 +47,27 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos, inventoryLot
 
   const canTransfer = selectedLot && targetSilo && transferKg > 0 && !originMismatch && !overflow && !insufficientStock;
 
-  const handleTransfer = (e: React.FormEvent) => {
+  const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canTransfer) return;
+
+    // Persist to Supabase Phase 18
+    const newSiloKg = targetSilo.currentKg + transferKg;
+    const newLotKg = selectedLot.stock_kg - transferKg;
+
+    const okSilo = await updateSilo(selectedSiloId, { 
+      lotId: selectedLot.id, 
+      origin: selectedLot.origin, 
+      moisture: selectedLot.moisture || null, 
+      currentKg: newSiloKg 
+    });
+    
+    const okLot = await updateInventoryLot(selectedLot.id, { stock_kg: newLotKg });
+
+    if (!okSilo || !okLot) {
+      alert("Error al sincronizar con la base de datos.");
+      return;
+    }
 
     setSilos(prev => prev.map(s => {
       if (s.id === selectedSiloId) {
@@ -57,7 +76,7 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos, inventoryLot
           lotId: selectedLot.id,
           origin: selectedLot.origin,
           moisture: selectedLot.moisture,
-          currentKg: s.currentKg + transferKg
+          currentKg: newSiloKg
         };
       }
       return s;
