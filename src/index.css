@@ -1,0 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-dashboard-bg text-gray-100 font-sans antialiased min-h-screen;
+    margin: 0;
+  }
+}
+
+/* Scrollbar customization for a more industrial feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-dashboard-bg;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-dashboard-border rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-500;
+}
