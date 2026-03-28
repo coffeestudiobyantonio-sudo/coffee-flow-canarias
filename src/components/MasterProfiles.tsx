@@ -30,7 +30,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
   const [profileToDelete, setProfileToDelete] = useState<number | null>(null);
   const [newProfile, setNewProfile] = useState<MasterProfile>({
     name: '',
-    roastedType: 'Medio',
+    roastedType: 'NATURAL',
     businessUnit: 'PROPIA',
     roastStrategy: 'PRE_BLEND',
     agtron: 55.0,
@@ -101,7 +101,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
       setMasterProfiles([newProfile, ...masterProfiles]);
       setIsCreating(false);
       setNewProfile({
-        name: '', roastedType: 'Medio', agtron: 55.0, businessUnit: 'PROPIA', roastStrategy: 'PRE_BLEND',
+        name: '', roastedType: 'NATURAL', agtron: 55.0, businessUnit: 'PROPIA', roastStrategy: 'PRE_BLEND',
         blend: [],
         sensory: { fragrancia: 7.0, aroma: 7.0, sabor: 7.0, cuerpo: 7.0 }
       });
@@ -191,16 +191,22 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
                        <div className="grid grid-cols-2 gap-4">
                          <div>
                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Tueste</label>
-                           <select 
-                             className="w-full bg-[#1e222b] border border-dashboard-border rounded-xl p-3 text-white focus:outline-none focus:border-coffee-light transition-colors appearance-none"
-                             value={newProfile.roastedType}
-                             onChange={e => setNewProfile({...newProfile, roastedType: e.target.value})}
-                           >
-                             <option value="Claro">Claro</option>
-                             <option value="Medio">Medio</option>
-                             <option value="Medio-Oscuro">Medio-Oscuro</option>
-                             <option value="Oscuro">Oscuro</option>
-                           </select>
+                           <div className="flex bg-[#14161a] border border-dashboard-border rounded-lg p-1">
+                              <button
+                                type="button"
+                                onClick={() => setNewProfile({...newProfile, roastedType: 'NATURAL'})}
+                                className={`flex-1 flex items-center justify-center py-2 px-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${newProfile.roastedType === 'NATURAL' ? 'bg-[#1e222b] text-white shadow border border-gray-600' : 'text-gray-500 hover:text-gray-300'}`}
+                              >
+                                <span>🟢 <span className={newProfile.roastedType === 'NATURAL' ? 'text-white' : ''}>Natural</span></span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setNewProfile({...newProfile, roastedType: 'TORREFACTO'})}
+                                className={`flex-1 flex items-center justify-center py-2 px-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${newProfile.roastedType === 'TORREFACTO' ? 'bg-[#1e222b] text-orange-400 shadow border border-orange-500/30' : 'text-gray-500 hover:text-gray-300'}`}
+                              >
+                                <span>🟤 <span className={newProfile.roastedType === 'TORREFACTO' ? 'text-orange-400' : ''}>Torrefacto</span></span>
+                              </button>
+                           </div>
                          </div>
 
                          <div>
@@ -446,8 +452,8 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded border ${profile.roastStrategy === 'PRE_BLEND' ? 'text-green-400 bg-green-500/10 border-green-500/20' : 'text-orange-400 bg-orange-500/10 border-orange-500/20'}`}>
                            {profile.roastStrategy === 'PRE_BLEND' ? 'PRE-BLEND' : 'POST-BLEND'}
                          </span>
-                         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-300 bg-gray-500/10 px-2 py-1 rounded border border-gray-500/20">
-                           {profile.roastedType}
+                         <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded border ${profile.roastedType === 'TORREFACTO' ? 'text-orange-400 bg-orange-500/10 border-orange-500/30' : 'text-green-400 bg-green-500/10 border-green-500/30'}`}>
+                           {profile.roastedType === 'TORREFACTO' ? 'MEZCLA TORREFACTO' : 'TUESTE NATURAL'}
                          </span>
                          <span className="text-[10px] font-bold uppercase tracking-widest text-purple-400 bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20">
                            AGTRON: {profile.agtron}

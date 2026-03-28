@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { MasterProfile, InventoryLot, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
 import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, Scale, Info, AlertTriangle, Lock } from 'lucide-react';
 import { ROASTING_MACHINES } from '../App';
@@ -47,6 +47,13 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       });
 
    const selectedProfile = masterProfiles.find(p => p.name === selectedProfileName);
+
+   useEffect(() => {
+      if (selectedProfile) {
+         if (selectedProfile.roastedType === 'NATURAL') setSelectedMachineId('TOST-B');
+         else if (selectedProfile.roastedType === 'TORREFACTO') setSelectedMachineId('TOST-A');
+      }
+   }, [selectedProfile]);
 
    const SHRINKAGE_PCT = 0.15;
    const estimatedYield = targetKg * (1 - SHRINKAGE_PCT);
@@ -298,7 +305,9 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                  <div className="grid grid-cols-2 gap-4">
                                     {ROASTING_MACHINES.map(m => {
                                        const isMDD = selectedProfile?.businessUnit === 'LIDL';
-                                       const isLocked = isMDD && targetKg >= 480 && m.id === 'TOST-A';
+                                       const isNaturalLayoutLocked = selectedProfile?.roastedType === 'NATURAL' && m.id === 'TOST-A';
+                                       const isTorrefactoLayoutLocked = selectedProfile?.roastedType === 'TORREFACTO' && m.id === 'TOST-B';
+                                       const isLocked = (isMDD && targetKg >= 480 && m.id === 'TOST-A') || isNaturalLayoutLocked || isTorrefactoLayoutLocked;
                                        const isOptimal = (m.id === 'TOST-A' && targetKg <= 140 && !isMDD) || (m.id === 'TOST-B' && (targetKg > 140 || isMDD));
                                        const isWarning = (m.id === 'TOST-B' && targetKg < 80 && !isMDD) || (m.id === 'TOST-A' && targetKg > 130 && !isMDD);
                                        const isActive = selectedMachineId === m.id && !isLocked;
@@ -322,7 +331,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                              <div className="flex items-end justify-between">
                                                 <p className="text-2xl font-black text-white">{m.maxCapacity}<span className="text-xs text-gray-500 ml-1">kg</span></p>
                                                 {isLocked ? (
-                                                   <span className="text-[8px] font-black text-red-500 uppercase border border-red-500/30 px-1.5 rounded">Bloqueo MDD</span>
+                                                   <span className="text-[8px] font-black text-red-500 uppercase border border-red-500/30 px-1.5 rounded">{isNaturalLayoutLocked || isTorrefactoLayoutLocked ? 'Reglas de Tueste' : 'Bloqueo MDD'}</span>
                                                 ) : isOptimal ? (
                                                    <span className="text-[8px] font-black text-green-500 uppercase border border-green-500/30 px-1.5 rounded">Alta Eficiencia</span>
                                                 ) : isWarning ? (
