@@ -97,8 +97,14 @@ const Inventory: React.FC<InventoryProps> = ({ inventoryLots, setInventoryLots, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Generate a collision-resistant ID to prevent Supabase PK constraints
+    const cleanMark = formData.shippingMark.trim().replace(/\s+/g, '-').toUpperCase();
+    const uniqueSuffix = Date.now().toString().slice(-4);
+    const generatedId = cleanMark ? `${cleanMark}-${uniqueSuffix}` : `LOTE-${String(inventoryLots.length + 1).padStart(3, '0')}-${uniqueSuffix}`;
+
     const newLot: InventoryLot = {
-      id: formData.shippingMark.trim() || `LOTE-${String(inventoryLots.length + 1).padStart(3, '0')}`,
+      id: generatedId,
       shippingMark: formData.shippingMark,
       arrivalNotes: formData.arrivalNotes,
       origin: formData.origin,
@@ -112,9 +118,9 @@ const Inventory: React.FC<InventoryProps> = ({ inventoryLots, setInventoryLots, 
       exclusiveFor: formData.exclusiveFor
     };
     
-    const ok = await createInventoryLot(newLot);
-    if (!ok) {
-        alert("Error al registrar el lote en la base de datos.");
+    const result = await createInventoryLot(newLot);
+    if (!result.success) {
+        alert("Error al registrar el lote en la base de datos: " + result.error);
         return;
     }
 

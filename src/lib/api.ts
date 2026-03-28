@@ -43,8 +43,11 @@ export const createInventoryLot = async (lot: InventoryLot) => {
     price_per_kg: lot.price_per_kg,
     exclusive_for: lot.exclusiveFor
   }]);
-  if (error) console.error('Error pushing lot:', error);
-  return !error;
+  if (error) {
+    console.error('Error pushing lot:', error);
+    return { success: false, error: error.message };
+  }
+  return { success: true };
 };
 
 export const updateInventoryLot = async (id: string, updates: Partial<InventoryLot>) => {
