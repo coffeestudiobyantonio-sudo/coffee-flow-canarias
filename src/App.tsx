@@ -287,7 +287,7 @@ function App() {
             <Database className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
           </div>
           <span className="hidden lg:block ml-3 font-black text-white tracking-tighter text-lg uppercase leading-none">
-            ARBITRADE <span className="text-coffee-light block text-[10px] tracking-[0.3em]">CANARIAS</span>
+            EMICELA <span className="text-coffee-light block text-[10px] tracking-[0.3em]">ERP INDUSTRIAL</span>
           </span>
         </div>
 

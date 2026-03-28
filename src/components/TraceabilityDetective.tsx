@@ -65,7 +65,7 @@ const TraceabilityDetective: React.FC<TraceabilityProps> = ({ activeLot }) => {
   const productName = isLiveLot ? activeLot?.profile.name : 'Espresso Barista PRO (Marca Propia)';
   const destination = isLiveLot && activeLot?.profile.name.toLowerCase().includes('lidl') 
     ? 'Plataforma Logística Lidl Canarias' 
-    : 'Distribuidora HORECA Arbitrade Canarias';
+    : 'Distribuidora HORECA Emicela';
   
   const blend = isLiveLot ? activeLot?.profile.blend : [
     { origin: 'Brasil Cerrado', percentage: 60, internalLot: 'BR-23-441' },
