@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, CheckCircle, Database, Trash2, AlertTriangle, ShieldAlert, ArchiveRestore, History, Lock, Activity } from 'lucide-react';
+import { Truck, CheckCircle, Database, Trash2, AlertTriangle, ShieldAlert, ArchiveRestore, History, Lock } from 'lucide-react';
 
 import type { InventoryLot, Silo } from '../App';
 import { createInventoryLot, updateInventoryLot } from '../lib/api';
