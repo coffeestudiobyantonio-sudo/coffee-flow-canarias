@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import type { MasterProfile, InventoryLot, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
-import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, Scale, Info, AlertTriangle, Lock } from 'lucide-react';
+import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, Scale, Info, AlertTriangle, Lock, Trash2 } from 'lucide-react';
 import { ROASTING_MACHINES } from '../App';
-import { createDailyOrder } from '../lib/api';
+import { createDailyOrder, deleteDailyOrder } from '../lib/api';
 
 interface DailyRoastOrdersProps {
    masterProfiles: MasterProfile[];
@@ -201,6 +201,17 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       setSelectedProfileName('');
       setTargetKg(120);
       setPriority('STOCK');
+   };
+   const handleDeleteOrder = async (orderId: string) => {
+      const confirmDelete = window.confirm("¿Estás seguro de que deseas eliminar esta orden de producción?");
+      if (!confirmDelete) return;
+
+      const isSuccess = await deleteDailyOrder(orderId);
+      if (!isSuccess) {
+         alert("Error de red: No se pudo eliminar la orden en Supabase.");
+         return;
+      }
+      setRoastOrders(roastOrders.filter(o => o.id !== orderId));
    };
 
    return (
@@ -470,7 +481,18 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                                 <span className="ml-2 bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-0.5 rounded text-[9px] animate-pulse">URGENTE</span>
                                              )}
                                           </span>
-                                          <h3 className="text-lg font-black text-white">{order.profileName} <span className="text-coffee-light ml-2 font-mono">{order.totalKg}kg</span></h3>
+                                          <div className="flex items-center space-x-3">
+                                             <h3 className="text-lg font-black text-white">{order.profileName} <span className="text-coffee-light font-mono">{order.totalKg}kg</span></h3>
+                                             {order.status === 'PLANNED' && viewMode === 'MANAGER' && (
+                                                <button 
+                                                   onClick={() => handleDeleteOrder(order.id)}
+                                                   className="p-1.5 bg-[#14161a] border border-red-500/20 text-red-500 hover:bg-red-500/20 hover:text-red-400 rounded-lg transition-all shadow-md"
+                                                   title="Eliminar Orden Planificada"
+                                                >
+                                                   <Trash2 className="w-4 h-4" />
+                                                </button>
+                                             )}
+                                          </div>
                                        </div>
                                        <div className="text-right">
                                           <div className="flex flex-col items-end">

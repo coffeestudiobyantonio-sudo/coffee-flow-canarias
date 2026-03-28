@@ -241,3 +241,9 @@ export const updateOrderStatus = async (orderId: string, status: string) => {
   if (error) console.error('Error updating order:', error);
   return !error;
 };
+
+export const deleteDailyOrder = async (orderId: string) => {
+  const { error } = await supabase.from('daily_roast_orders').delete().eq('id', orderId);
+  if (error) console.error('Error deleting order:', error);
+  return !error;
+};
