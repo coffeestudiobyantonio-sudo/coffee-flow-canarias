@@ -312,15 +312,6 @@ const Inventory: React.FC<InventoryProps> = ({ inventoryLots, setInventoryLots, 
                 <h2 className="text-sm font-black uppercase tracking-widest text-white flex items-center">
                   Base de Datos Activa
                 </h2>
-                
-                {/* Burn Rate Predictor Alert */}
-                <div className="flex items-center space-x-2 bg-orange-500/10 border border-orange-500/30 px-3 py-1.5 rounded-lg animate-pulse">
-                  <Activity className="w-4 h-4 text-orange-400" />
-                  <div className="text-[10px] text-orange-400 font-bold tracking-wide">
-                     <span className="uppercase font-black text-orange-500">Alerta de Consumo:</span> 'Brasil Cerrado' subió 20% vel. de tueste. 
-                     Stock actual se agotará en <span className="underline decoration-orange-500 text-white font-mono">15 DÍAS</span> (Previsto: 20 d).
-                  </div>
-                </div>
               </div>
               <div className="p-0 overflow-x-auto">
                 <table className="w-full text-left border-collapse">
