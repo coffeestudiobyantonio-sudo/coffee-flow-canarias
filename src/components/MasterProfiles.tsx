@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { Target, Play, Plus, Trash2, Box, Coffee, AlertTriangle, Calculator, Activity } from 'lucide-react';
+import { Target, Plus, Trash2, Box, Coffee, AlertTriangle, Calculator, Activity } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import type { MasterProfile, InventoryLot } from '../App';
 import { createMasterProfile } from '../lib/api';
 
 interface MasterProfilesProps {
-  onLaunchProduction: (profile: MasterProfile) => void;
   inventoryLots: InventoryLot[];
   masterProfiles: MasterProfile[];
   setMasterProfiles: React.Dispatch<React.SetStateAction<MasterProfile[]>>;
@@ -23,7 +22,7 @@ const getLotColor = (origin: string, index: number) => PIE_COLORS[origin] || ['#
 
 const BATCH_SIZE_KG = 120; // Standard roaster capacity for calculations
 
-const MasterProfiles: React.FC<MasterProfilesProps> = ({ onLaunchProduction, inventoryLots, masterProfiles, setMasterProfiles }) => {
+const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterProfiles, setMasterProfiles }) => {
   // SSOT Filter base: allow validated lots regardless of current raw stock kg
   const baseValidLots = inventoryLots.filter(l => l.status === 'VALIDATED');
 
@@ -491,16 +490,6 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ onLaunchProduction, inv
                          ))}
                        </div>
                      </div>
-                  </div>
-
-                  <div className="p-4 bg-dashboard-panel border-t border-dashboard-border z-10 transition-colors group-hover:bg-[#1a1d24]">
-                     <button 
-                       onClick={() => onLaunchProduction(profile)}
-                       className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-sm tracking-widest uppercase py-4 rounded-xl flex items-center justify-center transition-all shadow-[0_0_20px_rgba(37,99,235,0.2)] active:scale-95 group-hover:shadow-[0_0_25px_rgba(59,130,246,0.6)]"
-                     >
-                       <Play className="w-4 h-4 mr-3 fill-current" />
-                       Lanzar Producción
-                     </button>
                   </div>
                 </div>
               );

@@ -168,20 +168,6 @@ function App() {
     );
   }
 
-  const handleLaunchProduction = (profile: MasterProfile) => {
-    // Redirigir directamente al Hub de Planificación
-    setActiveTab('orders');
-    
-    const toast = document.createElement('div');
-    toast.className = 'fixed bottom-4 right-4 bg-blue-500/90 text-white px-6 py-4 rounded-xl font-bold shadow-[0_0_30px_rgba(59,130,246,0.3)] z-50 animate-bounce flex flex-col space-y-1';
-    toast.innerHTML = `
-      <span>🚀 Redirigido a Hub de Planificación</span>
-      <span class="text-xs bg-black/20 p-2 rounded block mt-1">El perfil ${profile.name} puede ser planificado ahora.</span>
-    `;
-    document.body.appendChild(toast);
-    setTimeout(() => document.body.removeChild(toast), 3000);
-  };
-
   const handleLaunchManualRoast = (task: RoastTask) => {
     setActiveLot({
       id: task.id,
@@ -359,7 +345,7 @@ function App() {
         <StepperBar />
         
         <div className="flex-1 overflow-y-auto w-full relative">
-          {activeTab === 'profiles' && <MasterProfiles onLaunchProduction={handleLaunchProduction} inventoryLots={inventoryLots} masterProfiles={masterProfiles} setMasterProfiles={setMasterProfiles} />}
+          {activeTab === 'profiles' && <MasterProfiles inventoryLots={inventoryLots} masterProfiles={masterProfiles} setMasterProfiles={setMasterProfiles} />}
           {activeTab === 'orders' && <DailyRoastOrders 
               masterProfiles={masterProfiles} 
               inventoryLots={inventoryLots} setInventoryLots={setInventoryLots}
