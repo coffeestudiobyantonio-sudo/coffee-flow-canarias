@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Target, Plus, Trash2, Box, Coffee, AlertTriangle, Calculator, Activity } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import type { MasterProfile, InventoryLot } from '../App';
-import { createMasterProfile } from '../lib/api';
+import { createMasterProfile, deleteMasterProfile } from '../lib/api';
 
 interface MasterProfilesProps {
   inventoryLots: InventoryLot[];
@@ -530,7 +530,15 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
                 MantenerGama
               </button>
               <button 
-                onClick={() => {
+                onClick={async () => {
+                  const targetProfile = masterProfiles[profileToDelete];
+                  if (targetProfile) {
+                    const isSuccess = await deleteMasterProfile(targetProfile.name);
+                    if (!isSuccess) {
+                      alert("Error: No se pudo eliminar la gama de la base de datos oficial. Verifica la conexión.");
+                      return;
+                    }
+                  }
                   setMasterProfiles(masterProfiles.filter((_, i) => i !== profileToDelete));
                   setProfileToDelete(null);
                 }}

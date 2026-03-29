@@ -130,6 +130,12 @@ export const createMasterProfile = async (profile: MasterProfile) => {
   return !error;
 };
 
+export const deleteMasterProfile = async (profileName: string) => {
+  const { error } = await supabase.from('master_profiles').delete().eq('name', profileName);
+  if (error) console.error('Error deleting profile:', error);
+  return !error;
+};
+
 // =======================
 // DAILY ROAST ORDERS
 // =======================
