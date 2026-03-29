@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Target, Plus, Trash2, Box, Coffee, AlertTriangle, Calculator, Activity } from 'lucide-react';
+import { Target, Plus, Trash2, Box, Coffee, AlertTriangle, Calculator, Activity, Edit2 } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import type { MasterProfile, InventoryLot } from '../App';
-import { createMasterProfile, deleteMasterProfile } from '../lib/api';
+import { createMasterProfile, deleteMasterProfile, updateMasterProfile } from '../lib/api';
 
 interface MasterProfilesProps {
   inventoryLots: InventoryLot[];
@@ -27,6 +27,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
   const baseValidLots = inventoryLots.filter(l => l.status === 'VALIDATED');
 
   const [isCreating, setIsCreating] = useState(false);
+  const [editingProfileName, setEditingProfileName] = useState<string | null>(null);
   const [profileToDelete, setProfileToDelete] = useState<number | null>(null);
   const [newProfile, setNewProfile] = useState<MasterProfile>({
     name: '',
@@ -92,14 +93,24 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
     e.preventDefault();
     if (newProfile.name.trim() !== '' && isBlendValid) {
       
-      const isSuccess = await createMasterProfile(newProfile);
-      if (!isSuccess) {
-        alert("Error de red: No se pudo guardar el nuevo perfil en Supabase.");
-        return;
+      if (editingProfileName) {
+         const isSuccess = await updateMasterProfile(editingProfileName, newProfile);
+         if (!isSuccess) {
+           alert("Error de red: No se pudo actualizar el perfil en Supabase.");
+           return;
+         }
+         setMasterProfiles(masterProfiles.map(p => p.name === editingProfileName ? newProfile : p));
+      } else {
+         const isSuccess = await createMasterProfile(newProfile);
+         if (!isSuccess) {
+           alert("Error de red: No se pudo guardar el nuevo perfil en Supabase.");
+           return;
+         }
+         setMasterProfiles([newProfile, ...masterProfiles]);
       }
 
-      setMasterProfiles([newProfile, ...masterProfiles]);
       setIsCreating(false);
+      setEditingProfileName(null);
       setNewProfile({
         name: '', roastedType: 'NATURAL', agtron: 55.0, businessUnit: 'PROPIA', roastStrategy: 'PRE_BLEND',
         blend: [],
@@ -128,7 +139,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
           <div className="bg-[#14161a] border border-dashboard-border rounded-3xl p-8 shadow-2xl">
             <h2 className="text-2xl font-bold mb-6 text-white flex items-center">
               <Coffee className="w-6 h-6 mr-3 text-coffee-light" />
-              Diseñar Nueva Gama Comercial
+              {editingProfileName ? `Modificar Gama: ${editingProfileName}` : 'Diseñar Nueva Gama Comercial'}
             </h2>
             <form onSubmit={handleCreate} className="space-y-10">
               
@@ -161,9 +172,10 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Nombre de la Gama</label>
                          <input 
                            type="text" required
-                           className="w-full bg-[#1e222b] border border-dashboard-border rounded-xl p-3 text-white focus:outline-none focus:border-coffee-light transition-colors"
+                           className={`w-full border rounded-xl p-3 text-white transition-colors focus:outline-none ${editingProfileName ? 'bg-[#14161a] border-dashboard-border text-gray-500 cursor-not-allowed opacity-70' : 'bg-[#1e222b] border-dashboard-border focus:border-coffee-light'}`}
                            value={newProfile.name}
                            onChange={e => setNewProfile({...newProfile, name: e.target.value})}
+                           disabled={editingProfileName !== null}
                          />
                        </div>
                        <div>
@@ -403,9 +415,15 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
                       ? 'bg-coffee-accent hover:bg-coffee-light text-white shadow-[0_0_20px_rgba(217,119,6,0.3)]' 
                       : 'bg-[#14161a] border border-dashboard-border text-gray-600 cursor-not-allowed'}`}
                 >
-                  Confirmar y Guardar Estándar
+                  {editingProfileName ? 'Guardar Modificaciones' : 'Confirmar y Guardar Estándar'}
                 </button>
-                <button type="button" onClick={() => setIsCreating(false)} className="px-10 bg-[#1e222b] hover:bg-dashboard-border text-gray-300 font-bold uppercase tracking-widest py-5 rounded-xl transition-all">
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setIsCreating(false);
+                    setEditingProfileName(null);
+                  }} 
+                  className="px-10 bg-[#1e222b] hover:bg-dashboard-border text-gray-300 font-bold uppercase tracking-widest py-5 rounded-xl transition-all">
                   Cancelar
                 </button>
               </div>
@@ -460,13 +478,28 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
                          </span>
                        </div>
                      </div>
-                     <button
-                       onClick={() => setProfileToDelete(i)}
-                       className="text-gray-500 hover:text-red-400 p-2 transition-colors ml-2 bg-[#14161a] rounded-lg border border-dashboard-border hover:border-red-500/30"
-                       title="Eliminar Gama"
-                     >
-                       <Trash2 className="w-4 h-4" />
-                     </button>
+                     <div className="flex">
+                       <button
+                         onClick={() => {
+                           setNewProfile(profile);
+                           setEditingProfileName(profile.name);
+                           setIsCreating(true);
+                           // Scroll to top
+                           document.querySelector('.overflow-y-auto')?.scrollTo({ top: 0, behavior: 'smooth' });
+                         }}
+                         className="text-gray-500 hover:text-coffee-light p-2 transition-colors ml-2 bg-[#14161a] rounded-lg border border-dashboard-border hover:border-coffee-light/30"
+                         title="Editar Gama"
+                       >
+                         <Edit2 className="w-4 h-4" />
+                       </button>
+                       <button
+                         onClick={() => setProfileToDelete(i)}
+                         className="text-gray-500 hover:text-red-400 p-2 transition-colors ml-2 bg-[#14161a] rounded-lg border border-dashboard-border hover:border-red-500/30"
+                         title="Eliminar Gama"
+                       >
+                         <Trash2 className="w-4 h-4" />
+                       </button>
+                     </div>
                   </div>
                   
                   <div className="flex flex-1 relative bg-[#14161a]">

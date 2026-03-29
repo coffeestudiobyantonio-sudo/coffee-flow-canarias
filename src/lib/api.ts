@@ -130,6 +130,20 @@ export const createMasterProfile = async (profile: MasterProfile) => {
   return !error;
 };
 
+export const updateMasterProfile = async (profileName: string, profile: MasterProfile) => {
+  const { error } = await supabase.from('master_profiles').update({
+    agtron: profile.agtron,
+    roasted_type: profile.roastedType,
+    business_unit: profile.businessUnit,
+    roast_strategy: profile.roastStrategy,
+    blend: profile.blend,
+    sensory: profile.sensory,
+    machine_profiles: profile.machineProfiles
+  }).eq('name', profileName);
+  if (error) console.error('Error updating profile:', error);
+  return !error;
+};
+
 export const deleteMasterProfile = async (profileName: string) => {
   const { error } = await supabase.from('master_profiles').delete().eq('name', profileName);
   if (error) console.error('Error deleting profile:', error);
