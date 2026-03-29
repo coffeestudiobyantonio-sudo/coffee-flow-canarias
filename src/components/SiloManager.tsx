@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Database, AlertTriangle, ArrowRight, Truck, Calendar, AlertCircle, Timer } from 'lucide-react';
+import { Database, AlertTriangle, ArrowRight, Truck, Calendar, AlertCircle, Timer, Trash2 } from 'lucide-react';
 import type { Silo, InventoryLot, DailyRoastOrder } from '../App';
 import { updateSilo, updateInventoryLot } from '../lib/api';
 
@@ -17,6 +17,9 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos, inventoryLot
   const [selectedLotId, setSelectedLotId] = useState<string>('');
   const [selectedSiloId, setSelectedSiloId] = useState<number>(0);
   const [transferKg, setTransferKg] = useState<number>(0);
+  
+  const [leftColumnMode, setLeftColumnMode] = useState<'TRANSFER' | 'ADJUST'>('TRANSFER');
+  const [adjustKg, setAdjustKg] = useState<number>(0);
 
   const selectedLot = validLots.find(l => l.id === selectedLotId);
   const targetSilo = silos.find(s => s.id === selectedSiloId);
@@ -107,6 +110,47 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos, inventoryLot
     setTimeout(() => document.body.removeChild(toast), 5000);
   };
 
+  const handleAdjust = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const target = silos.find(s => s.id === selectedSiloId);
+    if (!target) return;
+
+    const okSilo = await updateSilo(selectedSiloId, { 
+      currentKg: adjustKg
+    });
+
+    if (!okSilo) {
+      alert("Error al sincronizar con la base de datos.");
+      return;
+    }
+
+    setSilos(prev => prev.map(s => s.id === selectedSiloId ? { ...s, currentKg: adjustKg } : s));
+    
+    const toast = document.createElement('div');
+    toast.className = 'fixed bottom-4 right-4 bg-orange-500/90 text-white px-6 py-4 rounded-xl font-bold shadow-[0_0_30px_rgba(249,115,22,0.3)] z-50 animate-bounce';
+    toast.innerHTML = `🛢️ Silo ${selectedSiloId} ajustado forzosamente a ${adjustKg}kg`;
+    document.body.appendChild(toast);
+    setTimeout(() => document.body.removeChild(toast), 3000);
+  };
+
+  const handlePurge = async () => {
+    if (!confirm('¿Estás seguro de que deseas VACIAR este silo completamente? Perderá el rastro del origen actual.')) return;
+
+    const okSilo = await updateSilo(selectedSiloId, { 
+      currentKg: 0,
+      origin: null,
+      moisture: null
+    });
+
+    if (!okSilo) {
+      alert("Error al vaciar el silo en la base de datos.");
+      return;
+    }
+
+    setSilos(prev => prev.map(s => s.id === selectedSiloId ? { ...s, currentKg: 0, origin: null, moisture: null } : s));
+    setAdjustKg(0);
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-dashboard-bg text-gray-200 overflow-y-auto">
       
@@ -123,21 +167,38 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos, inventoryLot
 
       <div className="p-10 flex-1 relative z-10 mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-10">
         
-        {/* Left Column: Módulo de Carga */}
+        {/* Left Column: Módulo de Carga o Ajuste */}
         <div className="lg:col-span-4 space-y-6">
+           <div className="flex bg-[#14161a] p-1 rounded-xl mb-2 border border-dashboard-border">
+             <button 
+               onClick={() => setLeftColumnMode('TRANSFER')}
+               className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${leftColumnMode === 'TRANSFER' ? 'bg-[#1e222b] text-blue-400 shadow border border-blue-500/30' : 'text-gray-500 hover:text-gray-300'}`}
+             >
+               Carga Almacén
+             </button>
+             <button 
+               onClick={() => setLeftColumnMode('ADJUST')}
+               className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${leftColumnMode === 'ADJUST' ? 'bg-[#1e222b] text-orange-400 shadow border border-orange-500/30' : 'text-gray-500 hover:text-gray-300'}`}
+             >
+               Mantenimiento
+             </button>
+           </div>
+
           <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-8 shadow-2xl relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl transform translate-x-10 -translate-y-10"></div>
              
-             <h2 className="text-xl font-bold mb-6 text-white flex items-center uppercase tracking-widest relative z-10 border-b border-dashboard-border pb-4">
-               <Truck className="w-6 h-6 mr-3 text-blue-400" />
-               Módulo de Carga
-             </h2>
+             {leftColumnMode === 'TRANSFER' ? (
+                <>
+                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl transform translate-x-10 -translate-y-10"></div>
+                   
+                   <h2 className="text-xl font-bold mb-6 text-white flex items-center uppercase tracking-widest relative z-10 border-b border-dashboard-border pb-4">
+                     <Truck className="w-6 h-6 mr-3 text-blue-400" />
+                     Módulo de Carga
+                   </h2>
 
-
-             <form onSubmit={handleTransfer} className="space-y-6 relative z-10">
-               
-               {/* Lote FIFO Selector */}
-               <div>
+                   <form onSubmit={handleTransfer} className="space-y-6 relative z-10">
+                     
+                     {/* Lote FIFO Selector */}
+                     <div>
                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">1. Lote Aprobado (Origen)</label>
                  <select 
                    className="w-full bg-[#14161a] border border-dashboard-border rounded-xl p-4 text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none font-medium"
@@ -224,9 +285,96 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos, inventoryLot
                      ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]' 
                      : 'bg-[#14161a] border border-dashboard-border text-gray-600 cursor-not-allowed hidden'}`}
                >
-                 Autorizar Carga <ArrowRight className="w-5 h-5 ml-2" />
-               </button>
-             </form>
+                       Autorizar Carga <ArrowRight className="w-5 h-5 ml-2" />
+                     </button>
+                   </form>
+                </>
+             ) : (
+                <>
+                   <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl transform translate-x-10 -translate-y-10"></div>
+                   
+                   <h2 className="text-xl font-bold mb-6 text-white flex items-center uppercase tracking-widest relative z-10 border-b border-dashboard-border pb-4">
+                     <AlertTriangle className="w-6 h-6 mr-3 text-orange-400" />
+                     Ajuste de Precisión
+                   </h2>
+
+                   <form onSubmit={handleAdjust} className="space-y-6 relative z-10">
+                     
+                     {/* Target Silo Selector */}
+                     <div>
+                       <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">1. Seleccionar Silo a Calibrar</label>
+                       <div className="grid grid-cols-5 gap-2">
+                         {silos.map(s => {
+                           return (
+                             <button
+                               type="button"
+                               key={s.id}
+                               onClick={() => {
+                                  setSelectedSiloId(s.id);
+                                  setAdjustKg(s.currentKg);
+                               }}
+                               className={`py-3 rounded-lg font-black text-sm transition-all border ${
+                                 selectedSiloId === s.id 
+                                   ? 'bg-orange-600 border-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.4)]' 
+                                   : 'bg-[#14161a] border-dashboard-border text-gray-400 hover:border-orange-500/50 hover:text-white'
+                               }`}
+                             >
+                               {s.id}
+                             </button>
+                           )
+                         })}
+                       </div>
+                       {targetSilo && (
+                         <div className="mt-2 text-[10px] font-mono text-orange-300 bg-orange-500/10 p-2 rounded-lg border border-orange-500/20 flex justify-between">
+                           <span>Origen Actual: {targetSilo.origin || 'NINGUNO'}</span>
+                           <span>Lote Ref: {targetSilo.lotId || 'N/A'}</span>
+                         </div>
+                       )}
+                     </div>
+
+                     {/* Override Kilos */}
+                     <div>
+                       <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">2. Forzar Nivel Interno (kg)</label>
+                       <div className="flex bg-[#14161a] border border-dashboard-border rounded-xl px-4 py-2 focus-within:border-orange-500 transition-colors">
+                         <input 
+                           type="number" min="0" max="40000"
+                           className="w-full bg-transparent text-2xl font-black text-white focus:outline-none"
+                           value={adjustKg.toString()}
+                           onChange={e => setAdjustKg(parseInt(e.target.value) || 0)}
+                           disabled={!targetSilo}
+                           required
+                         />
+                         <span className="text-gray-500 font-black text-xl flex items-center ml-2">KG</span>
+                       </div>
+                     </div>
+
+                     <div className="pt-4 grid grid-cols-2 gap-4">
+                       <button 
+                         type="button" 
+                         onClick={handlePurge}
+                         disabled={!targetSilo || targetSilo.currentKg === 0}
+                         className={`w-full font-black uppercase text-[10px] tracking-widest py-4 rounded-xl transition-all shadow-xl flex items-center justify-center
+                           ${targetSilo && targetSilo.currentKg > 0
+                             ? 'bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)]' 
+                             : 'bg-[#14161a] border border-dashboard-border text-gray-600 cursor-not-allowed'}`}
+                       >
+                         <Trash2 className="w-4 h-4 mr-2" /> Vaciar Silo
+                       </button>
+
+                       <button 
+                         type="submit" 
+                         disabled={!targetSilo}
+                         className={`w-full font-black uppercase text-[10px] tracking-widest py-4 rounded-xl transition-all shadow-xl flex items-center justify-center
+                           ${targetSilo
+                             ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.4)]' 
+                             : 'bg-[#14161a] border border-dashboard-border text-gray-600 cursor-not-allowed'}`}
+                       >
+                         Forzar Ajuste
+                       </button>
+                     </div>
+                   </form>
+                </>
+             )}
           </div>
         </div>
 
