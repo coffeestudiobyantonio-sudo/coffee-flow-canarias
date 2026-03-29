@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Database, AlertTriangle, ArrowRight, Truck, Calendar, AlertCircle, Timer, Trash2 } from 'lucide-react';
 import type { Silo, InventoryLot, DailyRoastOrder } from '../App';
 import { updateSilo, updateInventoryLot } from '../lib/api';
@@ -20,6 +20,16 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos, inventoryLot
   
   const [leftColumnMode, setLeftColumnMode] = useState<'TRANSFER' | 'ADJUST'>('TRANSFER');
   const [adjustKg, setAdjustKg] = useState<number>(0);
+  const [transferMoisture, setTransferMoisture] = useState<number | ''>('');
+
+  useEffect(() => {
+    const lot = inventoryLots.find(l => l.id === selectedLotId);
+    if (lot && lot.moisture != null) {
+      setTransferMoisture(lot.moisture);
+    } else {
+      setTransferMoisture('');
+    }
+  }, [selectedLotId, inventoryLots]);
 
   const selectedLot = validLots.find(l => l.id === selectedLotId);
   const targetSilo = silos.find(s => s.id === selectedSiloId);
@@ -61,7 +71,7 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos, inventoryLot
     const okSilo = await updateSilo(selectedSiloId, { 
       lotId: selectedLot.id, 
       origin: selectedLot.origin, 
-      moisture: selectedLot.moisture || null, 
+      moisture: transferMoisture !== '' ? Number(transferMoisture) : (selectedLot.moisture || null), 
       currentKg: newSiloKg 
     });
     
@@ -247,20 +257,51 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos, inventoryLot
                  </div>
                </div>
 
-               {/* Kilos a transferir */}
-               <div>
-                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">3. Volumen a Subir (kg)</label>
-                 <div className="flex bg-[#14161a] border border-dashboard-border rounded-xl px-4 py-2 focus-within:border-blue-500 transition-colors">
-                   <input 
-                     type="number" min="1" max="4000"
-                     className="w-full bg-transparent text-2xl font-black text-white focus:outline-none"
-                     value={transferKg || ''}
-                     onChange={e => setTransferKg(parseInt(e.target.value) || 0)}
-                     required
-                   />
-                   <span className="text-gray-500 font-black text-xl flex items-center ml-2">KG</span>
+               {/* Kilos a transferir y Humedad */}
+               <div className="grid grid-cols-2 gap-4 relative">
+                 <div>
+                   <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">3. Transferir</label>
+                   <div className="flex bg-[#14161a] border border-dashboard-border rounded-xl px-4 py-2 focus-within:border-blue-500 transition-colors">
+                     <input 
+                       type="number" min="1" max="4000"
+                       className="w-full bg-transparent text-2xl font-black text-white focus:outline-none"
+                       value={transferKg || ''}
+                       onChange={e => setTransferKg(parseInt(e.target.value) || 0)}
+                       required
+                     />
+                     <span className="text-gray-500 font-black text-xl flex items-center ml-2">KG</span>
+                   </div>
+                 </div>
+
+                 <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">4. Humedad Real</label>
+                    <div className="flex bg-[#14161a] border border-dashboard-border rounded-xl px-4 py-2 focus-within:border-blue-500 transition-colors">
+                      <input 
+                        type="number" step="0.1" min="0" max="25"
+                        className="w-full bg-transparent text-2xl font-black text-white focus:outline-none"
+                        value={transferMoisture}
+                        onChange={e => setTransferMoisture(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                        disabled={!selectedLot}
+                        required
+                      />
+                      <span className="text-gray-500 font-black text-xl flex items-center ml-2">%</span>
+                    </div>
                  </div>
                </div>
+
+               {selectedLot && selectedLot.moisture != null && transferMoisture !== '' && transferMoisture !== selectedLot.moisture && (
+                 <div className={`-mt-2 mb-4 text-[10px] font-black uppercase tracking-widest px-4 py-3 rounded-xl border flex items-center justify-between shadow-inner ${
+                   Number(transferMoisture) < selectedLot.moisture 
+                     ? 'text-orange-400 bg-orange-500/10 border-orange-500/30' 
+                     : 'text-blue-400 bg-blue-500/10 border-blue-500/30'
+                 }`}>
+                   <span>H₂O Almacén: {selectedLot.moisture}%</span>
+                   <span className="flex items-center text-sm">
+                     Δ {(Number(transferMoisture) - selectedLot.moisture).toFixed(1)}% 
+                     <span className="text-[9px] text-gray-500 ml-2">{Number(transferMoisture) < selectedLot.moisture ? '(PÉRDIDA)' : '(GANANCIA)'}</span>
+                   </span>
+                 </div>
+               )}
 
                {/* Safety Alerts */}
                <div className="space-y-2">
