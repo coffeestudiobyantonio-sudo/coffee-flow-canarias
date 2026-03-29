@@ -668,13 +668,13 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                         );
                      })}
 
-                     {pendingTasks.length === 0 && (
+                     {pendingTasks.length === 0 ? (
                         <div className="col-span-full border-2 border-dashed border-dashboard-border rounded-[48px] p-24 flex flex-col items-center justify-center text-center opacity-40">
                            <ClipboardList className="w-24 h-24 mb-6 text-gray-600" />
                            <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Cola de Tareas Vacía</h2>
                            <p className="text-gray-500 font-bold max-w-sm">No hay tuestes planificados para esta sesión. Consulte con el Jefe de Producto para recibir órdenes de producción.</p>
                         </div>
-                     )}
+                     ) : null}
                   </div>
                </div>
             )}
