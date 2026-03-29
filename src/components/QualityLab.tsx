@@ -1,19 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { TestTube2, CheckCircle, PackageCheck, Send, AlertTriangle, Target, LineChart as LineChartIcon, History, Lock } from 'lucide-react';
+import { TestTube2, CheckCircle, AlertTriangle, Target, LineChart as LineChartIcon, History, Lock } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceArea } from 'recharts';
 
-import type { ActiveLot } from '../App';
+import type { ActiveLot, DailyRoastOrder, MasterProfile } from '../App';
 
 interface QualityLabProps {
   activeLot: ActiveLot | null;
-  onQualityValidated?: (lotCode: string, isApproved: boolean) => void;
+  roastOrders: DailyRoastOrder[];
+  onQualityValidated?: (taskId: string, isApproved: boolean) => void;
 }
 
 // Las tolerancias mecánicas (2% estricto Lidl, 8% flexibilidad Marca Propia)
 const getTolerancePct = (bu?: 'LIDL' | 'PROPIA') => bu === 'LIDL' ? 0.02 : 0.08;
 
-const QualityLab: React.FC<QualityLabProps> = ({ activeLot, onQualityValidated }) => {
-  const activeProfile = activeLot?.profile || null;
+const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQualityValidated }) => {
+  const pendingValidationTasks = roastOrders.flatMap(o => 
+     o.tasks.map(t => ({ 
+       ...t, 
+       parentProfileName: o.profileName, 
+       parentCategory: o.category,
+       parentBusinessUnit: (t.masterProfile as unknown as MasterProfile)?.businessUnit || 'PROPIA'
+     }))
+  ).filter(t => t.status === 'ROASTED');
+
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(activeLot?.id || null);
+
+  useEffect(() => {
+    if (!selectedTaskId && pendingValidationTasks.length > 0) {
+      setSelectedTaskId(pendingValidationTasks[0].id);
+    }
+  }, [pendingValidationTasks, selectedTaskId]);
+
+  const currentTask = pendingValidationTasks.find(t => t.id === selectedTaskId);
+  const activeProfile = (currentTask?.masterProfile as unknown as MasterProfile) || activeLot?.profile || null;
 
   const MASTER_PROFILE = activeProfile ? {
     fragrancia: activeProfile.sensory.fragrancia,
@@ -37,12 +56,10 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, onQualityValidated }
   });
 
   const [agtron, setAgtron] = useState<number>(MASTER_PROFILE.agtron);
-  const [lotCode, setLotCode] = useState(activeLot?.id || '');
   const [validationState, setValidationState] = useState<'PENDING' | 'APPROVED' | 'REJECT'>('PENDING');
 
   useEffect(() => {
-    if (activeLot) {
-      setLotCode(activeLot.id);
+    if (activeProfile) {
       setScores({
         fragrancia: MASTER_PROFILE.fragrancia,
         aroma: MASTER_PROFILE.aroma,
@@ -50,9 +67,9 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, onQualityValidated }
         cuerpo: MASTER_PROFILE.cuerpo,
       });
       setAgtron(MASTER_PROFILE.agtron);
-      setValidationState('PENDING'); // Reset validation state for new lot
+      setValidationState('PENDING');
     }
-  }, [activeLot]); 
+  }, [activeProfile?.name, currentTask?.id]); 
 
   // Calcula si cada parámetro está dentro del margen de la Unidad de Negocio
   const ACTIVE_TOLERANCE_PCT = getTolerancePct(activeProfile?.businessUnit);
@@ -112,8 +129,8 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, onQualityValidated }
   }, [activeProfile, agtron, MASTER_PROFILE.agtron, ACTIVE_TOLERANCE_PCT]);
 
   const handleValidate = () => {
-    if (onQualityValidated) {
-      onQualityValidated(lotCode, isApproved);
+    if (onQualityValidated && currentTask) {
+      onQualityValidated(currentTask.id, isApproved);
     }
   };
 
@@ -126,7 +143,36 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, onQualityValidated }
         {/* Left Column: Input Form (Tablet Friendly) */}
         <div className="w-full xl:w-[450px] bg-dashboard-panel border-r border-dashboard-border flex flex-col p-8">
           
-          <div className="flex justify-between items-center mb-8 border-b border-dashboard-border pb-6">
+          {/* VALIDATION QUEUE */}
+          <div className="mb-2">
+            <h3 className="text-sm font-bold text-gray-400 uppercase flex items-center mb-3">
+              <History className="w-4 h-4 mr-2" />
+              Lotes Pendientes de QA
+            </h3>
+            {pendingValidationTasks.length === 0 ? (
+               <div className="bg-[#14161a] border border-dashed border-dashboard-border rounded-xl p-4 text-center">
+                  <span className="text-gray-500 font-bold text-xs uppercase tracking-widest">No hay lotes en espera.</span>
+               </div>
+            ) : (
+               <div className="flex space-x-3 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-dashboard-border scrollbar-track-transparent">
+                  {pendingValidationTasks.map(t => (
+                     <button
+                       key={t.id}
+                       onClick={() => setSelectedTaskId(t.id)}
+                       className={`flex-none w-48 text-left p-3 rounded-xl border transition-all ${selectedTaskId === t.id ? 'bg-coffee-accent/10 border-coffee-light shadow-[inset_0_0_15px_rgba(217,119,6,0.1)]' : 'bg-[#1e222b] border-dashboard-border hover:border-gray-500 opacity-60'}`}
+                     >
+                       <div className="flex justify-between items-center mb-1">
+                          <span className="text-[10px] font-black text-white truncate mr-2">{t.id}</span>
+                          <span className="text-[9px] bg-[#14161a] border border-dashboard-border text-gray-300 px-1.5 rounded">{t.targetWeightKg}kg</span>
+                       </div>
+                       <div className="text-[9px] text-coffee-light/80 font-bold truncate">{t.parentProfileName}</div>
+                     </button>
+                  ))}
+               </div>
+            )}
+          </div>
+
+          <div className="flex justify-between items-center mb-8 border-b border-dashboard-border pb-6 mt-4">
             <div>
               <span className="text-xs text-coffee-accent font-black tracking-widest uppercase mb-1 flex items-center">
                 <TestTube2 className="w-4 h-4 mr-2" />
@@ -135,8 +181,7 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, onQualityValidated }
               <input 
                 type="text" 
                 className="bg-[#1e222b] border border-dashboard-border rounded-xl p-3 text-white font-mono text-lg focus:outline-none focus:border-purple-500 transition-colors w-64 mt-2"
-                value={lotCode}
-                onChange={(e) => setLotCode(e.target.value)}
+                value={currentTask ? currentTask.id : ''}
                 disabled={true}
                 placeholder="--- ESPERANDO LOTE ---"
               />
@@ -147,18 +192,18 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, onQualityValidated }
                 {activeProfile?.businessUnit === 'LIDL' ? 'ESTRICTO (2%)' : 'FLEXIBLE (8%)'}
               </span>
               <div className="flex items-center justify-end space-x-2">
-                 {activeLot?.machineId && (
+                 {currentTask?.machineId && (
                    <span className="bg-purple-500/10 px-2 py-1 rounded border border-purple-500/30 text-purple-400 text-[10px] font-black uppercase shadow-sm flex items-center">
-                     <Target className="w-3 h-3 mr-1" /> {activeLot.machineId}
+                     <Target className="w-3 h-3 mr-1" /> {currentTask.machineId}
                    </span>
                  )}
                  <span className="bg-[#1e222b] px-3 py-1 rounded border border-dashboard-border text-gray-300 text-xs font-bold shadow-sm">
                    {activeProfile ? activeProfile.name : 'Ninguno'}
                  </span>
-                 {activeLot?.category && (
-                    <span className={`px-2 py-1 rounded text-[10px] font-black tracking-widest uppercase border flex items-center shadow-sm ${activeLot.category === 'MARCA_PROPIA' ? 'bg-gradient-to-r from-yellow-600/30 to-yellow-800/30 text-yellow-500 border-yellow-500/50' : 'bg-blue-500/10 text-blue-400 border-blue-500/30'}`}>
-                      {activeLot.category === 'MARCA_PROPIA' ? <Lock className="w-3 h-3 mr-1" /> : <Target className="w-3 h-3 mr-1" />}
-                      {activeLot.category === 'MARCA_PROPIA' ? 'MARCA PROPIA' : 'MDD EXTERNO'}
+                 {currentTask?.parentCategory && (
+                    <span className={`px-2 py-1 rounded text-[10px] font-black tracking-widest uppercase border flex items-center shadow-sm ${currentTask.parentCategory === 'MARCA_PROPIA' ? 'bg-gradient-to-r from-yellow-600/30 to-yellow-800/30 text-yellow-500 border-yellow-500/50' : 'bg-blue-500/10 text-blue-400 border-blue-500/30'}`}>
+                      {currentTask.parentCategory === 'MARCA_PROPIA' ? <Lock className="w-3 h-3 mr-1" /> : <Target className="w-3 h-3 mr-1" />}
+                      {currentTask.parentCategory === 'MARCA_PROPIA' ? 'MARCA PROPIA' : 'MDD EXTERNO'}
                     </span>
                  )}
               </div>
@@ -344,35 +389,36 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, onQualityValidated }
                  <>
                    <AlertTriangle className="w-10 h-10 text-red-400 mb-2" />
                    <div className="text-center font-bold text-red-400">LOTE FUERA DE PERFIL</div>
-                   <div className="text-center text-xs text-red-500/70">Rechazo Automático</div>
+                   <div className="text-center text-xs text-red-500/70">Rechazar a Mermas</div>
                  </>
                ) : (
                  <>
                    <Target className="w-10 h-10 text-gray-400 mb-2" />
                    <div className="text-center font-bold text-gray-400">ESPERANDO CATA</div>
-                   <div className="text-center text-xs text-gray-500/70">Asigna un Lote de Producción</div>
+                   <div className="text-center text-xs text-gray-500/70">Selecciona un Lote de la Cola</div>
                  </>
                )}
             </div>
 
             {/* Validation Action Button */}
             <div className="relative border rounded-2xl border-dashboard-border bg-dashboard-panel flex flex-col p-4 justify-center items-center overflow-hidden">
-              {activeLot && activeLot.status === 'validado' ? (
-                <div className="absolute inset-0 bg-green-500/20 border-2 border-green-500/50 text-green-300 p-2 rounded-2xl flex flex-col items-center justify-center font-bold text-center animate-pulse z-10 backdrop-blur-sm">
-                   <PackageCheck className="w-8 h-8 text-green-400 mb-1" />
-                   <span className="text-sm cursor-default">SEÑAL VERDE ENVIADA</span>
+              {!currentTask ? (
+                <div className="text-center text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-2 px-2">
+                  Selecciona un lote de la cola superior para habilitar el registro de calidad.
                 </div>
               ) : (
                 <button 
                   onClick={handleValidate}
-                  disabled={!activeProfile || validationState === 'REJECT'}
-                  className={`w-full py-4 rounded-xl font-black text-sm tracking-widest uppercase transition-all shadow-xl flex items-center justify-center
-                    ${validationState === 'REJECT' || !activeProfile
-                      ? 'bg-dashboard-panel border border-dashboard-border text-gray-600 cursor-not-allowed' 
-                      : 'bg-green-600 hover:bg-green-500 text-white shadow-[0_0_20px_rgba(22,163,74,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]'}`}
+                  className={`w-full h-full py-4 rounded-xl font-black text-sm tracking-widest uppercase transition-all shadow-xl flex items-center justify-center text-center px-2
+                    ${validationState === 'APPROVED' 
+                      ? 'bg-green-600 hover:bg-green-500 text-white shadow-[0_0_20px_rgba(22,163,74,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]' 
+                      : 'bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)]'}`}
                 >
-                  <Send className="w-5 h-5 mr-3" />
-                  Validar Lote
+                  {validationState === 'APPROVED' ? (
+                    <><CheckCircle className="w-5 h-5 mr-3 flex-shrink-0" /> APROBAR Y<br/>SELLAR LOTE</>
+                  ) : (
+                    <><AlertTriangle className="w-5 h-5 mr-3 flex-shrink-0" /> REGISTRAR COMO<br/>MERMA (RECHAZO)</>
+                  )}
                 </button>
               )}
             </div>

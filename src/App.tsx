@@ -213,8 +213,21 @@ function App() {
     }
   };
 
-  const handleQualityValidated = () => {
-    if (activeLot) {
+  const handleQualityValidated = async (taskId: string, isApproved: boolean) => {
+    const nextStatus = isApproved ? 'RESTING' : 'LAB_REJECTED';
+    const isSuccess = await updateTaskStatus(taskId, nextStatus);
+
+    if (!isSuccess) {
+      alert("Error: No se pudo registrar la validación en Supabase.");
+      return;
+    }
+
+    setRoastOrders(prevOrders => prevOrders.map(o => ({
+      ...o,
+      tasks: o.tasks.map(t => t.id === taskId ? { ...t, status: nextStatus } : t)
+    })));
+
+    if (activeLot && activeLot.id === taskId) {
       setActiveLot({ ...activeLot, status: 'validado' });
     }
   };
@@ -358,7 +371,7 @@ function App() {
           {activeTab === 'roast' && <LiveRoastControl activeLot={activeLot} onRoastComplete={() => handleBatchComplete(activeLot?.batchWeight || 0)} />}
           {activeTab === 'manual_roast' && <ManualRoastControl activeLot={activeLot} onBatchComplete={handleBatchComplete} allOrders={roastOrders} setAllOrders={setRoastOrders} silos={silos} setSilos={setSilos} />}
           {activeTab === 'inventory' && <Inventory inventoryLots={inventoryLots} setInventoryLots={setInventoryLots} silos={silos} />}
-          {activeTab === 'lab' && <QualityLab activeLot={activeLot} onQualityValidated={handleQualityValidated} />}
+          {activeTab === 'lab' && <QualityLab activeLot={activeLot} roastOrders={roastOrders} onQualityValidated={handleQualityValidated} />}
           {activeTab === 'traceability' && <TraceabilityDetective activeLot={activeLot} />}
         </div>
       </main>
