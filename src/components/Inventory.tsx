@@ -286,19 +286,6 @@ const Inventory: React.FC<InventoryProps> = ({ inventoryLots, setInventoryLots, 
                       onChange={e => setFormData({...formData, arrivalDate: e.target.value})}
                     />
                   </div>
-                  <div>
-                    <label className="flex items-center space-x-3 bg-[#1a1d24] p-3 rounded-lg border border-dashboard-border cursor-pointer hover:border-coffee-accent/50 transition-colors">
-                      <input 
-                        type="checkbox" 
-                        checked={formData.exclusiveFor === 'LIDL'}
-                        onChange={e => setFormData({...formData, exclusiveFor: e.target.checked ? 'LIDL' : 'NONE'})}
-                        className="w-4 h-4 text-coffee-accent bg-[#1e222b] border-gray-600 rounded focus:ring-coffee-accent"
-                      />
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center">
-                        <Lock className="w-3 h-3 mr-2 text-coffee-accent" /> Reserva Contrato (Lidl)
-                      </span>
-                    </label>
-                  </div>
                   <button type="submit" className="w-full mt-6 bg-coffee-accent hover:bg-coffee-light text-white font-black uppercase tracking-widest py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(217,119,6,0.3)] active:scale-95">
                     Registrar Métrica
                   </button>
