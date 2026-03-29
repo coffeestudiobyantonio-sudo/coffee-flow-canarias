@@ -224,7 +224,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                   <ClipboardList className="w-6 h-6 text-coffee-light" />
                </div>
                <div>
-                  <h1 className="text-xl font-bold tracking-tight text-white">Agenda de Tueste (Hub)</h1>
+                  <h1 className="text-xl font-bold tracking-tight text-white">Agenda de Tueste</h1>
                   <p className="text-sm text-gray-400 font-mono tracking-wide">SSOT: Planificación & Ejecución</p>
                </div>
             </div>

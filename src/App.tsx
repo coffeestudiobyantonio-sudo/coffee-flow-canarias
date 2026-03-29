@@ -306,7 +306,7 @@ function App() {
             <span className="text-[10px] font-black justify-start text-coffee-accent uppercase tracking-widest">Módulo 2: Planta y Producción</span>
           </div>
           <NavItem icon={<Database />} label="3. Gestión de Silos" active={activeTab === 'silos'} onClick={() => handleNavClick('silos')} />
-          <NavItem icon={<ClipboardList />} label="4. Hub Planificación" active={activeTab === 'orders'} onClick={() => handleNavClick('orders')} highlight={true} />
+          <NavItem icon={<ClipboardList />} label="4. Agenda de Tueste" active={activeTab === 'orders'} onClick={() => handleNavClick('orders')} highlight={true} />
           <NavItem icon={<Timer />} label="5. Control de Tueste" active={activeTab === 'manual_roast'} onClick={() => handleNavClick('manual_roast')} pulse={activeLot?.status === 'tueste'} />
 
           {/* MÓDULO 3: CALIDAD Y DIRECCIÓN */}
