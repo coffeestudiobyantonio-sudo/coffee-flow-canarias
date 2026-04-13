@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, ScatterChart, Scatter, ZAxis, Cell, Legend } from 'recharts';
-import { AlertTriangle, Download, FileCheck, Target, Factory, ArrowDownToLine, ArrowUpFromLine, ShieldCheck, TrendingUp, Zap, Server, PiggyBank } from 'lucide-react';
+import { AlertTriangle, Download, FileCheck, Target, Factory, ArrowDownToLine, ArrowUpFromLine, ShieldCheck, TrendingUp, Zap, PiggyBank } from 'lucide-react';
 
 // --- MOCK DATA ---
 const homogeneityData = [

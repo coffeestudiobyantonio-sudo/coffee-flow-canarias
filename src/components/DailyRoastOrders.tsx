@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import type { MasterProfile, InventoryLot, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
 import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, Scale, Info, AlertTriangle, Lock, Trash2 } from 'lucide-react';
 import { ROASTING_MACHINES } from '../App';
@@ -342,7 +342,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
                               <div className="flex flex-wrap gap-2">
                                  {(() => {
-                                    const m = ROASTING_MACHINES.find(m => m.id === selectedMachineId) || ROASTING_MACHINES[1];
+                                    const m = ROASTING_MACHINES[0];
                                     const count = fragmentationMode === 'BALANCED'
                                        ? Math.ceil(targetKg / m.maxCapacity)
                                        : Math.ceil(targetKg / m.maxCapacity);
@@ -365,7 +365,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
                            {/* Machine Capacity Safety Interlock */}
                            {(() => {
-                              const m = ROASTING_MACHINES.find(ma => ma.id === selectedMachineId);
+                              const m = ROASTING_MACHINES[0];
                               if (m && targetKg > m.maxCapacity) {
                                  return (
                                     <div className="bg-orange-500/10 border border-orange-500/50 p-4 rounded-2xl flex items-start space-x-3 mb-4 animate-pulse">
