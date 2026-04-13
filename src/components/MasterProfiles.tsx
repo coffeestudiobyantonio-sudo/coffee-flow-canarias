@@ -200,27 +200,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
                          </div>
                        </div>
                        
-                       <div className="grid grid-cols-2 gap-4">
-                         <div>
-                           <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Tueste</label>
-                           <div className="flex bg-[#14161a] border border-dashboard-border rounded-lg p-1">
-                              <button
-                                type="button"
-                                onClick={() => setNewProfile({...newProfile, roastedType: 'NATURAL'})}
-                                className={`flex-1 flex items-center justify-center py-2 px-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${newProfile.roastedType === 'NATURAL' ? 'bg-[#1e222b] text-white shadow border border-gray-600' : 'text-gray-500 hover:text-gray-300'}`}
-                              >
-                                <span>🟢 <span className={newProfile.roastedType === 'NATURAL' ? 'text-white' : ''}>Natural</span></span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setNewProfile({...newProfile, roastedType: 'TORREFACTO'})}
-                                className={`flex-1 flex items-center justify-center py-2 px-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${newProfile.roastedType === 'TORREFACTO' ? 'bg-[#1e222b] text-orange-400 shadow border border-orange-500/30' : 'text-gray-500 hover:text-gray-300'}`}
-                              >
-                                <span>🟤 <span className={newProfile.roastedType === 'TORREFACTO' ? 'text-orange-400' : ''}>Torrefacto</span></span>
-                              </button>
-                           </div>
-                         </div>
-
+                       <div className="grid grid-cols-1 gap-4">
                          <div>
                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Target Agtron</label>
                            <input 
@@ -470,9 +450,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded border ${profile.roastStrategy === 'PRE_BLEND' ? 'text-green-400 bg-green-500/10 border-green-500/20' : 'text-orange-400 bg-orange-500/10 border-orange-500/20'}`}>
                            {profile.roastStrategy === 'PRE_BLEND' ? 'PRE-BLEND' : 'POST-BLEND'}
                          </span>
-                         <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded border ${profile.roastedType === 'TORREFACTO' ? 'text-orange-400 bg-orange-500/10 border-orange-500/30' : 'text-green-400 bg-green-500/10 border-green-500/30'}`}>
-                           {profile.roastedType === 'TORREFACTO' ? 'MEZCLA TORREFACTO' : 'TUESTE NATURAL'}
-                         </span>
+
                          <span className="text-[10px] font-bold uppercase tracking-widest text-purple-400 bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20">
                            AGTRON: {profile.agtron}
                          </span>

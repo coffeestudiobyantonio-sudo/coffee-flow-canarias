@@ -68,40 +68,18 @@ const ManagementDashboard: React.FC = () => {
       <div className="flex-1 p-6 grid grid-cols-12 gap-6 overflow-y-auto">
         
         {/* Phase 8: Executive KPIs (OEE & ROI) */}
-        <div className="col-span-12 grid grid-cols-1 md:grid-cols-3 gap-6 mb-2">
+        <div className="col-span-12 grid grid-cols-1 md:grid-cols-2 gap-6 mb-2">
            
            {/* OEE TOST-A */}
            <div className="bg-dashboard-panel border border-dashboard-border rounded-2xl p-6 shadow-xl relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl transform translate-x-12 -translate-y-12"></div>
-              <div className="flex justify-between items-start mb-4 relative z-10">
+               <div className="flex justify-between items-start mb-4 relative z-10">
                  <div>
-                   <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">OEE Global • TOST-A (120kg)</p>
-                   <h3 className="text-3xl font-black text-white mt-1">74.2%</h3>
+                   <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">OEE Global • Tostadora Principal (120kg)</p>
+                   <h3 className="text-3xl font-black text-white mt-1">89.5%</h3>
                  </div>
-                 <div className="bg-[#1e222b] p-3 rounded-xl border border-dashboard-border">
-                   <Server className="w-6 h-6 text-blue-400" />
-                 </div>
-              </div>
-              <div className="space-y-2 relative z-10">
-                 <div className="flex justify-between text-[10px] font-bold text-gray-400"><span className="uppercase">Disponibilidad</span><span className="text-white">85%</span></div>
-                 <div className="flex justify-between text-[10px] font-bold text-gray-400"><span className="uppercase">Rendimiento</span><span className="text-white">91%</span></div>
-                 <div className="flex justify-between text-[10px] font-bold text-gray-400"><span className="uppercase">Calidad (SCA)</span><span className="text-white">96%</span></div>
-              </div>
-           </div>
-
-           {/* OEE TOST-B (Main MDD roaster) */}
-           <div className="bg-dashboard-panel border border-dashboard-border rounded-2xl p-6 shadow-xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl transform translate-x-12 -translate-y-12"></div>
-              <div className="flex justify-between items-start mb-4 relative z-10">
-                 <div>
-                   <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">OEE Global • TOST-B (240kg)</p>
-                   <div className="flex items-center mt-1">
-                      <h3 className="text-3xl font-black text-white mr-3">89.5%</h3>
-                      <span className="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded font-black border border-green-500/30 flex items-center"><TrendingUp className="w-3 h-3 mr-1"/> MDD Loked</span>
-                   </div>
-                 </div>
-                 <div className="bg-[#1e222b] p-3 rounded-xl border border-dashboard-border shadow-[0_0_15px_rgba(168,85,247,0.15)]">
-                   <Factory className="w-6 h-6 text-purple-400" />
+                 <div className="bg-[#1e222b] p-3 rounded-xl border border-dashboard-border shadow-[0_0_15px_rgba(59,130,246,0.15)]">
+                   <Factory className="w-6 h-6 text-blue-400" />
                  </div>
               </div>
               <div className="space-y-2 relative z-10">
@@ -144,7 +122,7 @@ const ManagementDashboard: React.FC = () => {
               Alerta de Stock Crítico (Compras)
             </h3>
             <p className="text-sm text-gray-300 leading-relaxed font-mono">
-              Ritmo de tueste para <span className="text-white font-bold">Lidl Mezcla Directa</span> supera el promedio semanal en un 18%. 
+              Ritmo de tueste para <span className="text-white font-bold">Espresso Barista PRO</span> supera el promedio semanal en un 18%. 
               <br/><br/>
               <strong className="text-red-300">El inventario de Brasil Cerrado (Verde) se agotará en 6.4 días.</strong> 
               <br/><br/>
@@ -264,7 +242,7 @@ const ManagementDashboard: React.FC = () => {
             <div className="bg-black/20 p-3 rounded-lg border border-dashboard-border mt-6">
               <p className="text-[10px] text-gray-400 italic font-medium leading-relaxed">
                 <strong className="text-white mr-1">Conclusión Ejecutiva:</strong> 
-                El modelo MDD (Lidl) prioriza una alta eficiencia volumétrica para sostener el OEE de TOST-B. Las Marcas Propias absorben menor carga operativa en planta, aportando un margen neto un 130% superior. La sincronización de ambos mundos en la Fase 7 permite escalar la producción garantizando la máxima rentabilidad.
+                La centralización de todo el flujo en el tambor de 120kg estabiliza la inercia térmica global, maximizando el ahorro energético en la curva de tueste y mejorando el margen neto. La ausencia de mermas extremas por torrefacto influye positivamente en la homogeneidad Agtron de la semana.
               </p>
             </div>
           </div>
@@ -279,7 +257,7 @@ const ManagementDashboard: React.FC = () => {
                </div>
                <div>
                   <h2 className="text-xl font-black text-white uppercase tracking-wider mb-1">Certificado de Firma de Calidad</h2>
-                  <p className="text-sm text-green-400 font-mono tracking-wide">ID: AUTH-LIDL-CAN-2026-X89</p>
+                  <p className="text-sm text-green-400 font-mono tracking-wide">ID: AUTH-ARBITRADE-2026-X89</p>
                   <p className="text-sm text-gray-400 mt-2 max-w-sm">
                     "Este lote cumple con los estrictos estándares de homogeneidad validados por el protocolo de la industria de Antonio Márquez."
                   </p>
@@ -289,7 +267,7 @@ const ManagementDashboard: React.FC = () => {
             <div className="z-10 bg-dashboard-bg/50 border border-dashboard-border p-4 rounded-xl flex items-center shrink-0 w-full lg:w-auto justify-center">
                <FileCheck className="w-6 h-6 text-gray-400 mr-3" />
                <div className="flex flex-col">
-                 <span className="text-xs text-gray-500 uppercase font-bold">Estado del Lote #CAN-LIDL-003</span>
+                 <span className="text-xs text-gray-500 uppercase font-bold">Estado del Lote #CAN-ARB-003</span>
                  <span className="text-sm text-white font-mono">Homogeneidad Verificada</span>
                </div>
             </div>

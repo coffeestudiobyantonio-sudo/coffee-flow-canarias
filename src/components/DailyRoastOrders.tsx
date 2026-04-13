@@ -22,7 +22,6 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    const [targetKg, setTargetKg] = useState<number>(120);
    const [priority, setPriority] = useState<'URGENTE' | 'STOCK' | 'MUESTRA'>('STOCK');
    const [orderCategory, setOrderCategory] = useState<OrderCategory>('MARCA_PROPIA'); // Phase 12
-   const [selectedMachineId, setSelectedMachineId] = useState<string>('TOST-B');
    const [fragmentationMode, setFragmentationMode] = useState<'BALANCED' | 'MAX_CAPACITY'>('BALANCED');
    // Operator Form State
    
@@ -48,12 +47,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
    const selectedProfile = masterProfiles.find(p => p.name === selectedProfileName);
 
-   useEffect(() => {
-      if (selectedProfile) {
-         if (selectedProfile.roastedType === 'NATURAL') setSelectedMachineId('TOST-B');
-         else if (selectedProfile.roastedType === 'TORREFACTO') setSelectedMachineId('TOST-A');
-      }
-   }, [selectedProfile]);
+
 
    const SHRINKAGE_PCT = 0.15;
    const estimatedYield = targetKg * (1 - SHRINKAGE_PCT);
@@ -95,7 +89,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       const orderPMP = 8.50;
 
       // ASSET & FRAGMENTATION LOGIC
-      const machine = ROASTING_MACHINES.find(m => m.id === selectedMachineId) || ROASTING_MACHINES[1];
+      const machine = ROASTING_MACHINES[0];
 
       const calculateBatches = (total: number): number[] => {
          if (fragmentationMode === 'BALANCED') {
@@ -122,7 +116,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
             parentOrderId: orderId,
             type: 'ROAST',
             masterProfile: selectedProfile,
-            machineId: selectedMachineId,
+            machineId: 'TOST-A',
             origins: selectedProfile.blend.map(b => b.origin),
             assignedSilos: selectedProfile.blend.map(b => autoSiloAssignments[b.origin]),
             targetWeightKg: w,
@@ -144,7 +138,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                   parentOrderId: orderId,
                   type: 'ROAST',
                   masterProfile: selectedProfile,
-                  machineId: selectedMachineId,
+                  machineId: 'TOST-A',
                   origins: [b.origin],
                   assignedSilos: [autoSiloAssignments[b.origin]],
                   targetWeightKg: w,
@@ -310,53 +304,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                  </div>
                               </div>
 
-                              {/* Machine Selection (Workstation Selector) */}
-                              <div>
-                                 <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3">2. Asignación de Activo (Asset Selection)</label>
-                                 <div className="grid grid-cols-2 gap-4">
-                                    {ROASTING_MACHINES.map(m => {
-                                       const isMDD = selectedProfile?.businessUnit === 'LIDL';
-                                       const isNaturalLayoutLocked = selectedProfile?.roastedType === 'NATURAL' && m.id === 'TOST-A';
-                                       const isTorrefactoLayoutLocked = selectedProfile?.roastedType === 'TORREFACTO' && m.id === 'TOST-B';
-                                       const isLocked = (isMDD && targetKg >= 480 && m.id === 'TOST-A') || isNaturalLayoutLocked || isTorrefactoLayoutLocked;
-                                       const isOptimal = (m.id === 'TOST-A' && targetKg <= 140 && !isMDD) || (m.id === 'TOST-B' && (targetKg > 140 || isMDD));
-                                       const isWarning = (m.id === 'TOST-B' && targetKg < 80 && !isMDD) || (m.id === 'TOST-A' && targetKg > 130 && !isMDD);
-                                       const isActive = selectedMachineId === m.id && !isLocked;
 
-                                       return (
-                                          <button
-                                             key={m.id}
-                                             type="button"
-                                             disabled={isLocked}
-                                             onClick={() => setSelectedMachineId(m.id)}
-                                             className={`relative p-5 rounded-2xl border-2 transition-all flex flex-col text-left group 
-                                        ${isLocked ? 'bg-[#0f1114] border-red-900/30 opacity-40 cursor-not-allowed' :
-                                                   isActive ? 'bg-coffee-accent/10 border-coffee-accent shadow-lg shadow-coffee-accent/10' : 'bg-[#1e222b] border-dashboard-border hover:border-gray-600'}`}
-                                          >
-                                             <div className="flex justify-between items-center mb-2">
-                                                <span className={`text-sm font-black uppercase ${isLocked ? 'text-red-900' : isActive ? 'text-white' : 'text-gray-400'}`}>
-                                                   {m.name} {isLocked && '🔒'}
-                                                </span>
-                                                {isOptimal && !isLocked && <Zap className="w-4 h-4 text-green-500 fill-current" />}
-                                             </div>
-                                             <div className="flex items-end justify-between">
-                                                <p className="text-2xl font-black text-white">{m.maxCapacity}<span className="text-xs text-gray-500 ml-1">kg</span></p>
-                                                {isLocked ? (
-                                                   <span className="text-[8px] font-black text-red-500 uppercase border border-red-500/30 px-1.5 rounded">{isNaturalLayoutLocked || isTorrefactoLayoutLocked ? 'Reglas de Tueste' : 'Bloqueo MDD'}</span>
-                                                ) : isOptimal ? (
-                                                   <span className="text-[8px] font-black text-green-500 uppercase border border-green-500/30 px-1.5 rounded">Alta Eficiencia</span>
-                                                ) : isWarning ? (
-                                                   <span className="text-[8px] font-black text-red-500 uppercase border border-red-500/30 px-1.5 rounded">Mala Inercia</span>
-                                                ) : null}
-                                             </div>
-
-                                             {isActive && !isLocked && <div className="absolute -top-2 -right-2 bg-coffee-accent text-white p-1 rounded-full shadow-lg"><CheckCircle className="w-3 h-3" /></div>}
-                                             {isLocked && <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-2xl"><Lock className="w-8 h-8 text-red-500" /></div>}
-                                          </button>
-                                       );
-                                    })}
-                                 </div>
-                              </div>
 
                               {/* Fragmentation Mode */}
                               <div>

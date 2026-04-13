@@ -123,8 +123,7 @@ export interface DailyRoastOrder {
 }
 
 export const ROASTING_MACHINES: RoastingMachine[] = [
-  { id: 'TOST-A', name: 'Tostadora A', maxCapacity: 120, bbpCooldownBase: 180, bbpCoefficient: 0.5, energyType: 'ELECTRIC' },
-  { id: 'TOST-B', name: 'Tostadora B', maxCapacity: 240, bbpCooldownBase: 360, bbpCoefficient: 0.8, energyType: 'GAS' }
+  { id: 'TOST-A', name: 'Tostadora Única', maxCapacity: 120, bbpCooldownBase: 180, bbpCoefficient: 0.5, energyType: 'ELECTRIC' }
 ];
 
 function App() {
