@@ -191,10 +191,10 @@ const Inventory: React.FC<InventoryProps> = ({ inventoryLots, setInventoryLots, 
                       <AlertTriangle className="w-6 h-6 text-orange-400" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-black text-orange-400 uppercase tracking-widest">ALERTA PISO SUPERIOR: SILO {s.id} AL {(s.currentKg / s.maxKg * 100).toFixed(0)}%</h3>
+                      <h3 className="text-sm font-black text-orange-400 uppercase tracking-widest">ALERTA PRODUCTO TERMINADO: SILO T-{s.id} AL {(s.currentKg / s.maxKg * 100).toFixed(0)}%</h3>
                       <p className="text-xs text-gray-300 mt-1">
-                        El volumen de <span className="font-bold text-white">{s.origin}</span> ha caído a {s.currentKg}kg.
-                        Realice una transferencia en Gestión de Silos para evitar paradas mecánicas.
+                        El volumen de la receta <span className="font-bold text-white">{s.profileName || 'No Definido'}</span> ha caído a {s.currentKg}kg.
+                        Produzca más tueste para evitar paradas en el envasado mecánico.
                       </p>
                     </div>
                   </div>

@@ -72,9 +72,7 @@ export const fetchSilos = async (): Promise<Silo[]> => {
   }
   return data.map(s => ({
     id: s.id,
-    lotId: s.lot_id,
-    origin: s.origin,
-    moisture: s.moisture ? Number(s.moisture) : null,
+    profileName: s.origin,
     currentKg: Number(s.current_kg),
     maxKg: Number(s.max_kg),
     lastFillDate: s.last_fill_date
@@ -83,9 +81,7 @@ export const fetchSilos = async (): Promise<Silo[]> => {
 
 export const updateSilo = async (id: number, updates: Partial<Silo>) => {
   const dbUpdates: any = {};
-  if (updates.lotId !== undefined) dbUpdates.lot_id = updates.lotId;
-  if (updates.origin !== undefined) dbUpdates.origin = updates.origin;
-  if (updates.moisture !== undefined) dbUpdates.moisture = updates.moisture;
+  if (updates.profileName !== undefined) dbUpdates.origin = updates.profileName;
   if (updates.currentKg !== undefined) dbUpdates.current_kg = updates.currentKg;
   if (updates.lastFillDate !== undefined) dbUpdates.last_fill_date = updates.lastFillDate;
 

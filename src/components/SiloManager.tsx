@@ -1,609 +1,257 @@
-import React, { useState, useEffect } from 'react';
-import { Database, AlertTriangle, ArrowRight, Truck, Calendar, AlertCircle, Timer, Trash2 } from 'lucide-react';
-import type { Silo, InventoryLot, DailyRoastOrder } from '../App';
-import { updateSilo, updateInventoryLot } from '../lib/api';
+import React, { useState } from 'react';
+import { Database, AlertCircle, ArrowDownToLine, Trash2, ArrowUpFromLine } from 'lucide-react';
+import type { Silo } from '../App';
+import { updateSilo } from '../lib/api';
 
 interface SiloManagerProps {
   silos: Silo[];
   setSilos: React.Dispatch<React.SetStateAction<Silo[]>>;
-  inventoryLots: InventoryLot[];
-  setInventoryLots: React.Dispatch<React.SetStateAction<InventoryLot[]>>;
-  roastOrders: DailyRoastOrder[];
 }
 
-const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos, inventoryLots, setInventoryLots, roastOrders }) => {
-  const validLots = inventoryLots.filter(l => l.status === 'VALIDATED' && l.stock_kg > 0);
-
-  const [selectedLotId, setSelectedLotId] = useState<string>('');
+const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos }) => {
   const [selectedSiloId, setSelectedSiloId] = useState<number>(0);
-  const [transferKg, setTransferKg] = useState<number>(0);
-  
-  const [leftColumnMode, setLeftColumnMode] = useState<'TRANSFER' | 'ADJUST'>('TRANSFER');
+  const [operationType, setOperationType] = useState<'FILL' | 'EMPTY' | 'ADJUST'>('FILL');
   const [adjustKg, setAdjustKg] = useState<number>(0);
-  const [transferMoisture, setTransferMoisture] = useState<number | ''>('');
+  const [profileNameInput, setProfileNameInput] = useState<string>('');
 
-  useEffect(() => {
-    const lot = inventoryLots.find(l => l.id === selectedLotId);
-    if (lot && lot.moisture != null) {
-      setTransferMoisture(lot.moisture);
-    } else {
-      setTransferMoisture('');
-    }
-  }, [selectedLotId, inventoryLots]);
-
-  const selectedLot = validLots.find(l => l.id === selectedLotId);
   const targetSilo = silos.find(s => s.id === selectedSiloId);
 
-  // Validation Logic
-  const originMismatch = targetSilo && targetSilo.currentKg > 0 && targetSilo.origin !== selectedLot?.origin;
-  const overflow = targetSilo && (targetSilo.currentKg + transferKg) > targetSilo.maxKg;
-  const insufficientStock = selectedLot && transferKg > selectedLot.stock_kg;
-  
-  // Phase 11: Demand Forecasting Logic
-  const calculateDemand = () => {
-    const demand: Record<string, number> = {};
-    roastOrders
-      .filter(o => o.status === 'PLANNED')
-      .forEach(order => {
-        order.tasks.forEach(task => {
-          if (task.type === 'ROAST') {
-            const origin = task.origins[0];
-            demand[origin] = (demand[origin] || 0) + task.targetWeightKg;
-          }
-        });
-      });
-    return demand;
-  };
-
-  const totalDemand = calculateDemand();
-  const originsInDemand = Object.keys(totalDemand);
-
-  const canTransfer = selectedLot && targetSilo && transferKg > 0 && !originMismatch && !overflow && !insufficientStock;
-
-  const handleTransfer = async (e: React.FormEvent) => {
+  const handleOperation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canTransfer) return;
+    if (!targetSilo || selectedSiloId === 0) return;
 
-    // Persist to Supabase Phase 18
-    const newSiloKg = targetSilo.currentKg + transferKg;
-    const newLotKg = selectedLot.stock_kg - transferKg;
+    let newKg = targetSilo.currentKg;
+    let newProfile = targetSilo.profileName;
 
-    const okSilo = await updateSilo(selectedSiloId, { 
-      lotId: selectedLot.id, 
-      origin: selectedLot.origin, 
-      moisture: transferMoisture !== '' ? Number(transferMoisture) : (selectedLot.moisture || null), 
-      currentKg: newSiloKg 
-    });
-    
-    const okLot = await updateInventoryLot(selectedLot.id, { stock_kg: newLotKg });
-
-    if (!okSilo || !okLot) {
-      alert("Error al sincronizar con la base de datos.");
-      return;
+    if (operationType === 'FILL') {
+       if (newKg > 0 && targetSilo.profileName !== profileNameInput) {
+          alert('¡Peligro! No puedes mezclar dos perfiles distintos en el mismo silo.');
+          return;
+       }
+       if (newKg + adjustKg > targetSilo.maxKg) {
+          alert('El silo rebozará el nivel máximo.');
+          return;
+       }
+       newKg += adjustKg;
+       newProfile = profileNameInput;
+    } else if (operationType === 'EMPTY') {
+       if (adjustKg > newKg) {
+          alert('No puedes retirar más kilos de los que hay.');
+          return;
+       }
+       newKg -= adjustKg;
+       if (newKg <= 0) newProfile = null;
+    } else if (operationType === 'ADJUST') {
+       newKg = adjustKg;
+       if (newKg <= 0) newProfile = null;
     }
 
-    setSilos(prev => prev.map(s => {
-      if (s.id === selectedSiloId) {
-        return {
-          ...s,
-          lotId: selectedLot.id,
-          origin: selectedLot.origin,
-          moisture: selectedLot.moisture,
-          currentKg: newSiloKg
-        };
-      }
-      return s;
-    }));
+    const { lastFillDate } = targetSilo;
+    const isNewFill = operationType === 'FILL' && targetSilo.currentKg === 0;
 
-    // Deduct stock from the global inventory payload (Phase 13)
-    setInventoryLots(prev => prev.map(l => {
-      if (l.id === selectedLot.id) {
-        return {
-          ...l,
-          stock_kg: l.stock_kg - transferKg
-        };
-      }
-      return l;
-    }));
-
-    // Reset form
-    setTransferKg(0);
-    
-    // Simulate UI Toast
-    const toast = document.createElement('div');
-    toast.className = 'fixed bottom-4 right-4 bg-green-500/90 text-white px-6 py-4 rounded-xl font-bold shadow-[0_0_30px_rgba(34,197,94,0.3)] z-50 animate-bounce flex flex-col space-y-1';
-    toast.innerHTML = `
-      <span class="flex items-center">🛢️ Silo ${selectedSiloId} Cargado: +${transferKg}kg de ${selectedLot.origin}</span>
-      <span class="text-xs bg-black/20 p-2 rounded block mt-1">Almacén: Stock de lote ${selectedLot.id} reducido a ${selectedLot.stock_kg - transferKg}kg.</span>
-    `;
-    document.body.appendChild(toast);
-    setTimeout(() => document.body.removeChild(toast), 5000);
-  };
-
-  const handleAdjust = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const target = silos.find(s => s.id === selectedSiloId);
-    if (!target) return;
-
-    const okSilo = await updateSilo(selectedSiloId, { 
-      currentKg: adjustKg
+    const ok = await updateSilo(selectedSiloId, {
+       currentKg: newKg,
+       profileName: newProfile,
+       lastFillDate: isNewFill ? new Date().toISOString() : lastFillDate
     });
 
-    if (!okSilo) {
-      alert("Error al sincronizar con la base de datos.");
-      return;
+    if (ok) {
+       setSilos(prev => prev.map(s => s.id === selectedSiloId ? { ...s, currentKg: newKg, profileName: newProfile, lastFillDate: isNewFill ? new Date().toISOString() : s.lastFillDate } : s));
+       setAdjustKg(0);
+       alert('Operación registrada exitosamente.');
+    } else {
+       alert('Error base de datos.');
     }
-
-    setSilos(prev => prev.map(s => s.id === selectedSiloId ? { ...s, currentKg: adjustKg } : s));
-    
-    const toast = document.createElement('div');
-    toast.className = 'fixed bottom-4 right-4 bg-orange-500/90 text-white px-6 py-4 rounded-xl font-bold shadow-[0_0_30px_rgba(249,115,22,0.3)] z-50 animate-bounce';
-    toast.innerHTML = `🛢️ Silo ${selectedSiloId} ajustado forzosamente a ${adjustKg}kg`;
-    document.body.appendChild(toast);
-    setTimeout(() => document.body.removeChild(toast), 3000);
   };
 
   const handlePurge = async () => {
-    if (!confirm('¿Estás seguro de que deseas VACIAR este silo completamente? Perderá el rastro del origen actual.')) return;
-
-    const okSilo = await updateSilo(selectedSiloId, { 
-      currentKg: 0,
-      origin: null,
-      moisture: null
-    });
-
-    if (!okSilo) {
-      alert("Error al vaciar el silo en la base de datos.");
-      return;
-    }
-
-    setSilos(prev => prev.map(s => s.id === selectedSiloId ? { ...s, currentKg: 0, origin: null, moisture: null } : s));
-    setAdjustKg(0);
+     if (!targetSilo) return;
+     if (confirm('Vaciado de emergencia. El compartimento pasará a 0kg y perderá el perfil almacenado. ¿Confirmar purga?')) {
+        const ok = await updateSilo(targetSilo.id, { currentKg: 0, profileName: null });
+        if (ok) {
+            setSilos(prev => prev.map(s => s.id === targetSilo.id ? { ...s, currentKg: 0, profileName: null } : s));
+        }
+     }
   };
 
+  // UI calculations
+  const globalCapacity = silos.reduce((acc, s) => acc + s.maxKg, 0);
+  const globalCurrent = silos.reduce((acc, s) => acc + s.currentKg, 0);
+
   return (
-    <div className="flex flex-col h-full w-full bg-dashboard-bg text-gray-200 overflow-y-auto">
-      
-      {/* Top Banner */}
-      <div className="bg-dashboard-panel border-b border-dashboard-border px-10 py-8 shadow-sm flex flex-col justify-center relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
-        <h1 className="text-3xl font-black tracking-tight text-white mb-2 uppercase flex items-center">
-           <Database className="w-8 h-8 mr-3 text-blue-400" /> Centro de Control de Silos
-        </h1>
-        <p className="text-gray-400 text-lg max-w-2xl">
-          Sincronización Piso Inferior (Almacén) ➔ Piso Superior (Planta de Tueste). Enruta café verde validado a depósitos de alta capacidad de forma segura.
-        </p>
+    <div className="flex flex-col h-full bg-dashboard-bg overflow-x-hidden">
+      <div className="bg-gradient-to-r from-dashboard-panel to-dashboard-bg border-b border-dashboard-border px-8 py-6 mb-6 shrink-0 relative overflow-hidden">
+        <div className="absolute inset-0 z-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 80% 0%, #10b981 0%, transparent 40%)' }}></div>
+        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between">
+           <h1 className="text-3xl font-black text-white flex items-center tracking-tight mb-4 md:mb-0">
+             <Database className="w-8 h-8 mr-3 text-green-400" /> Silos de Café Tostado
+           </h1>
+           <div className="flex gap-4">
+              <div className="bg-dashboard-panel border border-dashboard-border px-6 py-3 rounded-2xl flex flex-col justify-center shadow-lg shadow-black/50 items-end">
+                <span className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Ocupación Batería</span>
+                <span className="text-xl font-bold text-white font-mono">{((globalCurrent/globalCapacity)*100 || 0).toFixed(1)}% <span className="text-sm text-gray-500">[{globalCurrent}/{globalCapacity}kg]</span></span>
+              </div>
+           </div>
+        </div>
       </div>
 
-      <div className="p-10 flex-1 relative z-10 mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-10">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 px-8 pb-8 overflow-y-auto">
         
-        {/* Left Column: Módulo de Carga o Ajuste */}
+        {/* Left Column: UI de Asignación / Ajuste */}
         <div className="lg:col-span-4 space-y-6">
            <div className="flex bg-[#14161a] p-1 rounded-xl mb-2 border border-dashboard-border">
              <button 
-               onClick={() => setLeftColumnMode('TRANSFER')}
-               className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${leftColumnMode === 'TRANSFER' ? 'bg-[#1e222b] text-blue-400 shadow border border-blue-500/30' : 'text-gray-500 hover:text-gray-300'}`}
+               onClick={() => setOperationType('FILL')}
+               className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${operationType === 'FILL' ? 'bg-[#1e222b] text-green-400 shadow border border-green-500/30' : 'text-gray-500 hover:text-gray-300'}`}
              >
-               Carga Almacén
+               Cargar
              </button>
              <button 
-               onClick={() => setLeftColumnMode('ADJUST')}
-               className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${leftColumnMode === 'ADJUST' ? 'bg-[#1e222b] text-orange-400 shadow border border-orange-500/30' : 'text-gray-500 hover:text-gray-300'}`}
+               onClick={() => setOperationType('EMPTY')}
+               className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${operationType === 'EMPTY' ? 'bg-[#1e222b] text-orange-400 shadow border border-orange-500/30' : 'text-gray-500 hover:text-gray-300'}`}
              >
-               Mantenimiento
+               Descargar
+             </button>
+             <button 
+               onClick={() => setOperationType('ADJUST')}
+               className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${operationType === 'ADJUST' ? 'bg-[#1e222b] text-red-500 shadow border border-red-500/30' : 'text-gray-500 hover:text-gray-300'}`}
+             >
+               Calibrar
              </button>
            </div>
 
           <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-8 shadow-2xl relative overflow-hidden">
-             
-             {leftColumnMode === 'TRANSFER' ? (
-                <>
-                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl transform translate-x-10 -translate-y-10"></div>
-                   
-                   <h2 className="text-xl font-bold mb-6 text-white flex items-center uppercase tracking-widest relative z-10 border-b border-dashboard-border pb-4">
-                     <Truck className="w-6 h-6 mr-3 text-blue-400" />
-                     Módulo de Carga
-                   </h2>
+               <h2 className="text-xl font-bold mb-6 text-white flex items-center uppercase tracking-widest relative z-10 border-b border-dashboard-border pb-4">
+                 {operationType === 'FILL' && <ArrowDownToLine className="w-6 h-6 mr-3 text-green-400" />}
+                 {operationType === 'EMPTY' && <ArrowUpFromLine className="w-6 h-6 mr-3 text-orange-400" />}
+                 {operationType === 'ADJUST' && <AlertCircle className="w-6 h-6 mr-3 text-red-500" />}
+                 Comandos Panel de Control
+               </h2>
 
-                   <form onSubmit={handleTransfer} className="space-y-6 relative z-10">
-                     
-                     {/* Lote FIFO Selector */}
+               <form onSubmit={handleOperation} className="space-y-6 relative z-10">
+                 <div>
+                   <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Compartimento</label>
+                   <select 
+                     className="w-full bg-[#14161a] border border-dashboard-border rounded-xl p-4 text-white focus:outline-none focus:border-green-500 transition-colors appearance-none font-medium"
+                     value={selectedSiloId}
+                     onChange={e => setSelectedSiloId(Number(e.target.value))}
+                     required
+                   >
+                     <option value={0} disabled>Seleccione un grupo</option>
+                     {silos.map(s => (
+                       <option key={s.id} value={s.id}>Silo TS-{s.id} ({s.currentKg}kg) {s.profileName ? `- ${s.profileName}` : ''}</option>
+                     ))}
+                   </select>
+                 </div>
+
+                 {operationType === 'FILL' && (
                      <div>
-                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">1. Lote Aprobado (Origen)</label>
-                 <select 
-                   className="w-full bg-[#14161a] border border-dashboard-border rounded-xl p-4 text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none font-medium"
-                   value={selectedLotId}
-                   onChange={e => setSelectedLotId(e.target.value)}
-                   required
-                 >
-                   <option value="" disabled>Selecciona Lote en Inventario</option>
-                   {validLots.map(l => (
-                     <option key={l.id} value={l.id}>{l.origin} — {l.id} ({l.stock_kg}kg disp)</option>
-                   ))}
-                 </select>
-                 {selectedLot && (
-                   <div className="mt-2 text-[10px] font-mono text-blue-300 bg-blue-500/10 p-2 rounded-lg border border-blue-500/20 flex justify-between">
-                     <span>H₂O: {selectedLot.moisture}%</span>
-                     <span>Densidad: {selectedLot.density}g/L</span>
-                   </div>
+                       <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Perfil Asignado (Lote Final)</label>
+                       <input 
+                         type="text" 
+                         disabled={targetSilo && targetSilo.currentKg > 0}
+                         className="w-full bg-[#14161a] border border-dashboard-border rounded-xl p-4 text-white focus:outline-none focus:border-green-500 transition-colors"
+                         value={targetSilo && targetSilo.currentKg > 0 && targetSilo.profileName ? targetSilo.profileName : profileNameInput}
+                         onChange={e => setProfileNameInput(e.target.value)}
+                         placeholder="Ej: Mezcla Barista Oro..."
+                         required
+                       />
+                     </div>
                  )}
-               </div>
-
-               {/* Target Silo Selector */}
-               <div>
-                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">2. Destino (Silo)</label>
-                 <div className="grid grid-cols-5 gap-2">
-                   {silos.map(s => {
-                     const isAvailable = s.currentKg === 0 || s.origin === selectedLot?.origin;
-                     const isFull = s.currentKg >= s.maxKg;
-                     return (
-                       <button
-                         type="button"
-                         key={s.id}
-                         disabled={!isAvailable || isFull}
-                         onClick={() => setSelectedSiloId(s.id)}
-                         className={`py-3 rounded-lg font-black text-sm transition-all border ${
-                           selectedSiloId === s.id 
-                             ? 'bg-blue-600 border-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]' 
-                             : (!isAvailable || isFull)
-                               ? 'bg-dashboard-bg border-transparent text-gray-600 opacity-50 cursor-not-allowed'
-                               : 'bg-[#14161a] border-dashboard-border text-gray-400 hover:border-blue-500/50 hover:text-white'
-                         }`}
-                       >
-                         {s.id}
-                       </button>
-                     )
-                   })}
-                 </div>
-               </div>
-
-               {/* Kilos a transferir y Humedad */}
-               <div className="grid grid-cols-2 gap-4 relative">
-                 <div>
-                   <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">3. Transferir</label>
-                   <div className="flex bg-[#14161a] border border-dashboard-border rounded-xl px-4 py-2 focus-within:border-blue-500 transition-colors">
-                     <input 
-                       type="number" min="1" max="4000"
-                       className="w-full bg-transparent text-2xl font-black text-white focus:outline-none"
-                       value={transferKg || ''}
-                       onChange={e => setTransferKg(parseInt(e.target.value) || 0)}
-                       required
-                     />
-                     <span className="text-gray-500 font-black text-xl flex items-center ml-2">KG</span>
-                   </div>
-                 </div>
 
                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">4. Humedad Real</label>
-                    <div className="flex bg-[#14161a] border border-dashboard-border rounded-xl px-4 py-2 focus-within:border-blue-500 transition-colors">
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Kilos Netos</label>
+                    <div className="flex bg-[#14161a] border border-dashboard-border rounded-xl px-4 py-2 focus-within:border-green-500 transition-colors">
                       <input 
-                        type="number" step="0.1" min="0" max="25"
+                        type="number" min="1" max="400" step="0.5"
                         className="w-full bg-transparent text-2xl font-black text-white focus:outline-none"
-                        value={transferMoisture}
-                        onChange={e => setTransferMoisture(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                        disabled={!selectedLot}
+                        value={adjustKg || ''}
+                        onChange={e => setAdjustKg(parseFloat(e.target.value) || 0)}
                         required
                       />
-                      <span className="text-gray-500 font-black text-xl flex items-center ml-2">%</span>
+                      <span className="text-gray-500 font-black text-xl flex items-center ml-2">KG</span>
                     </div>
                  </div>
-               </div>
 
-               {selectedLot && selectedLot.moisture != null && transferMoisture !== '' && transferMoisture !== selectedLot.moisture && (
-                 <div className={`-mt-2 mb-4 text-[10px] font-black uppercase tracking-widest px-4 py-3 rounded-xl border flex items-center justify-between shadow-inner ${
-                   Number(transferMoisture) < selectedLot.moisture 
-                     ? 'text-orange-400 bg-orange-500/10 border-orange-500/30' 
-                     : 'text-blue-400 bg-blue-500/10 border-blue-500/30'
+                 <button type="submit" className={`w-full py-4 rounded-xl font-black shadow-lg transition-all text-sm uppercase tracking-widest ${
+                     operationType === 'FILL' ? 'bg-green-600 hover:bg-green-500 text-white shadow-green-500/20' : 
+                     operationType === 'EMPTY' ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-500/20' : 
+                     'bg-red-600 hover:bg-red-500 text-white shadow-red-500/20'
                  }`}>
-                   <span>H₂O Almacén: {selectedLot.moisture}%</span>
-                   <span className="flex items-center text-sm">
-                     Δ {(Number(transferMoisture) - selectedLot.moisture).toFixed(1)}% 
-                     <span className="text-[9px] text-gray-500 ml-2">{Number(transferMoisture) < selectedLot.moisture ? '(PÉRDIDA)' : '(GANANCIA)'}</span>
-                   </span>
-                 </div>
+                   {operationType === 'FILL' && 'Confirmar Ingreso a Silo'}
+                   {operationType === 'EMPTY' && 'Confirmar Evacuación (A Envasado)'}
+                   {operationType === 'ADJUST' && 'Aplicar Sobrescritura'}
+                 </button>
+                 
+               </form>
+
+               {operationType === 'ADJUST' && targetSilo && (
+                   <button onClick={handlePurge} className="mt-4 w-full py-4 rounded-xl border border-red-900/30 bg-transparent text-red-500 hover:bg-red-500/10 font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center">
+                     <Trash2 className="w-4 h-4 mr-2" /> Purgar Silo a 0
+                   </button>
                )}
-
-               {/* Safety Alerts */}
-               <div className="space-y-2">
-                 {originMismatch && (
-                   <div className="flex items-start text-[11px] font-black uppercase tracking-widest text-red-500 bg-red-500/10 p-3 rounded-lg border border-red-500/20">
-                     <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" /> No se permiten diferentes orígenes en un mismo silo. Rastreabilidad comprometida.
-                   </div>
-                 )}
-                 {overflow && (
-                   <div className="flex items-start text-[11px] font-black uppercase tracking-widest text-orange-500 bg-orange-500/10 p-3 rounded-lg border border-orange-500/20">
-                     <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" /> Excede la capacidad máxima de ${targetSilo?.maxKg}kg.
-                   </div>
-                 )}
-               </div>
-
-               {/* Action Button */}
-               <button 
-                 type="submit" 
-                 disabled={!canTransfer}
-                 className={`w-full font-black uppercase tracking-widest py-5 rounded-xl transition-all shadow-xl flex items-center justify-center mt-4
-                   ${canTransfer
-                     ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]' 
-                     : 'bg-[#14161a] border border-dashboard-border text-gray-600 cursor-not-allowed hidden'}`}
-               >
-                       Autorizar Carga <ArrowRight className="w-5 h-5 ml-2" />
-                     </button>
-                   </form>
-                </>
-             ) : (
-                <>
-                   <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl transform translate-x-10 -translate-y-10"></div>
-                   
-                   <h2 className="text-xl font-bold mb-6 text-white flex items-center uppercase tracking-widest relative z-10 border-b border-dashboard-border pb-4">
-                     <AlertTriangle className="w-6 h-6 mr-3 text-orange-400" />
-                     Ajuste de Precisión
-                   </h2>
-
-                   <form onSubmit={handleAdjust} className="space-y-6 relative z-10">
-                     
-                     {/* Target Silo Selector */}
-                     <div>
-                       <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">1. Seleccionar Silo a Calibrar</label>
-                       <div className="grid grid-cols-5 gap-2">
-                         {silos.map(s => {
-                           return (
-                             <button
-                               type="button"
-                               key={s.id}
-                               onClick={() => {
-                                  setSelectedSiloId(s.id);
-                                  setAdjustKg(s.currentKg);
-                               }}
-                               className={`py-3 rounded-lg font-black text-sm transition-all border ${
-                                 selectedSiloId === s.id 
-                                   ? 'bg-orange-600 border-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.4)]' 
-                                   : 'bg-[#14161a] border-dashboard-border text-gray-400 hover:border-orange-500/50 hover:text-white'
-                               }`}
-                             >
-                               {s.id}
-                             </button>
-                           )
-                         })}
-                       </div>
-                       {targetSilo && (
-                         <div className="mt-2 text-[10px] font-mono text-orange-300 bg-orange-500/10 p-2 rounded-lg border border-orange-500/20 flex justify-between">
-                           <span>Origen Actual: {targetSilo.origin || 'NINGUNO'}</span>
-                           <span>Lote Ref: {targetSilo.lotId || 'N/A'}</span>
-                         </div>
-                       )}
-                     </div>
-
-                     {/* Override Kilos */}
-                     <div>
-                       <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">2. Forzar Nivel Interno (kg)</label>
-                       <div className="flex bg-[#14161a] border border-dashboard-border rounded-xl px-4 py-2 focus-within:border-orange-500 transition-colors">
-                         <input 
-                           type="number" min="0" max="40000"
-                           className="w-full bg-transparent text-2xl font-black text-white focus:outline-none"
-                           value={adjustKg.toString()}
-                           onChange={e => setAdjustKg(parseInt(e.target.value) || 0)}
-                           disabled={!targetSilo}
-                           required
-                         />
-                         <span className="text-gray-500 font-black text-xl flex items-center ml-2">KG</span>
-                       </div>
-                     </div>
-
-                     <div className="pt-4 grid grid-cols-2 gap-4">
-                       <button 
-                         type="button" 
-                         onClick={handlePurge}
-                         disabled={!targetSilo || targetSilo.currentKg === 0}
-                         className={`w-full font-black uppercase text-[10px] tracking-widest py-4 rounded-xl transition-all shadow-xl flex items-center justify-center
-                           ${targetSilo && targetSilo.currentKg > 0
-                             ? 'bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)]' 
-                             : 'bg-[#14161a] border border-dashboard-border text-gray-600 cursor-not-allowed'}`}
-                       >
-                         <Trash2 className="w-4 h-4 mr-2" /> Vaciar Silo
-                       </button>
-
-                       <button 
-                         type="submit" 
-                         disabled={!targetSilo}
-                         className={`w-full font-black uppercase text-[10px] tracking-widest py-4 rounded-xl transition-all shadow-xl flex items-center justify-center
-                           ${targetSilo
-                             ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.4)]' 
-                             : 'bg-[#14161a] border border-dashboard-border text-gray-600 cursor-not-allowed'}`}
-                       >
-                         Forzar Ajuste
-                       </button>
-                     </div>
-                   </form>
-                </>
-             )}
           </div>
         </div>
 
-        {/* Right Column: Dashboard Panel */}
-        <div className="lg:col-span-8 flex flex-col space-y-6">
-           {/* Summary Stats */}
-           <div className="grid grid-cols-3 gap-6">
-             <div className="bg-dashboard-panel border border-dashboard-border rounded-2xl p-6 flex flex-col">
-               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Volumen Total en Silos</span>
-               <span className="text-3xl font-black text-white">{silos.reduce((sum, s) => sum + s.currentKg, 0).toLocaleString()} <span className="text-sm text-gray-500">KG</span></span>
-             </div>
-             <div className="bg-dashboard-panel border border-dashboard-border rounded-2xl p-6 flex flex-col">
-               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Capacidad Máxima</span>
-               <span className="text-3xl font-black text-blue-400">40,000 <span className="text-sm text-gray-500">KG</span></span>
-             </div>
-             <div className="bg-dashboard-panel border border-dashboard-border rounded-2xl p-6 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 block">Rastreo Activo</span>
-                  <span className="text-xl font-black text-white">{silos.filter(s => s.currentKg > 0).length} Lotes</span>
-                </div>
-                <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
-                  <Database className="w-6 h-6 text-blue-400" />
-                </div>
-             </div>
-           </div>
+        {/* Right Column: Matriz de Silos */}
+        <div className="lg:col-span-8 flex flex-col min-h-0 bg-dashboard-panel border border-dashboard-border rounded-3xl overflow-hidden shadow-2xl">
+          <div className="p-6 border-b border-dashboard-border bg-[#14161a] flex justify-between items-center">
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+              <Database className="w-4 h-4 mr-2" /> Batería de Almacenamiento Tostado
+            </h2>
+          </div>
 
-           {/* Silo Grid */}
-           <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-8 flex-1">
-              <div className="flex justify-between items-center mb-8 border-b border-dashboard-border pb-4">
-                 <h3 className="text-lg font-black uppercase tracking-widest text-white flex items-center">
-                    <Database className="w-5 h-5 mr-3 text-coffee-light" />
-                    Telemetría de Abastecimiento Activo
-                 </h3>
-                 <span className="px-3 py-1 bg-green-500/20 text-green-400 text-[10px] font-black uppercase tracking-widest rounded border border-green-500/30 flex items-center">
-                   <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse mr-2"></div> SINC
-                 </span>
-              </div>
+          <div className="p-8 flex-1 overflow-y-auto">
+             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                {silos.map(s => {
+                   const rawPct = (s.currentKg / s.maxKg) * 100;
+                   const isFull = rawPct >= 98;
+                   const isEmpty = rawPct === 0;
 
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-y-12 gap-x-6">
-                 {silos.map(silo => {
-                   const fillPct = (silo.currentKg / silo.maxKg) * 100;
-                   const isEmpty = silo.currentKg === 0;
-                   
                    return (
-                     <div key={silo.id} className="flex flex-col items-center group relative cursor-pointer">
-                        {/* Status Label Overlay on hover maybe */}
-                        <div className="mb-2 text-center h-8 flex flex-col justify-end">
-                           <span className="text-[10px] uppercase font-black tracking-widest text-gray-500">Silo {silo.id}</span>
-                        </div>
-                        
-                        {/* Silo SVG/Container */}
-                        <div className="w-24 h-48 bg-[#14161a] rounded-t-full rounded-b-3xl border-2 border-dashboard-border relative overflow-hidden shadow-inner group-hover:border-blue-500/50 transition-colors">
-                           {/* Fill Component */}
-                           <div 
-                             className={`absolute bottom-0 w-full rounded-b-3xl transition-all duration-1000 ${isEmpty ? 'bg-transparent' : 'bg-gradient-to-t from-coffee-accent to-[#b45309]'}`}
-                             style={{ height: `${Math.max(fillPct, 0)}%` }}
-                           >
-                             {!isEmpty && <div className="absolute top-0 w-full h-1 bg-white/20"></div>}
-                           </div>
-                           
-                           {/* Demand Indicator Overlay */}
-                            {silo.origin && totalDemand[silo.origin] && !isEmpty && (
-                               <div 
-                                 className="absolute bottom-0 w-full border-t-2 border-dashed border-white/40 bg-white/5 pointer-events-none"
-                                 style={{ height: `${Math.max((totalDemand[silo.origin] / silo.maxKg) * 100, 0)}%`, opacity: 0.4 }}
-                                 title={`Demanda Planificada: ${totalDemand[silo.origin]}kg`}
-                               ></div>
-                            )}
+                     <div 
+                        key={s.id}
+                        className={`relative rounded-2xl border-2 transition-all p-4 flex flex-col justify-between aspect-[1/1.5] ${
+                           selectedSiloId === s.id ? 'border-green-500 bg-green-500/5 shadow-[0_0_20px_rgba(16,185,129,0.15)]' : 
+                           'border-dashboard-border bg-[#14161a] hover:border-gray-600'
+                        }`}
+                        onClick={() => setSelectedSiloId(s.id)}
+                     >
+                       {/* Level Indicator (Background) */}
+                       <div 
+                          className="absolute bottom-0 left-0 right-0 bg-green-500/10 rounded-b-xl z-0 transition-all duration-1000 ease-in-out"
+                          style={{ height: `${rawPct}%` }}
+                       ></div>
 
-                           {/* Ticks */}
-                           <div className="absolute inset-y-0 left-2 w-2 flex flex-col justify-between py-6 opacity-30">
-                              <div className="w-full h-px bg-white"></div>
-                              <div className="w-1/2 h-px bg-white"></div>
-                              <div className="w-full h-px bg-white"></div>
-                              <div className="w-1/2 h-px bg-white"></div>
-                              <div className="w-full h-px bg-white"></div>
-                           </div>
-                        </div>
+                       {/* Border indicating fill exact height */}
+                       <div className="absolute bottom-0 left-0 right-0 w-full z-0 border-t border-green-500/30 transition-all duration-1000 ease-in-out" style={{ bottom: `${rawPct}%` }}></div>
 
-                        {/* Silo Metadata */}
-                        <div className="mt-4 w-full flex flex-col items-center text-center">
-                           <div className={`text-xl font-black ${isEmpty ? 'text-gray-600' : 'text-white'} transition-colors leading-none mb-1`}>
-                             {silo.currentKg.toLocaleString()}
-                           </div>
-                           <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                             {isEmpty ? 'Vacío' : 'KG'}
-                           </div>
+                       <div className="relative z-10 flex justify-between items-start mb-2">
+                          <span className="text-gray-500 font-black uppercase text-[10px] tracking-widest">TS-{s.id}</span>
+                          <div className={`w-2 h-2 rounded-full ${isEmpty ? 'bg-gray-600' : isFull ? 'bg-red-500 animate-pulse' : 'bg-green-500 '}`}></div>
+                       </div>
 
-                           {!isEmpty && (
-                             <div className="mt-3 bg-[#14161a] w-full p-2 rounded-lg border border-dashboard-border relative">
-                               <div className="text-[10px] font-bold text-coffee-light uppercase truncate mb-1 border-b border-dashboard-border pb-1" title={silo.origin || ''}>
-                                 {silo.origin}
-                               </div>
-                               <div className="flex justify-center space-x-2 text-[9px] text-gray-400 font-mono">
-                                  <span>H₂O: {silo.moisture}%</span>
-                               </div>
-                               
-                                {/* Insufficient Alert */}
-                                {silo.origin && totalDemand[silo.origin] > silo.currentKg && (
-                                   <div className="absolute -top-1 -right-1">
-                                      <div className="w-4 h-4 bg-red-600 rounded-full flex items-center justify-center animate-pulse border border-white/20 shadow-lg">
-                                         <AlertTriangle className="w-2.5 h-2.5 text-white" />
-                                      </div>
-                                   </div>
-                                )}
+                       <div className="relative z-10 text-center my-auto">
+                          <p className="text-3xl font-black text-white font-mono">{s.currentKg}<span className="text-xs text-gray-500 ml-1">kg</span></p>
+                          <p className="text-[9px] text-gray-500 uppercase font-bold tracking-widest mt-1">/ {s.maxKg} MAX</p>
+                       </div>
 
-                                {/* Stale Alert (5 days) */}
-                                {silo.lastFillDate && (Date.now() - new Date(silo.lastFillDate).getTime() > 5 * 24 * 60 * 60 * 1000) && (
-                                   <div className="absolute -top-1 -left-1">
-                                      <div className="w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center border border-white/20 shadow-lg" title="Café Estancado (+5 días)">
-                                         <Timer className="w-2.5 h-2.5 text-white" />
-                                      </div>
-                                   </div>
-                                )}
-                              </div>
-                            )}
-                        </div>
+                       <div className="relative z-10 flex flex-col items-center mt-2 group-hover:opacity-100">
+                          {s.profileName ? (
+                             <span className="text-center bg-[#1e222b] border border-gray-700 px-2 py-1 rounded text-[9px] font-bold text-green-300 w-full truncate">
+                               {s.profileName}
+                             </span>
+                          ) : (
+                             <span className="text-center px-2 py-1 text-[9px] font-bold text-gray-600 italic">Vacio</span>
+                          )}
+                       </div>
                      </div>
                    );
-                 })}
-              </div>
-           </div>
+                })}
+             </div>
+          </div>
         </div>
 
-      </div>
-      
-      {/* Bottom Alert / Task System (Phase 11) */}
-      <div className="lg:col-span-12 mt-4 px-10 pb-10">
-         <div className="bg-[#14161a] border border-blue-500/20 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-            
-            <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-8 w-full">
-               <div className="bg-blue-600 p-6 rounded-2xl shadow-lg ring-4 ring-blue-500/20 shrink-0">
-                  <Calendar className="w-10 h-10 text-white" />
-               </div>
-               <div className="flex-1">
-                  <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Tareas Diarias: Proyección de Carga</h2>
-                  <p className="text-gray-400 font-bold">Basado en lo planificado en el <span className="text-blue-400">Hub de Producción</span> para las próximas 24-48h.</p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                     {originsInDemand.map(origin => {
-                        const demand = totalDemand[origin];
-                        const stockInSilos = silos
-                          .filter(s => s.origin === origin)
-                          .reduce((sum, s) => sum + s.currentKg, 0);
-                        const gap = demand - stockInSilos;
-                        const isShort = gap > 0;
-
-                        return (
-                           <div key={origin} className={`p-4 rounded-xl border flex flex-col ${isShort ? 'bg-red-500/10 border-red-500/30' : 'bg-[#1e222b] border-dashboard-border'}`}>
-                              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">{origin}</span>
-                              <div className="flex justify-between items-end">
-                                 <div className="flex flex-col">
-                                    <span className="text-xs font-bold text-gray-400">Necesario: <span className="text-white">{demand} kg</span></span>
-                                    <span className="text-xs font-bold text-gray-400">Stock Actual: <span className="text-white">{stockInSilos} kg</span></span>
-                                 </div>
-                                 {isShort ? (
-                                    <div className="text-right">
-                                       <span className="text-red-500 font-black text-xl leading-none">+{gap} kg</span>
-                                       <span className="block text-[8px] font-black text-red-400 uppercase tracking-tighter mt-1">RECARGAR SILO</span>
-                                    </div>
-                                 ) : (
-                                    <div className="text-right">
-                                       <span className="text-green-500 font-black text-xl leading-none">OK</span>
-                                       <span className="block text-[8px] font-black text-green-400 uppercase tracking-tighter mt-1">CUBIERTO</span>
-                                    </div>
-                                 )}
-                              </div>
-                           </div>
-                        );
-                     })}
-                     {originsInDemand.length === 0 && (
-                        <div className="col-span-3 border-2 border-dashed border-dashboard-border rounded-xl p-8 flex items-center justify-center opacity-40">
-                           <span className="text-xs font-bold uppercase tracking-widest text-gray-500">No hay demanda planificada hoy</span>
-                        </div>
-                     )}
-                  </div>
-               </div>
-               
-               {/* Insufficient Inventory Badge */}
-               {originsInDemand.some(o => totalDemand[o] > silos.filter(s => s.origin === o).reduce((sum, s) => sum + s.currentKg, 0)) && (
-                  <div className="hidden xl:flex bg-red-600/20 border border-red-600/30 p-6 rounded-2xl flex-col items-center justify-center space-y-2 animate-pulse mt-4 md:mt-0">
-                     <AlertCircle className="w-8 h-8 text-red-500" />
-                     <span className="text-[10px] font-black text-red-500 uppercase tracking-widest text-center">Ruptura de Stock<br/>Inminente</span>
-                  </div>
-               )}
-            </div>
-         </div>
       </div>
     </div>
   );

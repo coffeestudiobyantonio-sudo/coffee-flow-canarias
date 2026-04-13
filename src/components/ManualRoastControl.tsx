@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, Square, TrendingUp, AlertCircle, Flame, Timer as TimerIcon, BarChart3, CheckCircle, QrCode, Wrench, History, ArchiveRestore, TestTube2, Info, Lock, Target } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot, CartesianGrid } from 'recharts';
 import { ROASTING_MACHINES } from '../App';
-import { updateSilo, updateTaskStatus, updateOrderStatus } from '../lib/api';
+import { updateTaskStatus, updateOrderStatus } from '../lib/api';
 
 interface RoastDataPoint {
   time: number; // seconds
@@ -17,10 +17,9 @@ interface ManualRoastControlProps {
   allOrders: any[];
   setAllOrders: React.Dispatch<React.SetStateAction<any[]>>;
   silos: any[];
-  setSilos: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
-const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBatchComplete, allOrders, setAllOrders, silos, setSilos }) => {
+const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBatchComplete, allOrders, setAllOrders, silos }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0); // in seconds
   const [dataPoints, setDataPoints] = useState<RoastDataPoint[]>([]);
@@ -231,30 +230,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     const cooldownSeconds = machine.bbpCooldownBase + (weight * machine.bbpCoefficient);
     setBbpTimeLeft(Math.round(cooldownSeconds));
 
-    // Deduct from Assigned Silos proportionally
-    if (activeLot?.assignedSilos && activeLot?.origins) {
-       for (let i = 0; i < activeLot.origins.length; i++) {
-          const sId = activeLot.assignedSilos[i];
-          const originName = activeLot.origins[i];
-          
-          let percentage = 100;
-          if (activeLot.masterProfile?.blend) {
-             const b = activeLot.masterProfile.blend.find((b: any) => b.origin === originName);
-             if (b) percentage = b.percentage;
-          }
-          
-          const totalWeight = activeLot.targetWeightKg || machine.maxCapacity;
-          const deductionAmount = totalWeight * (percentage / 100);
-          
-          const targetSilo = silos.find(s => s.id === sId);
-          if (targetSilo) {
-             const newKg = Math.max(0, targetSilo.currentKg - deductionAmount);
-             // Phase 19: Push Silo deduction to Supabase
-             await updateSilo(sId, { currentKg: newKg });
-             setSilos(prev => prev.map(s => s.id === sId ? { ...s, currentKg: newKg } : s));
-          }
-       }
-    }
+
 
     // Handle Post-Batch Logic
     const parentOrder = allOrders.find(o => o.id === activeLot?.parentOrderId);

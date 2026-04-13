@@ -14,7 +14,7 @@ interface DailyRoastOrdersProps {
    onLaunchManualRoast: (task: RoastTask) => void;
 }
 
-const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roastOrders, setRoastOrders, silos, onLaunchManualRoast }) => {
+const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, inventoryLots, roastOrders, setRoastOrders, silos, onLaunchManualRoast }) => {
    const [viewMode, setViewMode] = useState<'MANAGER' | 'OPERATOR'>('MANAGER');
 
    // Manager Form State
@@ -62,27 +62,16 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       const orderId = `ORD-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
       let finalTasks: RoastTask[] = [];
 
-      // Auto Silo Assignment Logic (Phase 14)
-      const autoSiloAssignments: Record<string, number> = {};
-
       for (let b of selectedProfile.blend) {
          const reqKg = targetKg * (b.percentage / 100);
          
-         const viableSilos = silos.filter(s => s.origin === b.origin && s.currentKg >= reqKg);
-         if (viableSilos.length === 0) {
-            alert(`ERP Interlock: Stock insuficiente para cumplir con los ${reqKg}kg de ${b.origin} requeridos para esta receta.`);
+         const originInventory = inventoryLots.filter(l => l.status === 'VALIDATED' && l.origin === b.origin);
+         const totalOriginKg = originInventory.reduce((acc, l) => acc + l.stock_kg, 0);
+
+         if (totalOriginKg < reqKg) {
+            alert(`ERP Interlock: Stock de sacos insuficiente para cumplir con los ${reqKg}kg de ${b.origin} requeridos para esta receta.`);
             return;
          }
-
-         // Desempate: 1. FIFO (Más antiguo), 2. Menos stock (Vaciado eficiente)
-         viableSilos.sort((s1, s2) => {
-            const time1 = s1.lastFillDate ? new Date(s1.lastFillDate).getTime() : 0;
-            const time2 = s2.lastFillDate ? new Date(s2.lastFillDate).getTime() : 0;
-            if (time1 !== time2) return time1 - time2;
-            return s1.currentKg - s2.currentKg;
-         });
-
-         autoSiloAssignments[b.origin] = viableSilos[0].id;
       }
 
       // PMP calculation logic (Simplified for ER-Silo logic since actual Cost is held at lot level, mock PMP for now)
@@ -118,7 +107,6 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
             masterProfile: selectedProfile,
             machineId: 'TOST-A',
             origins: selectedProfile.blend.map(b => b.origin),
-            assignedSilos: selectedProfile.blend.map(b => autoSiloAssignments[b.origin]),
             targetWeightKg: w,
             status: 'PENDING',
             batchIndex: i + 1,
@@ -140,7 +128,6 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                   masterProfile: selectedProfile,
                   machineId: 'TOST-A',
                   origins: [b.origin],
-                  assignedSilos: [autoSiloAssignments[b.origin]],
                   targetWeightKg: w,
                   status: 'PENDING',
                   batchIndex: batchIdx + 1,

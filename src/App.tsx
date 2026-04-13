@@ -9,7 +9,7 @@ import DailyRoastOrders from './components/DailyRoastOrders';
 import ManualRoastControl from './components/ManualRoastControl';
 import SiloManager from './components/SiloManager';
 import { Database, Activity, LayoutDashboard, Target, Truck, TestTube2, Flame, CheckCircle, Lock, FileSearch, ClipboardList, Timer } from 'lucide-react';
-import { fetchSilos, fetchInventoryLots, fetchMasterProfiles, fetchDailyOrders, updateTaskStatus } from './lib/api';
+import { fetchSilos, fetchInventoryLots, fetchMasterProfiles, fetchDailyOrders, updateTaskStatus, updateInventoryLot } from './lib/api';
 
 export interface MachineSpecificProfile {
   targetAgtron: number;
@@ -63,9 +63,7 @@ export type OrderCategory = 'MDD' | 'MARCA_PROPIA';
 
 export type Silo = {
   id: number;
-  lotId: string | null;
-  origin: string | null;
-  moisture: number | null;
+  profileName: string | null;
   currentKg: number;
   maxKg: number;
   lastFillDate?: string | null;
@@ -196,6 +194,25 @@ function App() {
       if (!isSuccess) {
         alert("Error de red: No se pudo registrar el tueste en Supabase.");
         return;
+      }
+
+      // Deduct Green Inventory functionally directly from the active lot's recipe
+      let currentInv = [...inventoryLots];
+      if (activeLot.profile && activeLot.profile.blend && activeLot.batchWeight) {
+         for (let b of activeLot.profile.blend) {
+            const reqKg = activeLot.batchWeight * (b.percentage / 100);
+            const targetLotIndex = currentInv.findIndex(l => l.status === 'VALIDATED' && l.origin === b.origin && l.stock_kg >= reqKg);
+            
+            if (targetLotIndex >= 0) {
+                const targetLot = currentInv[targetLotIndex];
+                const newStock = targetLot.stock_kg - reqKg;
+                await updateInventoryLot(targetLot.id, { stock_kg: newStock });
+                currentInv[targetLotIndex].stock_kg = newStock;
+            } else {
+                console.warn(`WARNING: Auto-deduction failed for ${reqKg}kg of ${b.origin}. Stock mismatch.`);
+            }
+         }
+         setInventoryLots(currentInv);
       }
 
       setRoastOrders(prev => prev.map(order => {
@@ -365,10 +382,10 @@ function App() {
               silos={silos}
               onLaunchManualRoast={handleLaunchManualRoast}
             />}
-          {activeTab === 'silos' && <SiloManager silos={silos} setSilos={setSilos} inventoryLots={inventoryLots} setInventoryLots={setInventoryLots} roastOrders={roastOrders} />}
+          {activeTab === 'silos' && <SiloManager silos={silos} setSilos={setSilos} />}
           {activeTab === 'mgmt' && <ManagementDashboard />}
           {activeTab === 'roast' && <LiveRoastControl activeLot={activeLot} onRoastComplete={() => handleBatchComplete(activeLot?.batchWeight || 0)} />}
-          {activeTab === 'manual_roast' && <ManualRoastControl activeLot={activeLot} onBatchComplete={handleBatchComplete} allOrders={roastOrders} setAllOrders={setRoastOrders} silos={silos} setSilos={setSilos} />}
+          {activeTab === 'manual_roast' && <ManualRoastControl activeLot={activeLot} onBatchComplete={handleBatchComplete} allOrders={roastOrders} setAllOrders={setRoastOrders} silos={silos} />}
           {activeTab === 'inventory' && <Inventory inventoryLots={inventoryLots} setInventoryLots={setInventoryLots} silos={silos} />}
           {activeTab === 'lab' && <QualityLab activeLot={activeLot} roastOrders={roastOrders} onQualityValidated={handleQualityValidated} />}
           {activeTab === 'traceability' && <TraceabilityDetective activeLot={activeLot} />}
