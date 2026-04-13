@@ -334,9 +334,9 @@ function App() {
           <div className="hidden lg:block w-full px-4 mb-2 mt-6">
             <span className="text-[10px] font-black justify-start text-coffee-accent uppercase tracking-widest">Módulo 2: Planta y Producción</span>
           </div>
-          <NavItem icon={<Database />} label="3. Gestión de Silos" active={activeTab === 'silos'} onClick={() => handleNavClick('silos')} />
-          <NavItem icon={<ClipboardList />} label="4. Agenda de Tueste" active={activeTab === 'orders'} onClick={() => handleNavClick('orders')} highlight={true} />
-          <NavItem icon={<Timer />} label="5. Control de Tueste" active={activeTab === 'manual_roast'} onClick={() => handleNavClick('manual_roast')} pulse={activeLot?.status === 'tueste'} />
+          <NavItem icon={<ClipboardList />} label="3. Agenda de Tueste" active={activeTab === 'orders'} onClick={() => handleNavClick('orders')} highlight={true} />
+          <NavItem icon={<Timer />} label="4. Control de Tueste" active={activeTab === 'manual_roast'} onClick={() => handleNavClick('manual_roast')} pulse={activeLot?.status === 'tueste'} />
+          <NavItem icon={<Database />} label="5. Gestión de Silos" active={activeTab === 'silos'} onClick={() => handleNavClick('silos')} />
 
           {/* MÓDULO 3: CALIDAD Y DIRECCIÓN */}
           <div className="hidden lg:block w-full px-4 mb-2 mt-6">
@@ -385,7 +385,7 @@ function App() {
           {activeTab === 'silos' && <SiloManager silos={silos} setSilos={setSilos} />}
           {activeTab === 'mgmt' && <ManagementDashboard />}
           {activeTab === 'roast' && <LiveRoastControl activeLot={activeLot} onRoastComplete={() => handleBatchComplete(activeLot?.batchWeight || 0)} />}
-          {activeTab === 'manual_roast' && <ManualRoastControl activeLot={activeLot} onBatchComplete={handleBatchComplete} allOrders={roastOrders} setAllOrders={setRoastOrders} silos={silos} />}
+          {activeTab === 'manual_roast' && <ManualRoastControl activeLot={activeLot} onBatchComplete={handleBatchComplete} allOrders={roastOrders} setAllOrders={setRoastOrders} silos={silos} setSilos={setSilos} />}
           {activeTab === 'inventory' && <Inventory inventoryLots={inventoryLots} setInventoryLots={setInventoryLots} silos={silos} />}
           {activeTab === 'lab' && <QualityLab activeLot={activeLot} roastOrders={roastOrders} onQualityValidated={handleQualityValidated} />}
           {activeTab === 'traceability' && <TraceabilityDetective activeLot={activeLot} />}

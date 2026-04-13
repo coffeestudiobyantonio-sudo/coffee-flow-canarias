@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, Square, TrendingUp, AlertCircle, Flame, Timer as TimerIcon, BarChart3, CheckCircle, QrCode, Wrench, History, ArchiveRestore, TestTube2, Info, Lock, Target } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot, CartesianGrid } from 'recharts';
 import { ROASTING_MACHINES } from '../App';
-import { updateTaskStatus, updateOrderStatus } from '../lib/api';
+import { updateTaskStatus, updateOrderStatus, updateSilo } from '../lib/api';
 
 interface RoastDataPoint {
   time: number; // seconds
@@ -17,9 +17,10 @@ interface ManualRoastControlProps {
   allOrders: any[];
   setAllOrders: React.Dispatch<React.SetStateAction<any[]>>;
   silos: any[];
+  setSilos: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
-const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBatchComplete, allOrders, setAllOrders, silos }) => {
+const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBatchComplete, allOrders, setAllOrders, silos, setSilos }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0); // in seconds
   const [dataPoints, setDataPoints] = useState<RoastDataPoint[]>([]);
@@ -27,6 +28,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   const [showMaintenance, setShowMaintenance] = useState(false);
   const [showFinalReport, setShowFinalReport] = useState(false);
   const [finalWeight, setFinalWeight] = useState<string>("");
+  const [targetSiloId, setTargetSiloId] = useState<number>(0);
   const [agtronColor, setAgtronColor] = useState<string>("");
   const [roastCount, setRoastCount] = useState(0);
   const [bbpTimeLeft, setBbpTimeLeft] = useState<number>(0);
@@ -129,16 +131,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
       return;
     }
 
-    if (activeLot?.assignedSilos) {
-       for (let sId of activeLot.assignedSilos) {
-          const s = silos.find(s => s.id === sId);
-          if (!s || s.currentKg <= 0) {
-             alert(`⚠️ Error Crítico: El Silo asignado (${sId}) está vacío o no se encuentra.`);
-             return;
-          }
-       }
-    }
-    
+
     setIsRunning(true);
     setElapsedTime(0);
     setDataPoints([{ time: 0, temp: startTemp, type: 'CHARGE' }]);
@@ -225,10 +218,40 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   const handleFinalizeBatch = async () => {
     const weight = parseFloat(finalWeight);
     
+    if (targetSiloId === 0) {
+       alert("Por favor, selecciona un Silo de destino para el lote tostado.");
+       return;
+    }
+
+    // Verify Target Silo compatibility
+    const pickedSilo = silos.find(s => s.id === targetSiloId);
+    if (!pickedSilo) return;
+    if (pickedSilo.currentKg > 0 && pickedSilo.profileName && activeLot?.profile?.name && pickedSilo.profileName !== activeLot.profile.name) {
+       alert("Alerta: El silo seleccionado contiene una receta diferente. Vacía el silo o selecciona otro.");
+       return;
+    }
+    if (pickedSilo.currentKg + weight > pickedSilo.maxKg) {
+       alert("Alerta: El silo se desbordará. Selecciona otro silo.");
+       return;
+    }
+
     // Calculate BBP Cooldown based on machine inertia
     const machine = ROASTING_MACHINES.find(m => m.id === activeLot?.machineId) || ROASTING_MACHINES[1];
     const cooldownSeconds = machine.bbpCooldownBase + (weight * machine.bbpCoefficient);
     setBbpTimeLeft(Math.round(cooldownSeconds));
+
+    // Register into the Silo
+    const newSiloKg = pickedSilo.currentKg + weight;
+    const isNewFill = pickedSilo.currentKg === 0;
+    
+    await updateSilo(targetSiloId, { 
+       currentKg: newSiloKg, 
+       profileName: activeLot?.profile?.name || null,
+       lastFillDate: isNewFill ? new Date().toISOString() : pickedSilo.lastFillDate
+    });
+    setSilos(prev => prev.map(s => s.id === targetSiloId ? { 
+       ...s, currentKg: newSiloKg, profileName: activeLot?.profile?.name || null, lastFillDate: isNewFill ? new Date().toISOString() : s.lastFillDate
+    } : s));
 
 
 
@@ -736,7 +759,22 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                          placeholder="000.0"
                          className={`w-full bg-black/40 border-2 rounded-3xl p-8 text-5xl font-black text-white outline-none ${showShrinkageAlert ? 'border-red-500 animate-pulse' : 'border-white/5 focus:border-coffee-accent'}`}
                        />
-                    </div>
+                       <div className="space-y-3 col-span-2">
+                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-2">Destino (Silo Terminado)</label>
+                        <select 
+                          className="w-full bg-black/40 border-2 border-white/5 rounded-3xl p-6 text-2xl font-black text-white focus:border-coffee-accent outline-none appearance-none"
+                          value={targetSiloId}
+                          onChange={(e) => setTargetSiloId(Number(e.target.value))}
+                        >
+                          <option value={0} disabled>Seleccionar Silo TS-1 a TS-8</option>
+                          {silos.map(s => (
+                             <option key={s.id} value={s.id}>
+                                TS-{s.id} ({s.currentKg}kg) {s.profileName ? `- ${s.profileName}` : ''}
+                             </option>
+                          ))}
+                        </select>
+                     </div>
+                  </div>
                     <div className="space-y-3">
                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-2">Agtron / Color</label>
                        <input 
