@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
-import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, Scale, Info, AlertTriangle, Lock, Trash2 } from 'lucide-react';
+import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, Scale, AlertTriangle, Lock, Trash2 } from 'lucide-react';
 import { ROASTING_MACHINES } from '../App';
 import { createDailyOrder, deleteDailyOrder } from '../lib/api';
 
@@ -20,7 +20,6 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    const [targetKg, setTargetKg] = useState<number>(120);
    const [priority, setPriority] = useState<'URGENTE' | 'STOCK' | 'MUESTRA'>('STOCK');
    const [orderCategory, setOrderCategory] = useState<OrderCategory>('MARCA_PROPIA'); // Phase 12
-   const [fragmentationMode, setFragmentationMode] = useState<'BALANCED' | 'MAX_CAPACITY'>('BALANCED');
    // Operator Form State
    
    // Lógica D: Energy Efficiency Thermic Routing (MDD Specialized)
@@ -45,13 +44,24 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
    const selectedProfile = masterProfiles.find(p => p.name === selectedProfileName);
 
-   // TargetKg is now interpreted as TARGET ROASTED (Product Terminado)
    const SHRINKAGE_PCT = selectedProfile ? ((selectedProfile.expectedShrinkage || 16.0) / 100) : 0.16;
+   const machine = ROASTING_MACHINES[0];
    
-   // We calculate how much Green is required to hit the Target Roasted. Round UP to nearest whole Kilo of green.
-   const requiredGreenKg = Math.ceil(targetKg / (1 - SHRINKAGE_PCT));
-   const estimatedActualRoasted = requiredGreenKg * (1 - SHRINKAGE_PCT);
-   const excessRoasted = estimatedActualRoasted - targetKg;
+   // Base theoretical minimum
+   const baseRequiredGreenKg = targetKg / (1 - SHRINKAGE_PCT);
+   
+   // True green sum enforcing exactly 120kg per batch per origin
+   let actualTotalGreenRoasting = 0;
+   if (selectedProfile) {
+      selectedProfile.blend.forEach(b => {
+         const originReqGreen = baseRequiredGreenKg * (b.percentage / 100);
+         const batchesNeeded = Math.ceil(originReqGreen / machine.maxCapacity);
+         actualTotalGreenRoasting += batchesNeeded * machine.maxCapacity;
+      });
+   }
+
+   const trueEstimatedRoasted = actualTotalGreenRoasting * (1 - SHRINKAGE_PCT);
+   const excessRoasted = trueEstimatedRoasted - targetKg;
 
    const handleCreateOrder = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -60,7 +70,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          return;
       }
 
-      if (!confirm(`Para fabricar ${targetKg}kg de ${selectedProfile.name} (Merma del ${SHRINKAGE_PCT * 100}%):\nSe van a requerir ${requiredGreenKg}kg de café verde en total.\nEl rendimiento estimado es de ${estimatedActualRoasted.toFixed(1)}kg tostados.\nSobran: ${excessRoasted > 0 ? excessRoasted.toFixed(1) : 0}kg tostados que irán al silo de reserva.\n\n¿Proceder con la planificación?`)) {
+      if (!confirm(`Para fabricar ${targetKg}kg de ${selectedProfile.name} (Merma del ${(SHRINKAGE_PCT * 100).toFixed(1)}%):\nSe van a forzar tandas completas de ${machine.maxCapacity}kg verdes de acuerdo con su composición técnica.\n\nTotal Café Verde que procesarás: ${actualTotalGreenRoasting}kg.\nEl rendimiento final que obtendrás será aprox de ${trueEstimatedRoasted.toFixed(1)}kg tostados.\n\nSobrarán: ${excessRoasted > 0 ? excessRoasted.toFixed(1) : 0}kg tostados que irán al silo de reserva.\n\n¿Proceder con la generación de tareas?`)) {
          return;
       }
 
@@ -71,32 +81,14 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       const orderPMP = 8.50;
 
       // ASSET & FRAGMENTATION LOGIC
-      const machine = ROASTING_MACHINES[0];
 
-      const calculateBatches = (total: number): number[] => {
-         if (fragmentationMode === 'BALANCED') {
-            const count = Math.ceil(total / machine.maxCapacity);
-            const balancedWeight = (total / count) || total;
-            return Array.from({ length: count }, () => balancedWeight);
-         } else {
-            // MAX_CAPACITY Mode: 240, 240, 20...
-            const batches: number[] = [];
-            let remaining = total;
-            while (remaining > 0) {
-               const take = Math.min(remaining, machine.maxCapacity);
-               batches.push(take);
-               remaining -= take;
-            }
-            return batches;
-         }
-      };
-
-      // POST_BLEND implicitly: Fragment each origin's roast task independently
+      // POST_BLEND implicitly: Fragment each origin's roast task independently enforcing 120kg
       selectedProfile.blend.forEach((b, originIdx) => {
-         const originGreenTarget = Math.ceil(requiredGreenKg * (b.percentage / 100)); // Round up each origin's green requirement
-         const batchWeights = calculateBatches(originGreenTarget);
+         const originReqGreen = baseRequiredGreenKg * (b.percentage / 100);
+         const batchesNeeded = Math.ceil(originReqGreen / machine.maxCapacity);
 
-         batchWeights.forEach((w, batchIdx) => {
+         // We no longer calculate irregular batchWeights. Everyone is 120kg.
+         for (let batchIdx = 0; batchIdx < batchesNeeded; batchIdx++) {
             finalTasks.push({
                id: `${orderId}-O${originIdx + 1}-B${batchIdx + 1}`,
                parentOrderId: orderId,
@@ -104,14 +96,14 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                masterProfile: selectedProfile,
                machineId: 'TOST-A',
                origins: [b.origin],
-               targetWeightKg: w,
+               targetWeightKg: machine.maxCapacity,
                status: 'PENDING',
                batchIndex: batchIdx + 1,
-               totalBatches: batchWeights.length,
-               parentOrderTotalKg: originGreenTarget,
+               totalBatches: batchesNeeded,
+               parentOrderTotalKg: batchesNeeded * machine.maxCapacity,
                category: orderCategory
             });
-         });
+         }
       });
 
       finalTasks.push({
@@ -120,7 +112,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          type: 'BLEND',
          masterProfile: selectedProfile,
          origins: selectedProfile.blend.map(b => b.origin),
-         targetWeightKg: estimatedActualRoasted,
+         targetWeightKg: trueEstimatedRoasted,
          status: 'PENDING',
          category: orderCategory
       });
@@ -128,7 +120,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       const newOrder: DailyRoastOrder = {
          id: orderId,
          profileName: selectedProfile.name,
-         totalKg: requiredGreenKg, // We store the GREEN weight as total request for legacy tracking if needed
+         totalKg: actualTotalGreenRoasting, // We store the GREEN weight as total request for legacy tracking if needed
          priority,
          shrinkagePct: SHRINKAGE_PCT,
          tasks: finalTasks,
@@ -254,10 +246,11 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                  </div>
                                  {selectedProfile && (
                                     <p className="text-[11px] text-gray-400 mt-2 flex flex-col gap-1 bg-[#14161a] p-3 rounded-lg border border-dashboard-border">
-                                       <span>🔹 Merma pre-configurada del perfil: <b className="text-coffee-light">{(SHRINKAGE_PCT * 100).toFixed(1)}%</b></span>
-                                       <span>🔹 Café verde crudo requerido (Base): <b className="text-blue-400">{requiredGreenKg}kg</b></span>
+                                       <span>🔹 Merma del perfil: <b className="text-coffee-light">{(SHRINKAGE_PCT * 100).toFixed(1)}%</b></span>
+                                       <span>🔹 Requeriría <b className="text-gray-500">{(targetKg / (1 - SHRINKAGE_PCT)).toFixed(1)}kg</b> de verde matemáticamente.</span>
+                                       <span>🔹 Verde exacto que tostará (lotes llenos de {machine.maxCapacity}kg): <b className="text-blue-400">{actualTotalGreenRoasting}kg</b></span>
                                        {excessRoasted > 0 && (
-                                          <span className="text-yellow-500 font-bold">⚠️ Redondeo de tostadora generará un exceso de {excessRoasted.toFixed(1)}kg tostados sobre el volumen objetivo.</span>
+                                          <span className="text-yellow-500 font-bold">⚠️ Se generará un exceso de {excessRoasted.toFixed(1)}kg tostados debido al uso de tándems llenos.</span>
                                        )}
                                     </p>
                                  )}
@@ -291,64 +284,11 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
 
 
-                              {/* Fragmentation Mode */}
-                              <div>
-                                 <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3">3. Estrategia de Fragmentación</label>
-                                 <div className="grid grid-cols-2 gap-2 bg-[#14161a] p-1.5 rounded-xl border border-dashboard-border">
-                                    <button
-                                       type="button"
-                                       onClick={() => setFragmentationMode('BALANCED')}
-                                       className={`py-2 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${fragmentationMode === 'BALANCED' ? 'bg-[#1e222b] text-white shadow ring-1 ring-white/10' : 'text-gray-600 hover:text-gray-400'}`}
-                                    >
-                                       Equilibrado
-                                    </button>
-                                    <button
-                                       type="button"
-                                       onClick={() => setFragmentationMode('MAX_CAPACITY')}
-                                       className={`py-2 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${fragmentationMode === 'MAX_CAPACITY' ? 'bg-[#1e222b] text-white shadow ring-1 ring-white/10' : 'text-gray-600 hover:text-gray-400'}`}
-                                    >
-                                       Capacidad Máx
-                                    </button>
-                                 </div>
-                                 <p className="mt-2 text-[10px] text-gray-500 italic flex items-center">
-                                    <Info className="w-3 h-3 mr-1" />
-                                    {fragmentationMode === 'BALANCED'
-                                       ? 'Divide el total en partes iguales (Carga térmica constante).'
-                                       : 'Llena la máquina al máximo hasta agotar el lote (Menos tandas).'}
-                                 </p>
-                              </div>
+
+
+
+
                            </section>
-
-                           <section className="bg-black/20 p-6 rounded-2xl border border-dashboard-border space-y-4">
-                              <div className="flex justify-between items-center text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-dashboard-border pb-2">
-                                 <span>Vista Previa del Batching</span>
-                                 <Scale className="w-3 h-3" />
-                              </div>
-
-                              <div className="flex flex-wrap gap-2">
-                                 {(() => {
-                                    const m = ROASTING_MACHINES[0];
-                                    const count = fragmentationMode === 'BALANCED'
-                                       ? Math.ceil(targetKg / m.maxCapacity)
-                                       : Math.ceil(targetKg / m.maxCapacity);
-                                    const balanced = targetKg / count;
-
-                                    return Array.from({ length: count }).map((_, i) => (
-                                       <div key={i} className="bg-coffee-accent/5 border border-coffee-accent/20 px-3 py-2 rounded-lg text-center min-w-[60px]">
-                                          <p className="text-[8px] text-coffee-light font-black mb-0.5">#{i + 1}</p>
-                                          <p className="text-sm font-black text-white">
-                                             {fragmentationMode === 'BALANCED'
-                                                ? balanced.toFixed(1)
-                                                : (i === count - 1 ? (targetKg % m.maxCapacity || m.maxCapacity).toFixed(1) : m.maxCapacity.toFixed(1))}
-                                             <span className="text-[8px] ml-0.5">kg</span>
-                                          </p>
-                                       </div>
-                                    ));
-                                 })()}
-                              </div>
-                           </section>
-
-
 
                            <div className="pt-2">
                               <button
