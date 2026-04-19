@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import LiveRoastControl from './components/LiveRoastControl';
-import Inventory from './components/Inventory';
 import QualityLab from './components/QualityLab';
 import ManagementDashboard from './components/ManagementDashboard';
 import MasterProfiles from './components/MasterProfiles';
@@ -8,8 +7,8 @@ import TraceabilityDetective from './components/TraceabilityDetective';
 import DailyRoastOrders from './components/DailyRoastOrders';
 import ManualRoastControl from './components/ManualRoastControl';
 import SiloManager from './components/SiloManager';
-import { Database, Activity, LayoutDashboard, Target, Truck, TestTube2, Flame, CheckCircle, Lock, FileSearch, ClipboardList, Timer } from 'lucide-react';
-import { fetchSilos, fetchInventoryLots, fetchMasterProfiles, fetchDailyOrders, updateTaskStatus, updateInventoryLot } from './lib/api';
+import { Database, Activity, LayoutDashboard, Target, TestTube2, Flame, CheckCircle, Lock, FileSearch, ClipboardList, Timer } from 'lucide-react';
+import { fetchSilos, fetchMasterProfiles, fetchDailyOrders, updateTaskStatus } from './lib/api';
 
 export interface MachineSpecificProfile {
   targetAgtron: number;
@@ -41,21 +40,6 @@ export interface RoastingMachine {
   energyType: 'GAS' | 'ELECTRIC';
 }
 
-export interface InventoryLot {
-  id: string; // CAN-LIDL-001
-  shippingMark?: string; // Origin Lot ID or Bill of Lading
-  arrivalNotes?: string; // Pre-shipment cupping or lab notes
-  origin: string;
-  moisture: number;
-  density: number;
-  arrivalDate: string; // YYYY-MM-DD
-  status: 'VALIDATED' | 'REJECTED' | 'INACTIVE';
-  deletedAt?: number;
-  stock_kg: number;
-  originalStock_kg?: number; // Pre-shrinkage tracking
-  price_per_kg: number;
-  exclusiveFor: 'LIDL' | 'NONE';
-}
 
 export type LotStatus = 'definicion' | 'tueste' | 'laboratorio' | 'validado';
 
@@ -125,12 +109,11 @@ export const ROASTING_MACHINES: RoastingMachine[] = [
 ];
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'orders' | 'profiles' | 'mgmt' | 'roast' | 'manual_roast' | 'inventory' | 'lab' | 'traceability' | 'silos'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'profiles' | 'mgmt' | 'roast' | 'manual_roast' | 'lab' | 'traceability' | 'silos'>('profiles');
   const [activeLot, setActiveLot] = useState<ActiveLot | null>(null);
 
   const [masterProfiles, setMasterProfiles] = useState<MasterProfile[]>([]);
   const [roastOrders, setRoastOrders] = useState<DailyRoastOrder[]>([]);
-  const [inventoryLots, setInventoryLots] = useState<InventoryLot[]>([]);
   const [silos, setSilos] = useState<Silo[]>([]);
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
@@ -138,15 +121,13 @@ function App() {
   useEffect(() => {
     const loadData = async () => {
       console.log("Fetching DB State from Supabase...");
-      const [dbSilos, dbLots, dbProfiles, dbOrders] = await Promise.all([
+      const [dbSilos, dbProfiles, dbOrders] = await Promise.all([
         fetchSilos(),
-        fetchInventoryLots(),
         fetchMasterProfiles(),
         fetchDailyOrders()
       ]);
       
       setSilos(dbSilos);
-      setInventoryLots(dbLots);
       setMasterProfiles(dbProfiles);
       setRoastOrders(dbOrders);
       setIsDbLoaded(true);
@@ -196,24 +177,6 @@ function App() {
         return;
       }
 
-      // Deduct Green Inventory functionally directly from the active lot's recipe
-      let currentInv = [...inventoryLots];
-      if (activeLot.profile && activeLot.profile.blend && activeLot.batchWeight) {
-         for (let b of activeLot.profile.blend) {
-            const reqKg = activeLot.batchWeight * (b.percentage / 100);
-            const targetLotIndex = currentInv.findIndex(l => l.status === 'VALIDATED' && l.origin === b.origin && l.stock_kg >= reqKg);
-            
-            if (targetLotIndex >= 0) {
-                const targetLot = currentInv[targetLotIndex];
-                const newStock = targetLot.stock_kg - reqKg;
-                await updateInventoryLot(targetLot.id, { stock_kg: newStock });
-                currentInv[targetLotIndex].stock_kg = newStock;
-            } else {
-                console.warn(`WARNING: Auto-deduction failed for ${reqKg}kg of ${b.origin}. Stock mismatch.`);
-            }
-         }
-         setInventoryLots(currentInv);
-      }
 
       setRoastOrders(prev => prev.map(order => {
         if (order.id === activeLot.parentOrderId) {
@@ -323,12 +286,11 @@ function App() {
         {/* Navigation */}
         <nav className="flex-1 w-full space-y-1 mt-4 px-3 flex flex-col items-center lg:items-start overflow-y-auto custom-scrollbar pb-6">
           
-          {/* MÓDULO 1: RECEPCIÓN Y DISEÑO */}
+          {/* MÓDULO 1: DISEÑO Y RECETAS */}
           <div className="hidden lg:block w-full px-4 mb-2 mt-2">
-            <span className="text-[10px] font-black justify-start text-coffee-accent uppercase tracking-widest">Módulo 1: Recepción y Diseño</span>
+            <span className="text-[10px] font-black justify-start text-coffee-accent uppercase tracking-widest">Módulo 1: Diseño y Recetas</span>
           </div>
-          <NavItem icon={<Truck />} label="1. Inventario & Origen" active={activeTab === 'inventory'} onClick={() => handleNavClick('inventory')} />
-          <NavItem icon={<Target />} label="2. Gamas & Perfiles" active={activeTab === 'profiles'} onClick={() => handleNavClick('profiles')} />
+          <NavItem icon={<Target />} label="1. Gamas & Perfiles" active={activeTab === 'profiles'} onClick={() => handleNavClick('profiles')} />
           
           {/* MÓDULO 2: PLANTA Y PRODUCCIÓN */}
           <div className="hidden lg:block w-full px-4 mb-2 mt-6">
@@ -374,10 +336,9 @@ function App() {
         <StepperBar />
         
         <div className="flex-1 overflow-y-auto w-full relative">
-          {activeTab === 'profiles' && <MasterProfiles inventoryLots={inventoryLots} masterProfiles={masterProfiles} setMasterProfiles={setMasterProfiles} />}
+          {activeTab === 'profiles' && <MasterProfiles masterProfiles={masterProfiles} setMasterProfiles={setMasterProfiles} />}
           {activeTab === 'orders' && <DailyRoastOrders 
               masterProfiles={masterProfiles} 
-              inventoryLots={inventoryLots} setInventoryLots={setInventoryLots}
               roastOrders={roastOrders} setRoastOrders={setRoastOrders}
               silos={silos}
               onLaunchManualRoast={handleLaunchManualRoast}
@@ -386,7 +347,6 @@ function App() {
           {activeTab === 'mgmt' && <ManagementDashboard />}
           {activeTab === 'roast' && <LiveRoastControl activeLot={activeLot} onRoastComplete={() => handleBatchComplete(activeLot?.batchWeight || 0)} />}
           {activeTab === 'manual_roast' && <ManualRoastControl activeLot={activeLot} onBatchComplete={handleBatchComplete} allOrders={roastOrders} setAllOrders={setRoastOrders} silos={silos} setSilos={setSilos} />}
-          {activeTab === 'inventory' && <Inventory inventoryLots={inventoryLots} setInventoryLots={setInventoryLots} silos={silos} />}
           {activeTab === 'lab' && <QualityLab activeLot={activeLot} roastOrders={roastOrders} onQualityValidated={handleQualityValidated} />}
           {activeTab === 'traceability' && <TraceabilityDetective activeLot={activeLot} />}
         </div>

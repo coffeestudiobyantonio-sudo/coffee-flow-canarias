@@ -1,20 +1,18 @@
 import React, { useState } from 'react';
-import type { MasterProfile, InventoryLot, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
+import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
 import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, Scale, Info, AlertTriangle, Lock, Trash2 } from 'lucide-react';
 import { ROASTING_MACHINES } from '../App';
 import { createDailyOrder, deleteDailyOrder } from '../lib/api';
 
 interface DailyRoastOrdersProps {
    masterProfiles: MasterProfile[];
-   inventoryLots: InventoryLot[];
-   setInventoryLots: React.Dispatch<React.SetStateAction<InventoryLot[]>>;
    roastOrders: DailyRoastOrder[];
    setRoastOrders: React.Dispatch<React.SetStateAction<DailyRoastOrder[]>>;
    silos: any[];
    onLaunchManualRoast: (task: RoastTask) => void;
 }
 
-const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, inventoryLots, roastOrders, setRoastOrders, silos, onLaunchManualRoast }) => {
+const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roastOrders, setRoastOrders, silos, onLaunchManualRoast }) => {
    const [viewMode, setViewMode] = useState<'MANAGER' | 'OPERATOR'>('MANAGER');
 
    // Manager Form State
@@ -62,17 +60,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, inv
       const orderId = `ORD-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
       let finalTasks: RoastTask[] = [];
 
-      for (let b of selectedProfile.blend) {
-         const reqKg = targetKg * (b.percentage / 100);
-         
-         const originInventory = inventoryLots.filter(l => l.status === 'VALIDATED' && l.origin === b.origin);
-         const totalOriginKg = originInventory.reduce((acc, l) => acc + l.stock_kg, 0);
 
-         if (totalOriginKg < reqKg) {
-            alert(`ERP Interlock: Stock de sacos insuficiente para cumplir con los ${reqKg}kg de ${b.origin} requeridos para esta receta.`);
-            return;
-         }
-      }
 
       // PMP calculation logic (Simplified for ER-Silo logic since actual Cost is held at lot level, mock PMP for now)
       const orderPMP = 8.50;

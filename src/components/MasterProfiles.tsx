@@ -1,11 +1,19 @@
 import React, { useState } from 'react';
-import { Target, Plus, Trash2, Box, Coffee, AlertTriangle, Calculator, Activity, Edit2 } from 'lucide-react';
+import { Target, Plus, Trash2, Coffee, AlertTriangle, Activity, Edit2 } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
-import type { MasterProfile, InventoryLot } from '../App';
+import type { MasterProfile } from '../App';
 import { createMasterProfile, deleteMasterProfile, updateMasterProfile } from '../lib/api';
 
+const GREEN_ORIGINS = [
+  'Brasil Cerrado',
+  'Colombia Supremo',
+  'Uganda',
+  'Etiopía Yirgacheffe',
+  'Vietnam Robusta',
+  'Costa Rica'
+];
+
 interface MasterProfilesProps {
-  inventoryLots: InventoryLot[];
   masterProfiles: MasterProfile[];
   setMasterProfiles: React.Dispatch<React.SetStateAction<MasterProfile[]>>;
 }
@@ -17,15 +25,9 @@ const PIE_COLORS: Record<string, string> = {
   'Etiopía Yirgacheffe': '#3b82f6',
   'Uganda': '#8b5cf6'
 };
-
 const getLotColor = (origin: string, index: number) => PIE_COLORS[origin] || ['#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#3b82f6'][index % 5];
 
-const BATCH_SIZE_KG = 120; // Standard roaster capacity for calculations
-
-const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterProfiles, setMasterProfiles }) => {
-  // SSOT Filter base: allow validated lots regardless of current raw stock kg
-  const baseValidLots = inventoryLots.filter(l => l.status === 'VALIDATED');
-
+const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMasterProfiles }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [editingProfileName, setEditingProfileName] = useState<string | null>(null);
   const [profileToDelete, setProfileToDelete] = useState<number | null>(null);
@@ -39,16 +41,13 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
     sensory: { fragrancia: 7.0, aroma: 7.0, sabor: 7.0, cuerpo: 7.0 }
   });
 
-  // Filter lots based on BU Unit
-  const availableLots = baseValidLots.filter(l => newProfile.businessUnit === 'PROPIA' ? l.exclusiveFor !== 'LIDL' : true);
-
   // Blend Logic
   const handleAddOrigin = () => {
-    const available = availableLots.find(l => !newProfile.blend.some(b => b.origin === l.origin));
+    const available = GREEN_ORIGINS.find(origin => !newProfile.blend.some(b => b.origin === origin));
     if (available) {
       setNewProfile({
         ...newProfile,
-        blend: [...newProfile.blend, { origin: available.origin, percentage: 0 }]
+        blend: [...newProfile.blend, { origin: available, percentage: 0 }]
       });
     }
   };
@@ -66,28 +65,6 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
 
   const totalPercentage = newProfile.blend.reduce((sum, item) => sum + item.percentage, 0);
   const isBlendValid = totalPercentage === 100;
-
-  // Single Source of Truth Checks
-  const insufficientStockOrigins = newProfile.blend.filter(b => {
-    const lot = availableLots.find(l => l.origin === b.origin);
-    if (!lot) return true;
-    
-    // Phase 19 fix: Don't block recipe creation based on stock, as it may be in Silos.
-    // Real physical constraints are handled by the Hub.
-    return false;
-  });
-
-  const estimatedCostPerKg = newProfile.blend.reduce((sum, b) => {
-    const lot = availableLots.find(l => l.origin === b.origin);
-    const price = lot ? lot.price_per_kg : 0;
-    return sum + (price * (b.percentage / 100));
-  }, 0);
-
-  const getStockIndicator = (kg: number) => {
-    if (kg > 5000) return <span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" title="Stock Alto"></span>;
-    if (kg > 1000) return <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.8)]" title="Stock Medio"></span>;
-    return <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" title="Últimos Sacos"></span>;
-  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -250,16 +227,9 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
                      </span>
                    </div>
 
-                   {/* Dynamic Origin Selector linked to InventoryLot State */}
+                   {/* Dynamic Origin Selector linked to Text Array */}
                    <div className="space-y-4 mb-6 relative z-20">
-                     {availableLots.length === 0 && (
-                        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-bold flex items-center">
-                           <AlertTriangle className="w-5 h-5 mr-3" /> No hay datos de origen validados en el sistema.
-                        </div>
-                     )}
-
                      {newProfile.blend.map((item, index) => {
-                       const inventoryRef = availableLots.find(l => l.origin === item.origin);
 
                        return (
                        <div key={index} className="p-4 bg-[#14161a] rounded-xl border border-dashboard-border group relative">
@@ -268,16 +238,16 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
                            {/* Color Coded Indicator Wrapper */}
                            <div className="relative flex-1">
                               <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                                 {inventoryRef ? getStockIndicator(inventoryRef.stock_kg) : <Box className="w-4 h-4 text-gray-600" />}
+                                 <Coffee className="w-4 h-4 text-gray-500" />
                               </div>
                               <select 
                                 className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg pl-8 pr-2 py-2 text-white font-semibold focus:outline-none focus:border-coffee-light appearance-none tracking-wide text-sm"
                                 value={item.origin}
                                 onChange={(e) => handleUpdateBlend(index, 'origin', e.target.value)}
                               >
-                                {availableLots.map(l => (
-                                  <option key={l.id} value={l.origin} disabled={newProfile.blend.some(b => b.origin === l.origin && b.origin !== item.origin)}>
-                                    {l.origin} — {l.stock_kg}kg
+                                {GREEN_ORIGINS.map(origin => (
+                                  <option key={origin} value={origin} disabled={newProfile.blend.some(b => b.origin === origin && b.origin !== item.origin)}>
+                                    {origin}
                                   </option>
                                 ))}
                               </select>
@@ -295,25 +265,12 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
                            <button type="button" onClick={() => handleRemoveOrigin(index)} className="text-gray-500 hover:text-red-400 p-2 transition-colors">
                              <Trash2 className="w-5 h-5" />
                            </button>
-                         </div>
-                         
-                         {/* Linked lot metadata & real-time cost analysis */}
-                         <div className="flex flex-wrap items-center justify-between text-[11px] text-gray-500 bg-[#1e222b]/50 p-2 rounded-lg border border-[#1e222b]">
-                           <div className="flex items-center">
-                              <Box className="w-3 h-3 mr-1 opacity-70" />
-                              <span className="text-coffee-light font-mono truncate mr-3">
-                                {inventoryRef ? inventoryRef.id : 'N/A'}
-                              </span>
-                           </div>
-                           <div className="flex space-x-4">
-                              <span className="font-mono" title="Precio Base">€{inventoryRef?.price_per_kg.toFixed(2)}/kg</span>
-                              <span className="font-mono text-gray-400" title="Humedad Inicial">H₂O: {inventoryRef?.moisture}%</span>
-                           </div>
-                         </div>
-                       </div>
-                     )})}
+                          </div>
+                        </div>
+                       );
+                     })}
                      
-                     {newProfile.blend.length < availableLots.length && (
+                     {newProfile.blend.length < GREEN_ORIGINS.length && (
                        <button 
                          type="button" 
                          onClick={handleAddOrigin}
@@ -324,34 +281,18 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
                      )}
                    </div>
 
-                   {/* Alerts panel */}
+                    {/* Alerts panel */}
                    <div className="relative z-20 space-y-2 mb-6">
                       {!isBlendValid && (
                         <div className="flex items-center text-[11px] font-black uppercase tracking-widest text-red-400 bg-red-500/10 p-3 rounded-lg border border-red-500/20">
                           <AlertTriangle className="w-4 h-4 mr-2" /> Composición inválida (≠ 100%).
                         </div>
                       )}
-                      
-                      {insufficientStockOrigins.length > 0 && (
-                        <div className="flex items-center text-[11px] font-bold uppercase tracking-widest text-orange-400 bg-orange-400/10 p-3 rounded-lg border border-orange-400/20 shadow-inner">
-                          <Activity className="w-4 h-4 mr-2" /> 
-                          Aviso: Stock bajo para {insufficientStockOrigins[0].origin} (Tueste {BATCH_SIZE_KG}kg).
-                        </div>
-                      )}
                    </div>
 
-                   {/* Real-time Blend Cost & Chart */}
+                   {/* Real-time Blend Chart */}
                    <div className="flex-1 mt-auto flex items-end">
                       <div className="w-full h-[220px] bg-[#14161a] rounded-xl relative p-2 flex items-center justify-center border border-dashboard-border shadow-inner">
-                        
-                        {/* Live Price Tag */}
-                        <div className="absolute top-3 left-4 bg-dashboard-panel border border-dashboard-border rounded-lg px-3 py-2 flex items-center shadow-lg z-10">
-                           <Calculator className="w-4 h-4 text-green-400 mr-2" />
-                           <div className="flex flex-col">
-                              <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest leading-none">Coste Estimado</span>
-                              <span className="text-white font-mono font-bold text-sm tracking-tight hidden lg:block">€{estimatedCostPerKg.toFixed(2)} / kg</span>
-                           </div>
-                        </div>
 
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
@@ -389,9 +330,9 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
               <div className="flex space-x-4 pt-4 border-t border-dashboard-border">
                 <button 
                   type="submit" 
-                  disabled={!isBlendValid || availableLots.length === 0}
+                  disabled={!isBlendValid || GREEN_ORIGINS.length === 0}
                   className={`flex-1 font-black uppercase tracking-widest py-5 px-6 rounded-xl transition-all shadow-xl
-                    ${isBlendValid && availableLots.length > 0
+                    ${isBlendValid && GREEN_ORIGINS.length > 0
                       ? 'bg-coffee-accent hover:bg-coffee-light text-white shadow-[0_0_20px_rgba(217,119,6,0.3)]' 
                       : 'bg-[#14161a] border border-dashboard-border text-gray-600 cursor-not-allowed'}`}
                 >
@@ -416,8 +357,8 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
             <button 
               onClick={() => {
                 setIsCreating(true);
-                if (newProfile.blend.length === 0 && baseValidLots.length > 0) {
-                   setNewProfile({...newProfile, blend: [{ origin: baseValidLots[0].origin, percentage: 100 }]});
+                if (newProfile.blend.length === 0 && GREEN_ORIGINS.length > 0) {
+                   setNewProfile({...newProfile, blend: [{ origin: GREEN_ORIGINS[0], percentage: 100 }]});
                 }
               }}
               className="bg-dashboard-panel border-2 border-dashed border-dashboard-border rounded-3xl p-8 min-h-[350px] flex flex-col items-center justify-center text-gray-500 hover:text-white hover:border-coffee-light hover:bg-[#1e222b] transition-all group shadow-sm"
@@ -426,7 +367,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ inventoryLots, masterPr
                 <Plus className="w-12 h-12 text-coffee-light" />
               </div>
               <h3 className="text-xl font-bold uppercase tracking-widest mt-2">Crear Gama / Módulo</h3>
-              <p className="text-sm mt-3 text-center px-4 font-medium">Extrae datos del Inventario Global y diseña la arquitectura de blend.</p>
+              <p className="text-sm mt-3 text-center px-4 font-medium">Diseña la arquitectura de blend basándote en la base de orígenes estándar.</p>
             </button>
 
             {/* List Profiles */}
