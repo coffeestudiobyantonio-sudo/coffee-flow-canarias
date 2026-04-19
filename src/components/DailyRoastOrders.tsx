@@ -45,18 +45,19 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    const selectedProfile = masterProfiles.find(p => p.name === selectedProfileName);
 
    const SHRINKAGE_PCT = selectedProfile ? ((selectedProfile.expectedShrinkage || 16.0) / 100) : 0.16;
-   const machine = ROASTING_MACHINES[0];
+
    
    // Base theoretical minimum
    const baseRequiredGreenKg = targetKg / (1 - SHRINKAGE_PCT);
    
-   // True green sum enforcing exactly 120kg per batch per origin
+   // True green sum enforcing exactly 2 Sacks per batch per origin
    let actualTotalGreenRoasting = 0;
    if (selectedProfile) {
       selectedProfile.blend.forEach(b => {
          const originReqGreen = baseRequiredGreenKg * (b.percentage / 100);
-         const batchesNeeded = Math.ceil(originReqGreen / machine.maxCapacity);
-         actualTotalGreenRoasting += batchesNeeded * machine.maxCapacity;
+         const originBatchSize = (b.sackWeight || 60) * 2;
+         const batchesNeeded = Math.ceil(originReqGreen / originBatchSize);
+         actualTotalGreenRoasting += batchesNeeded * originBatchSize;
       });
    }
 
@@ -70,7 +71,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          return;
       }
 
-      if (!confirm(`Para fabricar ${targetKg}kg de ${selectedProfile.name} (Merma del ${(SHRINKAGE_PCT * 100).toFixed(1)}%):\nSe van a forzar tandas completas de ${machine.maxCapacity}kg verdes de acuerdo con su composición técnica.\n\nTotal Café Verde que procesarás: ${actualTotalGreenRoasting}kg.\nEl rendimiento final que obtendrás será aprox de ${trueEstimatedRoasted.toFixed(1)}kg tostados.\n\nSobrarán: ${excessRoasted > 0 ? excessRoasted.toFixed(1) : 0}kg tostados que irán al silo de reserva.\n\n¿Proceder con la generación de tareas?`)) {
+      if (!confirm(`Para fabricar ${targetKg}kg de ${selectedProfile.name} (Merma del ${(SHRINKAGE_PCT * 100).toFixed(1)}%):\nLa agenda forzará tandas cerradas de 2 SACOS según el origen (ej. 120kg o 138kg).\n\nTotal Café Verde que procesarás: ${actualTotalGreenRoasting}kg.\nEl rendimiento final que obtendrás será aprox de ${trueEstimatedRoasted.toFixed(1)}kg tostados.\n\nSobrarán: ${excessRoasted > 0 ? excessRoasted.toFixed(1) : 0}kg tostados que irán al silo de reserva.\n\n¿Proceder con la generación de tareas?`)) {
          return;
       }
 
@@ -82,12 +83,13 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
       // ASSET & FRAGMENTATION LOGIC
 
-      // POST_BLEND implicitly: Fragment each origin's roast task independently enforcing 120kg
+      // POST_BLEND implicitly: Fragment each origin's roast task independently enforcing 2 sacks per batch
       selectedProfile.blend.forEach((b, originIdx) => {
          const originReqGreen = baseRequiredGreenKg * (b.percentage / 100);
-         const batchesNeeded = Math.ceil(originReqGreen / machine.maxCapacity);
+         const originBatchSize = (b.sackWeight || 60) * 2;
+         const batchesNeeded = Math.ceil(originReqGreen / originBatchSize);
 
-         // We no longer calculate irregular batchWeights. Everyone is 120kg.
+         // We no longer calculate irregular batchWeights. Everyone is 2 sacks.
          for (let batchIdx = 0; batchIdx < batchesNeeded; batchIdx++) {
             finalTasks.push({
                id: `${orderId}-O${originIdx + 1}-B${batchIdx + 1}`,
@@ -96,11 +98,11 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                masterProfile: selectedProfile,
                machineId: 'TOST-A',
                origins: [b.origin],
-               targetWeightKg: machine.maxCapacity,
+               targetWeightKg: originBatchSize,
                status: 'PENDING',
                batchIndex: batchIdx + 1,
                totalBatches: batchesNeeded,
-               parentOrderTotalKg: batchesNeeded * machine.maxCapacity,
+               parentOrderTotalKg: batchesNeeded * originBatchSize,
                category: orderCategory
             });
          }
@@ -248,9 +250,9 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                     <p className="text-[11px] text-gray-400 mt-2 flex flex-col gap-1 bg-[#14161a] p-3 rounded-lg border border-dashboard-border">
                                        <span>🔹 Merma del perfil: <b className="text-coffee-light">{(SHRINKAGE_PCT * 100).toFixed(1)}%</b></span>
                                        <span>🔹 Requeriría <b className="text-gray-500">{(targetKg / (1 - SHRINKAGE_PCT)).toFixed(1)}kg</b> de verde matemáticamente.</span>
-                                       <span>🔹 Verde exacto que tostará (lotes llenos de {machine.maxCapacity}kg): <b className="text-blue-400">{actualTotalGreenRoasting}kg</b></span>
+                                       <span>🔹 Verde exacto que tostará (siempre cargas de 2 sacos según origen): <b className="text-blue-400">{actualTotalGreenRoasting}kg</b></span>
                                        {excessRoasted > 0 && (
-                                          <span className="text-yellow-500 font-bold">⚠️ Se generará un exceso de {excessRoasted.toFixed(1)}kg tostados debido al uso de tándems llenos.</span>
+                                          <span className="text-yellow-500 font-bold">⚠️ Se generará un exceso de {excessRoasted.toFixed(1)}kg tostados debido al uso de múltiplos exactos de saco.</span>
                                        )}
                                     </p>
                                  )}

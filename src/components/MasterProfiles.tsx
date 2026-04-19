@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Target, Plus, Trash2, Coffee, AlertTriangle, Activity, Edit2 } from 'lucide-react';
+import { Target, Plus, Trash2, Coffee, AlertTriangle, Activity, Edit2, Package } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import type { MasterProfile } from '../App';
 import { createMasterProfile, deleteMasterProfile, updateMasterProfile } from '../lib/api';
@@ -49,11 +49,11 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
     
     setNewProfile({
       ...newProfile,
-      blend: [...newProfile.blend, { origin: available, percentage: 0 }]
+      blend: [...newProfile.blend, { origin: available, percentage: 0, sackWeight: 60 }]
     });
   };
 
-  const handleUpdateBlend = (index: number, field: 'origin' | 'percentage', value: string | number) => {
+  const handleUpdateBlend = (index: number, field: 'origin' | 'percentage' | 'sackWeight', value: string | number) => {
     const newBlend = [...newProfile.blend];
     newBlend[index] = { ...newBlend[index], [field]: value };
     setNewProfile({ ...newProfile, blend: newBlend });
@@ -243,14 +243,27 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
                               </datalist>
                            </div>
 
-                           <div className="flex items-center bg-[#1e222b] border border-dashboard-border rounded-lg px-2 py-2">
-                             <input 
-                               type="number" min="0" max="100"
-                               className="w-16 bg-transparent text-right text-white font-mono font-bold focus:outline-none"
-                               value={item.percentage}
-                               onChange={(e) => handleUpdateBlend(index, 'percentage', parseInt(e.target.value) || 0)}
-                             />
-                             <span className="text-gray-400 ml-1 font-bold">%</span>
+                           <div className="flex items-center space-x-2">
+                             <div className="flex items-center bg-[#1e222b] border border-dashboard-border rounded-lg px-2 py-2" title="Kilos por Saco">
+                               <Package className="w-4 h-4 text-gray-500 mr-1" />
+                               <input 
+                                 type="number" min="10" step="1"
+                                 className="w-12 bg-transparent text-right text-gray-400 font-mono focus:outline-none"
+                                 value={item.sackWeight || 60}
+                                 onChange={(e) => handleUpdateBlend(index, 'sackWeight', parseInt(e.target.value) || 60)}
+                               />
+                               <span className="text-gray-500 ml-1 text-[10px] font-bold">kg</span>
+                             </div>
+
+                             <div className="flex items-center bg-[#1e222b] border border-dashboard-border rounded-lg px-2 py-2">
+                               <input 
+                                 type="number" min="0" max="100"
+                                 className="w-16 bg-transparent text-right text-white font-mono font-bold focus:outline-none"
+                                 value={item.percentage}
+                                 onChange={(e) => handleUpdateBlend(index, 'percentage', parseInt(e.target.value) || 0)}
+                               />
+                               <span className="text-gray-400 ml-1 font-bold">%</span>
+                             </div>
                            </div>
                            <button type="button" onClick={() => handleRemoveOrigin(index)} className="text-gray-500 hover:text-red-400 p-2 transition-colors">
                              <Trash2 className="w-5 h-5" />
