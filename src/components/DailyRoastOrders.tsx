@@ -348,22 +348,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                               </div>
                            </section>
 
-                           {/* Machine Capacity Safety Interlock */}
-                           {(() => {
-                              const m = ROASTING_MACHINES[0];
-                              if (m && targetKg > m.maxCapacity) {
-                                 return (
-                                    <div className="bg-orange-500/10 border border-orange-500/50 p-4 rounded-2xl flex items-start space-x-3 mb-4 animate-pulse">
-                                       <AlertTriangle className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
-                                       <div>
-                                          <p className="text-sm font-black text-orange-400 uppercase tracking-widest">Aviso de Capacidad</p>
-                                          <p className="text-[11px] text-gray-300 italic">Atención: El lote excede la capacidad nominal de la máquina elegida ({m.maxCapacity} kg). Se requiere fragmentación.</p>
-                                       </div>
-                                    </div>
-                                 );
-                              }
-                              return null;
-                           })()}
+
 
                            <div className="pt-2">
                               <button
