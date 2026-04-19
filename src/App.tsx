@@ -21,6 +21,7 @@ export interface MasterProfile {
   roastedType: string;
   businessUnit: 'LIDL' | 'PROPIA';
   roastStrategy: 'PRE_BLEND' | 'POST_BLEND';
+  expectedShrinkage?: number;
   blend: { origin: string, percentage: number }[];
   sensory: {
     fragrancia: number;

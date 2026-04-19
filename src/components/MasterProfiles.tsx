@@ -36,6 +36,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
     roastedType: 'NATURAL',
     businessUnit: 'PROPIA',
     roastStrategy: 'POST_BLEND',
+    expectedShrinkage: 16.0,
     agtron: 55.0,
     blend: [],
     sensory: { fragrancia: 7.0, aroma: 7.0, sabor: 7.0, cuerpo: 7.0 }
@@ -89,7 +90,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
       setIsCreating(false);
       setEditingProfileName(null);
       setNewProfile({
-        name: '', roastedType: 'NATURAL', agtron: 55.0, businessUnit: 'PROPIA', roastStrategy: 'POST_BLEND',
+        name: '', roastedType: 'NATURAL', agtron: 55.0, businessUnit: 'PROPIA', roastStrategy: 'POST_BLEND', expectedShrinkage: 16.0,
         blend: [],
         sensory: { fragrancia: 7.0, aroma: 7.0, sabor: 7.0, cuerpo: 7.0 }
       });
@@ -164,6 +165,15 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
                              className="w-full bg-[#1e222b] border border-dashboard-border rounded-xl p-3 text-white focus:outline-none focus:border-coffee-light transition-colors font-mono"
                              value={newProfile.agtron}
                              onChange={e => setNewProfile({...newProfile, agtron: parseFloat(e.target.value)})}
+                           />
+                         </div>
+                         <div>
+                           <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Merma Esperada (%)</label>
+                           <input 
+                             type="number" step="0.1" required min="10" max="25"
+                             className="w-full bg-[#1e222b] border border-dashboard-border rounded-xl p-3 text-white focus:outline-none focus:border-coffee-light transition-colors font-mono"
+                             value={newProfile.expectedShrinkage || 16.0}
+                             onChange={e => setNewProfile({...newProfile, expectedShrinkage: parseFloat(e.target.value)})}
                            />
                          </div>
                        </div>

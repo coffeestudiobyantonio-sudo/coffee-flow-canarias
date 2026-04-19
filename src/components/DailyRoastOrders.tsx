@@ -45,10 +45,13 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
    const selectedProfile = masterProfiles.find(p => p.name === selectedProfileName);
 
-
-
-   const SHRINKAGE_PCT = 0.15;
-   const estimatedYield = targetKg * (1 - SHRINKAGE_PCT);
+   // TargetKg is now interpreted as TARGET ROASTED (Product Terminado)
+   const SHRINKAGE_PCT = selectedProfile ? ((selectedProfile.expectedShrinkage || 16.0) / 100) : 0.16;
+   
+   // We calculate how much Green is required to hit the Target Roasted. Round UP to nearest whole Kilo of green.
+   const requiredGreenKg = Math.ceil(targetKg / (1 - SHRINKAGE_PCT));
+   const estimatedActualRoasted = requiredGreenKg * (1 - SHRINKAGE_PCT);
+   const excessRoasted = estimatedActualRoasted - targetKg;
 
    const handleCreateOrder = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -57,10 +60,12 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          return;
       }
 
+      if (!confirm(`Para fabricar ${targetKg}kg de ${selectedProfile.name} (Merma del ${SHRINKAGE_PCT * 100}%):\nSe van a requerir ${requiredGreenKg}kg de café verde en total.\nEl rendimiento estimado es de ${estimatedActualRoasted.toFixed(1)}kg tostados.\nSobran: ${excessRoasted > 0 ? excessRoasted.toFixed(1) : 0}kg tostados que irán al silo de reserva.\n\n¿Proceder con la planificación?`)) {
+         return;
+      }
+
       const orderId = `ORD-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
       let finalTasks: RoastTask[] = [];
-
-
 
       // PMP calculation logic (Simplified for ER-Silo logic since actual Cost is held at lot level, mock PMP for now)
       const orderPMP = 8.50;
@@ -88,8 +93,8 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
       // POST_BLEND implicitly: Fragment each origin's roast task independently
       selectedProfile.blend.forEach((b, originIdx) => {
-         const originTarget = targetKg * (b.percentage / 100);
-         const batchWeights = calculateBatches(originTarget);
+         const originGreenTarget = Math.ceil(requiredGreenKg * (b.percentage / 100)); // Round up each origin's green requirement
+         const batchWeights = calculateBatches(originGreenTarget);
 
          batchWeights.forEach((w, batchIdx) => {
             finalTasks.push({
@@ -103,7 +108,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                status: 'PENDING',
                batchIndex: batchIdx + 1,
                totalBatches: batchWeights.length,
-               parentOrderTotalKg: originTarget,
+               parentOrderTotalKg: originGreenTarget,
                category: orderCategory
             });
          });
@@ -115,7 +120,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          type: 'BLEND',
          masterProfile: selectedProfile,
          origins: selectedProfile.blend.map(b => b.origin),
-         targetWeightKg: estimatedYield,
+         targetWeightKg: estimatedActualRoasted,
          status: 'PENDING',
          category: orderCategory
       });
@@ -123,7 +128,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       const newOrder: DailyRoastOrder = {
          id: orderId,
          profileName: selectedProfile.name,
-         totalKg: targetKg,
+         totalKg: requiredGreenKg, // We store the GREEN weight as total request for legacy tracking if needed
          priority,
          shrinkagePct: SHRINKAGE_PCT,
          tasks: finalTasks,
@@ -235,9 +240,32 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                  <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-2">{orderCategory === 'MARCA_PROPIA' ? 'Protocolo: Estricto. Máxima calidad y control de curva.' : 'Protocolo: Estándar Industrial. Foco en volumen y repetibilidad.'}</p>
                               </div>
 
+                              {/* Target Kg vs Roasted input logic */}
                               <div>
-                                 <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3">2. Perfil y Volumen</label>
-                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Volumen Objetivo (Kg Tostados)</label>
+                                 <div className="relative">
+                                    <input 
+                                       type="number" required min="10"
+                                       className="w-full bg-[#14161a] border border-dashboard-border rounded-xl pl-12 pr-4 py-3 text-white focus:outline-none focus:border-coffee-light transition-colors font-mono"
+                                       value={targetKg}
+                                       onChange={e => setTargetKg(parseInt(e.target.value) || 0)}
+                                    />
+                                    <Scale className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                                 </div>
+                                 {selectedProfile && (
+                                    <p className="text-[11px] text-gray-400 mt-2 flex flex-col gap-1 bg-[#14161a] p-3 rounded-lg border border-dashboard-border">
+                                       <span>🔹 Merma pre-configurada del perfil: <b className="text-coffee-light">{(SHRINKAGE_PCT * 100).toFixed(1)}%</b></span>
+                                       <span>🔹 Café verde crudo requerido (Base): <b className="text-blue-400">{requiredGreenKg}kg</b></span>
+                                       {excessRoasted > 0 && (
+                                          <span className="text-yellow-500 font-bold">⚠️ Redondeo de tostadora generará un exceso de {excessRoasted.toFixed(1)}kg tostados sobre el volumen objetivo.</span>
+                                       )}
+                                    </p>
+                                 )}
+                              </div>
+
+                              <div>
+                                 <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3">2. Perfil de Tueste</label>
+                                 <div className="grid grid-cols-1 gap-4">
                                     <select
                                        required
                                        value={selectedProfileName}
