@@ -35,7 +35,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
     name: '',
     roastedType: 'NATURAL',
     businessUnit: 'PROPIA',
-    roastStrategy: 'PRE_BLEND',
+    roastStrategy: 'POST_BLEND',
     agtron: 55.0,
     blend: [],
     sensory: { fragrancia: 7.0, aroma: 7.0, sabor: 7.0, cuerpo: 7.0 }
@@ -89,7 +89,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
       setIsCreating(false);
       setEditingProfileName(null);
       setNewProfile({
-        name: '', roastedType: 'NATURAL', agtron: 55.0, businessUnit: 'PROPIA', roastStrategy: 'PRE_BLEND',
+        name: '', roastedType: 'NATURAL', agtron: 55.0, businessUnit: 'PROPIA', roastStrategy: 'POST_BLEND',
         blend: [],
         sensory: { fragrancia: 7.0, aroma: 7.0, sabor: 7.0, cuerpo: 7.0 }
       });
@@ -154,27 +154,6 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
                            onChange={e => setNewProfile({...newProfile, name: e.target.value})}
                            disabled={editingProfileName !== null}
                          />
-                       </div>
-                       <div>
-                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Estrategia de Tueste (Protocolo)</label>
-                         <div className="flex bg-[#14161a] border border-dashboard-border rounded-lg p-1">
-                            <button
-                              type="button"
-                              onClick={() => setNewProfile({...newProfile, roastStrategy: 'PRE_BLEND'})}
-                              className={`flex-1 flex flex-col items-center justify-center py-2 px-2 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${newProfile.roastStrategy === 'PRE_BLEND' ? 'bg-[#1e222b] text-white shadow border border-gray-600' : 'text-gray-500 hover:text-gray-300'}`}
-                            >
-                              <span className="text-white mb-0.5">🟢 Pre-Blend</span>
-                              <span className="text-gray-500 text-[9px] font-normal normal-case">Mezclar verdes y tostar lote único</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setNewProfile({...newProfile, roastStrategy: 'POST_BLEND'})}
-                              className={`flex-1 flex flex-col items-center justify-center py-2 px-2 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${newProfile.roastStrategy === 'POST_BLEND' ? 'bg-[#1e222b] text-coffee-light shadow border border-coffee-accent/30' : 'text-gray-500 hover:text-gray-300'}`}
-                            >
-                              <span className="text-coffee-light mb-0.5">🔄 Post-Blend</span>
-                              <span className="text-gray-500 text-[9px] font-normal normal-case">Tostar separados y ensamblar al final</span>
-                            </button>
-                         </div>
                        </div>
                        
                        <div className="grid grid-cols-1 gap-4">

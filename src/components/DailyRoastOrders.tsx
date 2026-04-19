@@ -86,57 +86,39 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          }
       };
 
-      if (selectedProfile.roastStrategy === 'PRE_BLEND') {
-         const batchWeights = calculateBatches(targetKg);
-         finalTasks = batchWeights.map((w, i) => ({
-            id: `${orderId}-B${i + 1}`,
-            parentOrderId: orderId,
-            type: 'ROAST',
-            masterProfile: selectedProfile,
-            machineId: 'TOST-A',
-            origins: selectedProfile.blend.map(b => b.origin),
-            targetWeightKg: w,
-            status: 'PENDING',
-            batchIndex: i + 1,
-            totalBatches: batchWeights.length,
-            parentOrderTotalKg: targetKg,
-            category: orderCategory
-         }));
-      } else {
-         // POST_BLEND: Fragment each origin's roast task independently
-         selectedProfile.blend.forEach((b, originIdx) => {
-            const originTarget = targetKg * (b.percentage / 100);
-            const batchWeights = calculateBatches(originTarget);
+      // POST_BLEND implicitly: Fragment each origin's roast task independently
+      selectedProfile.blend.forEach((b, originIdx) => {
+         const originTarget = targetKg * (b.percentage / 100);
+         const batchWeights = calculateBatches(originTarget);
 
-            batchWeights.forEach((w, batchIdx) => {
-               finalTasks.push({
-                  id: `${orderId}-O${originIdx + 1}-B${batchIdx + 1}`,
-                  parentOrderId: orderId,
-                  type: 'ROAST',
-                  masterProfile: selectedProfile,
-                  machineId: 'TOST-A',
-                  origins: [b.origin],
-                  targetWeightKg: w,
-                  status: 'PENDING',
-                  batchIndex: batchIdx + 1,
-                  totalBatches: batchWeights.length,
-                  parentOrderTotalKg: originTarget,
-                  category: orderCategory
-               });
+         batchWeights.forEach((w, batchIdx) => {
+            finalTasks.push({
+               id: `${orderId}-O${originIdx + 1}-B${batchIdx + 1}`,
+               parentOrderId: orderId,
+               type: 'ROAST',
+               masterProfile: selectedProfile,
+               machineId: 'TOST-A',
+               origins: [b.origin],
+               targetWeightKg: w,
+               status: 'PENDING',
+               batchIndex: batchIdx + 1,
+               totalBatches: batchWeights.length,
+               parentOrderTotalKg: originTarget,
+               category: orderCategory
             });
          });
+      });
 
-         finalTasks.push({
-            id: `${orderId}-ASM`,
-            parentOrderId: orderId,
-            type: 'BLEND',
-            masterProfile: selectedProfile,
-            origins: selectedProfile.blend.map(b => b.origin),
-            targetWeightKg: estimatedYield,
-            status: 'PENDING',
-            category: orderCategory
-         });
-      }
+      finalTasks.push({
+         id: `${orderId}-ASM`,
+         parentOrderId: orderId,
+         type: 'BLEND',
+         masterProfile: selectedProfile,
+         origins: selectedProfile.blend.map(b => b.origin),
+         targetWeightKg: estimatedYield,
+         status: 'PENDING',
+         category: orderCategory
+      });
 
       const newOrder: DailyRoastOrder = {
          id: orderId,
