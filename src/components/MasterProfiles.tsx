@@ -43,13 +43,13 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
 
   // Blend Logic
   const handleAddOrigin = () => {
-    const available = GREEN_ORIGINS.find(origin => !newProfile.blend.some(b => b.origin === origin));
-    if (available) {
-      setNewProfile({
-        ...newProfile,
-        blend: [...newProfile.blend, { origin: available, percentage: 0 }]
-      });
-    }
+    let available = GREEN_ORIGINS.find(origin => !newProfile.blend.some(b => b.origin === origin));
+    if (!available) available = `Nuevo Origen ${newProfile.blend.length + 1}`;
+    
+    setNewProfile({
+      ...newProfile,
+      blend: [...newProfile.blend, { origin: available, percentage: 0 }]
+    });
   };
 
   const handleUpdateBlend = (index: number, field: 'origin' | 'percentage', value: string | number) => {
@@ -240,17 +240,18 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
                               <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
                                  <Coffee className="w-4 h-4 text-gray-500" />
                               </div>
-                              <select 
-                                className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg pl-8 pr-2 py-2 text-white font-semibold focus:outline-none focus:border-coffee-light appearance-none tracking-wide text-sm"
+                              <input 
+                                list={`origin-list-${index}`}
+                                className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg pl-10 pr-2 py-2 text-white font-semibold focus:outline-none focus:border-coffee-light tracking-wide text-sm"
+                                placeholder="Escribe o selecciona un origen..."
                                 value={item.origin}
                                 onChange={(e) => handleUpdateBlend(index, 'origin', e.target.value)}
-                              >
+                              />
+                              <datalist id={`origin-list-${index}`}>
                                 {GREEN_ORIGINS.map(origin => (
-                                  <option key={origin} value={origin} disabled={newProfile.blend.some(b => b.origin === origin && b.origin !== item.origin)}>
-                                    {origin}
-                                  </option>
+                                  <option key={origin} value={origin} />
                                 ))}
-                              </select>
+                              </datalist>
                            </div>
 
                            <div className="flex items-center bg-[#1e222b] border border-dashboard-border rounded-lg px-2 py-2">
@@ -270,7 +271,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
                        );
                      })}
                      
-                     {newProfile.blend.length < GREEN_ORIGINS.length && (
+                     {newProfile.blend.length < 8 && (
                        <button 
                          type="button" 
                          onClick={handleAddOrigin}
