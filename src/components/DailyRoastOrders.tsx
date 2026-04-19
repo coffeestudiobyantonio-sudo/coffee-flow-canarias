@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
-import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, Scale, AlertTriangle, Lock, Trash2 } from 'lucide-react';
+import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, AlertTriangle, Lock, Trash2 } from 'lucide-react';
 import { ROASTING_MACHINES } from '../App';
 import { createDailyOrder, deleteDailyOrder } from '../lib/api';
 
@@ -236,30 +236,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
                               {/* Target Kg vs Roasted input logic */}
                               <div>
-                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Volumen Objetivo (Kg Tostados)</label>
-                                 <div className="relative">
-                                    <input 
-                                       type="number" required min="10"
-                                       className="w-full bg-[#14161a] border border-dashboard-border rounded-xl pl-12 pr-4 py-3 text-white focus:outline-none focus:border-coffee-light transition-colors font-mono"
-                                       value={targetKg}
-                                       onChange={e => setTargetKg(parseInt(e.target.value) || 0)}
-                                    />
-                                    <Scale className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
-                                 </div>
-                                 {selectedProfile && (
-                                    <p className="text-[11px] text-gray-400 mt-2 flex flex-col gap-1 bg-[#14161a] p-3 rounded-lg border border-dashboard-border">
-                                       <span>🔹 Merma del perfil: <b className="text-coffee-light">{(SHRINKAGE_PCT * 100).toFixed(1)}%</b></span>
-                                       <span>🔹 Requeriría <b className="text-gray-500">{(targetKg / (1 - SHRINKAGE_PCT)).toFixed(1)}kg</b> de verde matemáticamente.</span>
-                                       <span>🔹 Verde exacto que tostará (siempre cargas de 2 sacos según origen): <b className="text-blue-400">{actualTotalGreenRoasting}kg</b></span>
-                                       {excessRoasted > 0 && (
-                                          <span className="text-yellow-500 font-bold">⚠️ Se generará un exceso de {excessRoasted.toFixed(1)}kg tostados debido al uso de múltiplos exactos de saco.</span>
-                                       )}
-                                    </p>
-                                 )}
-                              </div>
-
-                              <div>
-                                 <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3">2. Perfil de Tueste</label>
+                                 <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3">2. Perfil y Volumen (Tostado)</label>
                                  <div className="grid grid-cols-1 gap-4">
                                     <select
                                        required
@@ -272,25 +249,69 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                           <option key={p.name} value={p.name}>{p.name}</option>
                                        ))}
                                     </select>
+                                    
                                     <div className="flex bg-[#1e222b] border border-dashboard-border rounded-xl items-center px-4 py-3">
                                        <input
                                           type="number" required min="10" step="1"
                                           value={targetKg}
                                           onChange={(e) => setTargetKg(Number(e.target.value))}
                                           className="w-full bg-transparent text-white font-mono text-lg font-black focus:outline-none"
+                                          placeholder="Kilos Tostados..."
                                        />
                                        <span className="text-gray-500 font-bold ml-2">kg</span>
                                     </div>
                                  </div>
+                                 
+                                 {selectedProfile && (
+                                    <div className="mt-4">
+                                       <p className="text-[11px] text-gray-400 mt-2 flex flex-col gap-1 bg-[#14161a] p-3 rounded-lg border border-dashboard-border">
+                                          <span>🔹 Merma del perfil: <b className="text-coffee-light">{(SHRINKAGE_PCT * 100).toFixed(1)}%</b></span>
+                                          <span>🔹 Requeriría <b className="text-gray-500">{(targetKg / (1 - SHRINKAGE_PCT)).toFixed(1)}kg</b> de verde matemáticamente.</span>
+                                          <span>🔹 Verde exacto que tostará (siempre cargas de 2 sacos según origen): <b className="text-blue-400">{actualTotalGreenRoasting}kg</b></span>
+                                          {excessRoasted > 0 && (
+                                             <span className="text-yellow-500 font-bold">⚠️ Se generará un exceso de {excessRoasted.toFixed(1)}kg tostados debido al uso de múltiplos exactos de saco.</span>
+                                          )}
+                                       </p>
+                                    </div>
+                                 )}
                               </div>
-
-
-
-
-
-
-
                            </section>
+
+                           {selectedProfile && (
+                              <section className="bg-black/20 p-6 rounded-2xl border border-dashboard-border space-y-4">
+                                 <div className="flex justify-between items-center text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-dashboard-border pb-2">
+                                    <span>Desglose de Lotes por Origen</span>
+                                    <Package className="w-3 h-3" />
+                                 </div>
+                                 <div className="space-y-3">
+                                    {selectedProfile.blend.map((b, idx) => {
+                                       const reqGreen = baseRequiredGreenKg * (b.percentage / 100);
+                                       const batchSz = (b.sackWeight || 60) * 2;
+                                       const batches = Math.ceil(reqGreen / batchSz);
+                                       return (
+                                          <div key={idx} className="flex flex-col bg-[#14161a] p-3 rounded-lg border border-dashboard-border">
+                                             <div className="flex justify-between items-center mb-2">
+                                                <span className="text-xs font-bold text-gray-300">{b.origin}</span>
+                                                <span className="text-[10px] text-gray-400 font-bold bg-[#1e222b] px-2 py-0.5 rounded border border-dashboard-border">
+                                                   {b.percentage}% ({(b.sackWeight || 60)}kg/saco)
+                                                </span>
+                                             </div>
+                                             <div className="flex flex-wrap gap-2">
+                                                {Math.ceil(reqGreen) > 0 ? Array.from({ length: batches }).map((_, i) => (
+                                                   <div key={i} className="bg-coffee-accent/10 border border-coffee-accent/20 px-2 py-1 rounded text-center flex items-center">
+                                                      <span className="text-coffee-light font-black text-[10px] mr-1.5">#{i+1}</span>
+                                                      <span className="text-white font-bold text-[11px]">{batchSz}</span><span className="text-[9px] text-gray-500 ml-0.5">kg</span>
+                                                   </div>
+                                                )) : (
+                                                   <span className="text-[10px] text-gray-500">Mínimo no alcanzado</span>
+                                                )}
+                                             </div>
+                                          </div>
+                                       );
+                                    })}
+                                 </div>
+                              </section>
+                           )}
 
                            <div className="pt-2">
                               <button
