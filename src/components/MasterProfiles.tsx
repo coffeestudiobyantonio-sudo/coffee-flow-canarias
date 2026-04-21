@@ -226,21 +226,25 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
                            
                            {/* Color Coded Indicator Wrapper */}
                            <div className="relative flex-1">
-                              <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                                 <Coffee className="w-4 h-4 text-gray-500" />
-                              </div>
-                              <input 
-                                list={`origin-list-${index}`}
-                                className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg pl-10 pr-2 py-2 text-white font-semibold focus:outline-none focus:border-coffee-light tracking-wide text-sm"
-                                placeholder="Escribe o selecciona un origen..."
+                              <select 
+                                className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-2 text-white font-semibold focus:outline-none focus:border-coffee-light tracking-wide text-sm appearance-none"
                                 value={item.origin}
-                                onChange={(e) => handleUpdateBlend(index, 'origin', e.target.value)}
-                              />
-                              <datalist id={`origin-list-${index}`}>
-                                {GREEN_ORIGINS.map(origin => (
-                                  <option key={origin} value={origin} />
+                                onChange={(e) => {
+                                  if (e.target.value === '___NEW___') {
+                                     const custom = window.prompt("Introduce el nombre del nuevo Origen:");
+                                     if (custom && custom.trim() !== '') {
+                                        handleUpdateBlend(index, 'origin', custom.trim());
+                                     }
+                                  } else {
+                                     handleUpdateBlend(index, 'origin', e.target.value);
+                                  }
+                                }}
+                              >
+                                {Array.from(new Set([...GREEN_ORIGINS, ...newProfile.blend.map(b => b.origin)])).map(origin => (
+                                  <option key={origin} value={origin}>{origin}</option>
                                 ))}
-                              </datalist>
+                                <option value="___NEW___" className="text-coffee-light font-bold">+ Escribir Nuevo Origen...</option>
+                              </select>
                            </div>
 
                            <div className="flex items-center space-x-2">
