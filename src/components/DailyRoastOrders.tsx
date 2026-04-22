@@ -488,11 +488,12 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                       const pName = e.target.value;
                                       let detectedFormat = newDemand.format || '1000g';
                                       
-                                      // Automatic format detection
-                                      if (pName.includes('250 g.')) detectedFormat = '250g';
-                                      else if (pName.includes('500 g.')) detectedFormat = '500g';
-                                      else if (pName.includes('450 g.')) detectedFormat = '450g';
-                                      else if (pName.includes('1 kg.')) detectedFormat = '1000g';
+                                      // Automatic format detection (More robust matching)
+                                      const normalizedName = pName.toLowerCase();
+                                      if (normalizedName.includes('250')) detectedFormat = '250g';
+                                      else if (normalizedName.includes('500')) detectedFormat = '500g';
+                                      else if (normalizedName.includes('450')) detectedFormat = '450g';
+                                      else if (normalizedName.includes('1 kg') || normalizedName.includes('1000')) detectedFormat = '1000g';
 
                                       const weight = getFormatWeight(detectedFormat);
                                       setNewDemand(prev => ({
