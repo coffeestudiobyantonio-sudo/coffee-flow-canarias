@@ -375,7 +375,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
       const newOrder: DailyRoastOrder = {
          id: parentOrderId,
-         profileName: 'PLAN_AUTOMATICO',
+         profileName: day.blocks[0]?.profileName || 'MAURICE ALICANTO 250 G.', // Debe ser un perfil real existente en DB
          totalKg: day.totalKg,
          priority: 'STOCK',
          shrinkagePct: 0.16,
