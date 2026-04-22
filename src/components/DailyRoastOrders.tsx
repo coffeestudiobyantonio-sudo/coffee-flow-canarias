@@ -25,6 +25,7 @@ interface DailyPlan {
    targetSilos: number[]; // e.g [1,2,3,4] or [5,6,7,8]
    totalKg: number;
    blocks: { profileName: string, format: string, targetKg: number }[];
+   scheduledDate?: string;
 }
 
 const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roastOrders, setRoastOrders, silos, onLaunchManualRoast }) => {
@@ -34,6 +35,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    const [demands, setDemands] = useState<DelegationDemand[]>([]);
    const [plannedDays, setPlannedDays] = useState<DailyPlan[]>([]);
    const [newDemand, setNewDemand] = useState<Partial<DelegationDemand>>({
+      delegation: 'Canarias',
       format: '1000g',
       kgRequested: 1600
    });
@@ -279,7 +281,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    };
 
    const handleLaunchDay = async (day: DailyPlan) => {
-      const parentOrderId = `PLAN-D${day.dayIndex}-${Date.now().toString().slice(-4)}`;
+      const parentOrderId = `PLAN-${day.scheduledDate || 'D' + day.dayIndex}-${Date.now().toString().slice(-4)}`;
       
       const newTasks: any[] = [];
       let batchIdx = 1;
@@ -335,7 +337,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       // Toast notification
       const toast = document.createElement('div');
       toast.className = 'fixed bottom-4 right-4 bg-green-500/90 text-white px-6 py-4 rounded-xl font-bold z-50 animate-bounce flex flex-col space-y-1';
-      toast.innerHTML = `<span>🚀 Día ${day.dayIndex} inyectado (Silos ${day.targetSilos.join(', ')})</span>`;
+      toast.innerHTML = `<span>🚀 Plan ${day.scheduledDate || day.dayIndex} inyectado (Silos ${day.targetSilos.join(', ')})</span>`;
       document.body.appendChild(toast);
       setTimeout(() => document.body.removeChild(toast), 3000);
    };
@@ -430,9 +432,16 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                      <form onSubmit={handleAddDemand} className="bg-[#14161a] p-6 rounded-xl border border-dashboard-border flex flex-col lg:flex-row items-end gap-4 shadow-inner">
                         <div className="flex-1 w-full relative">
                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Delegación Destino</label>
-                           <input type="text" required placeholder="Ej: Las Palmas, Madrid..." 
-                                  value={newDemand.delegation || ''} onChange={e => setNewDemand({...newDemand, delegation: e.target.value})}
-                                  className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-coffee-light font-semibold" />
+                           <select required value={newDemand.delegation || ''} onChange={e => setNewDemand({...newDemand, delegation: e.target.value})}
+                                   className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-coffee-light font-bold">
+                              <option value="" disabled>-- Selecciona... --</option>
+                              <option value="Madrid">Madrid</option>
+                              <option value="Barcelona">Barcelona</option>
+                              <option value="Valencia">Valencia</option>
+                              <option value="Málaga">Málaga</option>
+                              <option value="Granada">Granada</option>
+                              <option value="Canarias">Canarias</option>
+                           </select>
                         </div>
                         <div className="flex-1 w-full">
                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Perfil Requerido</label>
@@ -484,7 +493,18 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                            {plannedDays.map(day => (
                               <div key={day.dayIndex} className="bg-[#14161a] border border-dashboard-border rounded-2xl overflow-hidden flex flex-col group hover:border-blue-500/50 transition-colors">
                                  <div className="bg-gradient-to-r from-blue-900/30 to-[#14161a] p-4 border-b border-dashboard-border flex justify-between items-center">
-                                    <span className="font-black text-white tracking-widest uppercase">Día {day.dayIndex}</span>
+                                    <div className="flex items-center space-x-2">
+                                       <span className="font-black text-white tracking-widest uppercase">Plan M/</span>
+                                       <input type="date" 
+                                              value={day.scheduledDate || ''}
+                                              onChange={(e) => {
+                                                 const ns = [...plannedDays];
+                                                 const tgt = ns.find(x => x.dayIndex === day.dayIndex);
+                                                 if (tgt) tgt.scheduledDate = e.target.value;
+                                                 setPlannedDays(ns);
+                                              }}
+                                              className="bg-[#1e222b] border border-dashboard-border text-white px-2 py-1 rounded text-xs focus:border-blue-500 outline-none" />
+                                    </div>
                                     <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-1 rounded font-bold border border-blue-500/30">
                                        Silos {day.targetSilos.join(', ')}
                                     </span>
