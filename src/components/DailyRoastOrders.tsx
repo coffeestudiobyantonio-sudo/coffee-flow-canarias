@@ -24,6 +24,7 @@ interface DelegationDemand {
 interface DailyPlan {
    dayIndex: number;
    targetSilos: number[]; // e.g [1,2,3,4] or [5,6,7,8]
+   siloAssignments: { siloId: number, origin: string, batches: { profileName: string, format: string }[] }[];
    totalKg: number;
    blocks: { profileName: string, format: string, targetKg: number }[];
    scheduledDate?: string;
@@ -262,104 +263,140 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       }
 
       // 1. Group demands by Profile and Format
-      const groups: { profileName: string, format: string, pending: number }[] = [];
+      const groups: { profileName: string, format: string, pendingKg: number }[] = [];
       demands.forEach(d => {
          const existing = groups.find(g => g.profileName === d.profileName && g.format === d.format);
          if (existing) {
-            existing.pending += d.kgRequested;
+            existing.pendingKg += d.kgRequested;
          } else {
-            groups.push({ profileName: d.profileName, format: d.format, pending: d.kgRequested });
+            groups.push({ profileName: d.profileName, format: d.format, pendingKg: d.kgRequested });
          }
       });
 
-      // 2. Sort by total demand (Volume Priority)
-      groups.sort((a, b) => b.pending - a.pending);
+      // 2. Explode into needed batches PER ORIGIN
+      type OriginBatchQueue = { origin: string, profileName: string, format: string, batchesNeeded: number };
+      const batchQueues: OriginBatchQueue[] = [];
+
+      groups.forEach(g => {
+         const profile = masterProfiles.find(p => p.name === g.profileName);
+         if (!profile) return;
+         const shrinkage = (profile.expectedShrinkage || 16) / 100;
+         const greenRequired = g.pendingKg / (1 - shrinkage);
+
+         profile.blend.forEach(b => {
+            const originGreen = greenRequired * (b.percentage / 100);
+            const sackWeight = b.sackWeight || 69;
+            const batchSize = sackWeight * 2;
+            const count = Math.ceil(originGreen / batchSize);
+            batchQueues.push({ origin: b.origin, profileName: g.profileName, format: g.format, batchesNeeded: count });
+         });
+      });
 
       const computedDays: DailyPlan[] = [];
       let dayIdx = 1;
       
-      let currentDayKg = 0;
-      let currentDayBlocks: { profileName: string, format: string, targetKg: number }[] = [];
+      // Distributor Tracking
+      let currentDaySilos: { origin: string, batches: { profileName: string, format: string }[] }[] = [];
 
       const flushDay = () => {
-         if (currentDayKg > 0) {
+         if (currentDaySilos.length > 0) {
+            const blocks: { profileName: string, format: string, targetKg: number }[] = [];
+            let dayTotalRoasted = 0;
+            const siloSet = dayIdx % 2 === 1 ? [1,2,3,4] : [5,6,7,8];
+            const siloAssignments: { siloId: number, origin: string, batches: { profileName: string, format: string }[] }[] = [];
+
+            currentDaySilos.forEach((siloData, idx) => {
+               const siloId = siloSet[idx];
+               siloAssignments.push({ siloId, origin: siloData.origin, batches: siloData.batches });
+
+               siloData.batches.forEach(b => {
+                  const profile = masterProfiles.find(p => p.name === b.profileName);
+                  const shrinkage = (profile?.expectedShrinkage || 16) / 100;
+                  const sackWeight = profile?.blend.find(bl => bl.origin === siloData.origin)?.sackWeight || 69;
+                  const batchRoasted = (sackWeight * 2) * (1 - shrinkage);
+                  
+                  const existingBlock = blocks.find(bl => bl.profileName === b.profileName && bl.format === b.format);
+                  if (existingBlock) {
+                     existingBlock.targetKg += batchRoasted;
+                  } else {
+                     blocks.push({ profileName: b.profileName, format: b.format, targetKg: batchRoasted });
+                  }
+                  dayTotalRoasted += batchRoasted;
+               });
+            });
+
             computedDays.push({
                dayIndex: dayIdx,
-               targetSilos: dayIdx % 2 === 1 ? [1,2,3,4] : [5,6,7,8],
-               totalKg: currentDayKg,
-               blocks: [...currentDayBlocks]
+               targetSilos: siloSet,
+               siloAssignments,
+               totalKg: dayTotalRoasted,
+               blocks: blocks.map(bl => ({ ...bl, targetKg: Number(bl.targetKg.toFixed(1)) }))
             });
             dayIdx++;
-            currentDayKg = 0;
-            currentDayBlocks = [];
+            currentDaySilos = [];
          }
       };
 
-      // 3. Consume groups 1890kg max per day
-      const DAY_CAPACITY = 1890;
-      for (const group of groups) {
-         while (group.pending > 0) {
-            const spaceInDay = DAY_CAPACITY - currentDayKg;
-            if (spaceInDay <= 0) {
-               flushDay();
-               continue;
+      for (const queueItem of batchQueues) {
+         let remaining = queueItem.batchesNeeded;
+         while (remaining > 0) {
+            let targetSilo = currentDaySilos.find(s => s.origin === queueItem.origin && s.batches.length < 4);
+            
+            if (!targetSilo) {
+               if (currentDaySilos.length >= 4) flushDay();
+               targetSilo = { origin: queueItem.origin, batches: [] };
+               currentDaySilos.push(targetSilo);
             }
 
-            const take = Math.min(group.pending, spaceInDay);
-            currentDayBlocks.push({ profileName: group.profileName, format: group.format, targetKg: take });
-            currentDayKg += take;
-            group.pending -= take;
+            const canTake = 4 - targetSilo.batches.length;
+            const take = Math.min(remaining, canTake);
 
-            if (currentDayKg >= DAY_CAPACITY) {
-               flushDay();
+            for (let i = 0; i < take; i++) {
+               targetSilo.batches.push({ profileName: queueItem.profileName, format: queueItem.format });
             }
+            remaining -= take;
          }
       }
-      flushDay(); // Flush remainder day
-
+      flushDay(); 
       setPlannedDays(computedDays);
    };
 
    const handleLaunchDay = async (day: DailyPlan) => {
       const parentOrderId = `PLAN-${day.scheduledDate || 'D' + day.dayIndex}-${Date.now().toString().slice(-4)}`;
-      
       const newTasks: RoastTask[] = [];
 
-      for (const block of day.blocks) {
-         const profile = masterProfiles.find(p => p.name === block.profileName);
-         if (!profile) continue;
+      // 1. Generate ROAST tasks from Silo Assignments
+      day.siloAssignments.forEach((silo) => {
+         silo.batches.forEach((batchInfo, bIdx) => {
+            const profile = masterProfiles.find(p => p.name === batchInfo.profileName);
+            if (!profile) return;
+            const sackWeight = profile.blend.find(b => b.origin === silo.origin)?.sackWeight || 69;
+            const batchSizeGreen = sackWeight * 2;
 
-         const shrinkage = (profile.expectedShrinkage || 16) / 100;
-         const blockRequiredGreenKg = block.targetKg / (1 - shrinkage);
-
-         // Fragmentar por origen siguiendo la lógica industrial de 2 sacos (138kg si es 69kg)
-         profile.blend.forEach((originPart) => {
-            const originReqGreen = blockRequiredGreenKg * (originPart.percentage / 100);
-            const sackWeight = originPart.sackWeight || 69; // Default 69kg as requested
-            const batchSizeGreen = sackWeight * 2; // 138kg batches
-            const batchesCount = Math.ceil(originReqGreen / batchSizeGreen);
-
-            for (let bIdx = 0; bIdx < batchesCount; bIdx++) {
-               newTasks.push({
-                  id: `${parentOrderId}-B${newTasks.length + 1}`,
-                  parentOrderId,
-                  type: 'ROAST',
-                  masterProfile: profile,
-                  origins: [originPart.origin],
-                  targetWeightKg: batchSizeGreen,
-                  status: 'PENDING',
-                  category: 'MARCA_PROPIA',
-                  batchIndex: bIdx + 1,
-                  totalBatches: batchesCount,
-                  parentOrderTotalKg: day.totalKg,
-                  assignedSilos: day.targetSilos
-               });
-            }
+            newTasks.push({
+               id: `${parentOrderId}-S${silo.siloId}-B${bIdx + 1}`,
+               parentOrderId,
+               type: 'ROAST',
+               masterProfile: profile,
+               origins: [silo.origin],
+               targetWeightKg: batchSizeGreen,
+               status: 'PENDING',
+               category: 'MARCA_PROPIA',
+               batchIndex: bIdx + 1,
+               totalBatches: silo.batches.length,
+               parentOrderTotalKg: day.totalKg,
+               assignedSilos: [silo.siloId]
+            });
          });
+      });
 
-         // Tarea de mezcla final para este bloque
+      // 2. Generate BLEND tasks for each profile block in the day
+      day.blocks.forEach((block, blIdx) => {
+         const profile = masterProfiles.find(p => p.name === block.profileName);
+         if (!profile) return;
+
          newTasks.push({
-            id: `${parentOrderId}-BLEND-${newTasks.length + 1}`,
+            id: `${parentOrderId}-BLEND-${blIdx + 1}`,
             parentOrderId,
             type: 'BLEND',
             masterProfile: profile,
@@ -367,15 +404,15 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
             targetWeightKg: block.targetKg,
             status: 'PENDING',
             category: 'MARCA_PROPIA',
-            assignedSilos: day.targetSilos
+            assignedSilos: day.targetSilos // The packaging machine pulls from all silos of the day
          });
-      }
+      });
 
       if (newTasks.length === 0) return;
 
       const newOrder: DailyRoastOrder = {
          id: parentOrderId,
-         profileName: day.blocks[0]?.profileName || 'MAURICE ALICANTO 250 G.', // Debe ser un perfil real existente en DB
+         profileName: day.blocks[0]?.profileName || 'MAURICE ALICANTO 250 G.',
          totalKg: day.totalKg,
          priority: 'STOCK',
          shrinkagePct: 0.16,
