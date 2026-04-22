@@ -153,6 +153,7 @@ export const createDailyOrder = async (order: DailyRoastOrder) => {
   }]);
   if (oError) {
     console.error('Error inserting order:', oError);
+    alert(`Error Supabase (Order): ${oError.message}\n${oError.details}`);
     return false;
   }
 
@@ -177,6 +178,7 @@ export const createDailyOrder = async (order: DailyRoastOrder) => {
   const { error: tError } = await supabase.from('roast_tasks').insert(dbTasks);
   if (tError) {
     console.error('Error inserting tasks:', tError);
+    alert(`Error Supabase (Tasks): ${tError.message}\n${tError.details}`);
     return false;
   }
   return true;
