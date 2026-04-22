@@ -262,102 +262,83 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          return;
       }
 
-      // 1. Group demands by Profile and Format
-      const groups: { profileName: string, format: string, pendingKg: number }[] = [];
+      // 1. Group demands by Profile
+      const groups: { profileName: string, formats: string[], totalKg: number }[] = [];
       demands.forEach(d => {
-         const existing = groups.find(g => g.profileName === d.profileName && g.format === d.format);
+         const existing = groups.find(g => g.profileName === d.profileName);
          if (existing) {
-            existing.pendingKg += d.kgRequested;
+            existing.totalKg += d.kgRequested;
+            if (!existing.formats.includes(d.format)) existing.formats.push(d.format);
          } else {
-            groups.push({ profileName: d.profileName, format: d.format, pendingKg: d.kgRequested });
+            groups.push({ profileName: d.profileName, formats: [d.format], totalKg: d.kgRequested });
          }
-      });
-
-      // 2. Explode into needed batches PER ORIGIN
-      type OriginBatchQueue = { origin: string, profileName: string, format: string, batchesNeeded: number };
-      const batchQueues: OriginBatchQueue[] = [];
-
-      groups.forEach(g => {
-         const profile = masterProfiles.find(p => p.name === g.profileName);
-         if (!profile) return;
-         const shrinkage = (profile.expectedShrinkage || 16) / 100;
-         const greenRequired = g.pendingKg / (1 - shrinkage);
-
-         profile.blend.forEach(b => {
-            const originGreen = greenRequired * (b.percentage / 100);
-            const sackWeight = b.sackWeight || 69;
-            const batchSize = sackWeight * 2;
-            const count = Math.ceil(originGreen / batchSize);
-            batchQueues.push({ origin: b.origin, profileName: g.profileName, format: g.format, batchesNeeded: count });
-         });
       });
 
       const computedDays: DailyPlan[] = [];
       let dayIdx = 1;
-      
-      // Distributor Tracking
-      let currentDaySilos: { origin: string, batches: { profileName: string, format: string }[] }[] = [];
 
-      const flushDay = () => {
-         if (currentDaySilos.length > 0) {
-            const blocks: { profileName: string, format: string, targetKg: number }[] = [];
-            let dayTotalRoasted = 0;
-            const siloSet = dayIdx % 2 === 1 ? [1,2,3,4] : [5,6,7,8];
+      // 2. Process each profile in units of 4 silos (approx 1890kg)
+      groups.forEach(group => {
+         const profile = masterProfiles.find(p => p.name === group.profileName);
+         if (!profile) return;
+
+         const shrinkage = (profile.expectedShrinkage || 16) / 100;
+         const sackWeight = profile.blend[0]?.sackWeight || 69; // Use first origin as baseline or default 69
+         const batchSizeGreen = sackWeight * 2;
+         const batchSizeRoasted = batchSizeGreen * (1 - shrinkage);
+         const siloCapacityRoasted = batchSizeRoasted * 4; // 4 batches per silo
+
+         let remainingKg = group.totalKg;
+
+         while (remainingKg > 0) {
+            // How many silos of this profile to produce in this "Production Run"?
+            // Usually we fill exactly 4 silos to complete a rotation day
+            const siloSet = dayIdx % 2 === 1 ? [1, 2, 3, 4] : [5, 6, 7, 8];
             const siloAssignments: { siloId: number, origin: string, batches: { profileName: string, format: string }[] }[] = [];
+            const dayBlocks: { profileName: string, format: string, targetKg: number }[] = [];
 
-            currentDaySilos.forEach((siloData, idx) => {
-               const siloId = siloSet[idx];
-               siloAssignments.push({ siloId, origin: siloData.origin, batches: siloData.batches });
+            // Distribute the 4 silos according to blend percentages
+            // Special Case: Timanfaya 75/25 -> 3 Silos / 1 Silo
+            // General: round(percent * 4)
+            let silosAllocated = 0;
+            profile.blend.forEach((component, cIdx) => {
+               let silosForThisOrigin = Math.round((component.percentage / 100) * 4);
+               // Adjust last one to ensure exactly 4 silos
+               if (cIdx === profile.blend.length - 1) {
+                  silosForThisOrigin = 4 - silosAllocated;
+               }
+               silosForThisOrigin = Math.max(0, silosForThisOrigin);
 
-               siloData.batches.forEach(b => {
-                  const profile = masterProfiles.find(p => p.name === b.profileName);
-                  const shrinkage = (profile?.expectedShrinkage || 16) / 100;
-                  const sackWeight = profile?.blend.find(bl => bl.origin === siloData.origin)?.sackWeight || 69;
-                  const batchRoasted = (sackWeight * 2) * (1 - shrinkage);
-                  
-                  const existingBlock = blocks.find(bl => bl.profileName === b.profileName && bl.format === b.format);
-                  if (existingBlock) {
-                     existingBlock.targetKg += batchRoasted;
-                  } else {
-                     blocks.push({ profileName: b.profileName, format: b.format, targetKg: batchRoasted });
+               for (let s = 0; s < silosForThisOrigin; s++) {
+                  if (silosAllocated < 4) {
+                     const siloId = siloSet[silosAllocated];
+                     const batches = Array(4).fill(null).map(() => ({ 
+                        profileName: group.profileName, 
+                        format: group.formats[0] // Simplify to first format or distribute? User implies single format per run usually
+                     }));
+                     
+                     siloAssignments.push({ siloId, origin: component.origin, batches });
+                     silosAllocated++;
                   }
-                  dayTotalRoasted += batchRoasted;
-               });
+               }
             });
+
+            const dayTotalRoasted = silosAllocated * siloCapacityRoasted;
+            dayBlocks.push({ profileName: group.profileName, format: group.formats[0], targetKg: dayTotalRoasted });
 
             computedDays.push({
                dayIndex: dayIdx,
                targetSilos: siloSet,
                siloAssignments,
-               totalKg: dayTotalRoasted,
-               blocks: blocks.map(bl => ({ ...bl, targetKg: Number(bl.targetKg.toFixed(1)) }))
+               totalKg: Number(dayTotalRoasted.toFixed(1)),
+               blocks: dayBlocks.map(b => ({ ...b, targetKg: Number(b.targetKg.toFixed(1)) }))
             });
+
             dayIdx++;
-            currentDaySilos = [];
+            remainingKg -= dayTotalRoasted;
          }
-      };
+      });
 
-      for (const queueItem of batchQueues) {
-         let remaining = queueItem.batchesNeeded;
-         while (remaining > 0) {
-            let targetSilo = currentDaySilos.find(s => s.origin === queueItem.origin && s.batches.length < 4);
-            
-            if (!targetSilo) {
-               if (currentDaySilos.length >= 4) flushDay();
-               targetSilo = { origin: queueItem.origin, batches: [] };
-               currentDaySilos.push(targetSilo);
-            }
-
-            const canTake = 4 - targetSilo.batches.length;
-            const take = Math.min(remaining, canTake);
-
-            for (let i = 0; i < take; i++) {
-               targetSilo.batches.push({ profileName: queueItem.profileName, format: queueItem.format });
-            }
-            remaining -= take;
-         }
-      }
-      flushDay(); 
       setPlannedDays(computedDays);
    };
 
@@ -365,8 +346,11 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       const parentOrderId = `PLAN-${day.scheduledDate || 'D' + day.dayIndex}-${Date.now().toString().slice(-4)}`;
       const newTasks: RoastTask[] = [];
 
-      // 1. Generate ROAST tasks from Silo Assignments
-      day.siloAssignments.forEach((silo) => {
+      // Sort siloAssignments by origin to ensure correlative roasting
+      const sortedAssignments = [...day.siloAssignments].sort((a, b) => a.origin.localeCompare(b.origin));
+
+      // 1. Generate ROAST tasks from Sorted Silo Assignments
+      sortedAssignments.forEach((silo) => {
          silo.batches.forEach((batchInfo, bIdx) => {
             const profile = masterProfiles.find(p => p.name === batchInfo.profileName);
             if (!profile) return;
@@ -404,7 +388,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
             targetWeightKg: block.targetKg,
             status: 'PENDING',
             category: 'MARCA_PROPIA',
-            assignedSilos: day.targetSilos // The packaging machine pulls from all silos of the day
+            assignedSilos: day.targetSilos 
          });
       });
 
