@@ -262,83 +262,131 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          return;
       }
 
-      // 1. Group demands by Profile
-      const groups: { profileName: string, formats: string[], totalKg: number }[] = [];
+      // 1. Group demands by Profile + Format (Independent Lines)
+      let queue: { profileName: string, format: string, totalKg: number }[] = [];
       demands.forEach(d => {
-         const existing = groups.find(g => g.profileName === d.profileName);
+         const existing = queue.find(g => g.profileName === d.profileName && g.format === d.format);
          if (existing) {
             existing.totalKg += d.kgRequested;
-            if (!existing.formats.includes(d.format)) existing.formats.push(d.format);
          } else {
-            groups.push({ profileName: d.profileName, formats: [d.format], totalKg: d.kgRequested });
+            queue.push({ profileName: d.profileName, format: d.format, totalKg: d.kgRequested });
          }
       });
 
-      const computedDays: DailyPlan[] = [];
-      let dayIdx = 1;
+      // 2. Sort by Format Affinity (The Greedy Algorithm)
+      // Pick highest volume -> then all same format -> then next highest...
+      const sortedQueue: { profileName: string, format: string, totalKg: number }[] = [];
+      let currentFormat: string | null = null;
 
-      // 2. Process each profile in units of 4 silos (approx 1890kg)
-      groups.forEach(group => {
-         const profile = masterProfiles.find(p => p.name === group.profileName);
-         if (!profile) return;
-
-         const shrinkage = (profile.expectedShrinkage || 16) / 100;
-         const sackWeight = profile.blend[0]?.sackWeight || 69; // Use first origin as baseline or default 69
-         const batchSizeGreen = sackWeight * 2;
-         const batchSizeRoasted = batchSizeGreen * (1 - shrinkage);
-         const siloCapacityRoasted = batchSizeRoasted * 4; // 4 batches per silo
-
-         let remainingKg = group.totalKg;
-
-         while (remainingKg > 0) {
-            // How many silos of this profile to produce in this "Production Run"?
-            // Usually we fill exactly 4 silos to complete a rotation day
-            const siloSet = dayIdx % 2 === 1 ? [1, 2, 3, 4] : [5, 6, 7, 8];
-            const siloAssignments: { siloId: number, origin: string, batches: { profileName: string, format: string }[] }[] = [];
-            const dayBlocks: { profileName: string, format: string, targetKg: number }[] = [];
-
-            // Distribute the 4 silos according to blend percentages
-            // Special Case: Timanfaya 75/25 -> 3 Silos / 1 Silo
-            // General: round(percent * 4)
-            let silosAllocated = 0;
-            profile.blend.forEach((component, cIdx) => {
-               let silosForThisOrigin = Math.round((component.percentage / 100) * 4);
-               // Adjust last one to ensure exactly 4 silos
-               if (cIdx === profile.blend.length - 1) {
-                  silosForThisOrigin = 4 - silosAllocated;
-               }
-               silosForThisOrigin = Math.max(0, silosForThisOrigin);
-
-               for (let s = 0; s < silosForThisOrigin; s++) {
-                  if (silosAllocated < 4) {
-                     const siloId = siloSet[silosAllocated];
-                     const batches = Array(4).fill(null).map(() => ({ 
-                        profileName: group.profileName, 
-                        format: group.formats[0] // Simplify to first format or distribute? User implies single format per run usually
-                     }));
-                     
-                     siloAssignments.push({ siloId, origin: component.origin, batches });
-                     silosAllocated++;
-                  }
+      while (queue.length > 0) {
+         let nextIndex = -1;
+         
+         if (currentFormat) {
+            // Try to find the highest volume item with the same format
+            let maxKg = -1;
+            queue.forEach((item, idx) => {
+               if (item.format === currentFormat && item.totalKg > maxKg) {
+                  maxKg = item.totalKg;
+                  nextIndex = idx;
                }
             });
+         }
 
-            const dayTotalRoasted = silosAllocated * siloCapacityRoasted;
-            dayBlocks.push({ profileName: group.profileName, format: group.formats[0], targetKg: dayTotalRoasted });
+         if (nextIndex === -1) {
+            // Fallback: Pick highest volume regardless of format
+            let maxKg = -1;
+            queue.forEach((item, idx) => {
+               if (item.totalKg > maxKg) {
+                  maxKg = item.totalKg;
+                  nextIndex = idx;
+               }
+            });
+         }
+
+         const selected = queue.splice(nextIndex, 1)[0];
+         sortedQueue.push(selected);
+         currentFormat = selected.format;
+      }
+
+      // 3. Process the sorted queue into days/silos
+      const computedDays: DailyPlan[] = [];
+      let dayIdx = 1;
+      
+      // Distributor State
+      let currentDaySiloAssignments: { siloId: number, origin: string, batches: { profileName: string, format: string }[] }[] = [];
+      let currentDayBlocks: { profileName: string, format: string, targetKg: number }[] = [];
+
+      const flushDay = () => {
+         if (currentDaySiloAssignments.length > 0) {
+            const siloSet = dayIdx % 2 === 1 ? [1, 2, 3, 4] : [5, 6, 7, 8];
+            const finalSiloAssignments = currentDaySiloAssignments.map((s, idx) => ({
+               ...s,
+               siloId: siloSet[idx]
+            }));
+
+            let dayTotalKg = 0;
+            currentDayBlocks.forEach(b => dayTotalKg += b.targetKg);
 
             computedDays.push({
                dayIndex: dayIdx,
                targetSilos: siloSet,
-               siloAssignments,
-               totalKg: Number(dayTotalRoasted.toFixed(1)),
-               blocks: dayBlocks.map(b => ({ ...b, targetKg: Number(b.targetKg.toFixed(1)) }))
+               siloAssignments: finalSiloAssignments,
+               totalKg: Number(dayTotalKg.toFixed(1)),
+               blocks: currentDayBlocks.map(b => ({ ...b, targetKg: Number(b.targetKg.toFixed(1)) }))
             });
-
             dayIdx++;
-            remainingKg -= dayTotalRoasted;
+            currentDaySiloAssignments = [];
+            currentDayBlocks = [];
          }
+      };
+
+      sortedQueue.forEach(item => {
+         const profile = masterProfiles.find(p => p.name === item.profileName);
+         if (!profile) return;
+
+         const shrinkage = (profile.expectedShrinkage || 16) / 100;
+
+         // For each origin in the profile blend
+         profile.blend.forEach(component => {
+            const targetRoastedForThisOrigin = item.totalKg * (component.percentage / 100);
+            const sackWeight = component.sackWeight || 69;
+            const batchSizeGreen = sackWeight * 2;
+            const batchSizeRoasted = batchSizeGreen * (1 - shrinkage);
+            
+            const batchesNeeded = Math.ceil(targetRoastedForThisOrigin / batchSizeRoasted);
+            let remainingBatches = batchesNeeded;
+
+            while (remainingBatches > 0) {
+               // Find existing silo for this origin on current day
+               let silo = currentDaySiloAssignments.find(s => s.origin === component.origin && s.batches.length < 4);
+               
+               if (!silo) {
+                  if (currentDaySiloAssignments.length >= 4) flushDay();
+                  silo = { siloId: 0, origin: component.origin, batches: [] };
+                  currentDaySiloAssignments.push(silo);
+               }
+
+               const spaceInSilo = 4 - silo.batches.length;
+               const take = Math.min(remainingBatches, spaceInSilo);
+
+               for (let i = 0; i < take; i++) {
+                  silo.batches.push({ profileName: item.profileName, format: item.format });
+                  
+                  // Track this block's actual roasted weight
+                  const roastedWeight = batchSizeRoasted;
+                  const existingBlock = currentDayBlocks.find(b => b.profileName === item.profileName && b.format === item.format);
+                  if (existingBlock) {
+                     existingBlock.targetKg += roastedWeight;
+                  } else {
+                     currentDayBlocks.push({ profileName: item.profileName, format: item.format, targetKg: roastedWeight });
+                  }
+               }
+               remainingBatches -= take;
+            }
+         });
       });
 
+      flushDay();
       setPlannedDays(computedDays);
    };
 
