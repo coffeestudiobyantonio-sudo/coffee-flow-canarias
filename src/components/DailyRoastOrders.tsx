@@ -12,8 +12,32 @@ interface DailyRoastOrdersProps {
    onLaunchManualRoast: (task: RoastTask) => void;
 }
 
+interface DelegationDemand {
+   id: string;
+   delegation: string;
+   profileName: string;
+   format: '250g' | '450g' | '500g' | '1000g' | '2KG' | 'GRANEL';
+   kgRequested: number;
+}
+
+interface DailyPlan {
+   dayIndex: number;
+   targetSilos: number[]; // e.g [1,2,3,4] or [5,6,7,8]
+   totalKg: number;
+   blocks: { profileName: string, format: string, targetKg: number }[];
+}
+
 const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roastOrders, setRoastOrders, silos, onLaunchManualRoast }) => {
-   const [viewMode, setViewMode] = useState<'MANAGER' | 'OPERATOR'>('MANAGER');
+   const [viewMode, setViewMode] = useState<'PLAN_MENSUAL' | 'MANAGER' | 'OPERATOR'>('PLAN_MENSUAL');
+
+   // Planificador Mensual State
+   const [demands, setDemands] = useState<DelegationDemand[]>([]);
+   const [plannedDays, setPlannedDays] = useState<DailyPlan[]>([]);
+   const [newDemand, setNewDemand] = useState<Partial<DelegationDemand>>({
+      format: '1000g',
+      kgRequested: 1600
+   });
+
 
    // Manager Form State
    const [selectedProfileName, setSelectedProfileName] = useState<string>('');
@@ -158,10 +182,162 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
       const isSuccess = await deleteDailyOrder(orderId);
       if (!isSuccess) {
-         alert("Error de red: No se pudo eliminar la orden en Supabase.");
+         alert("Error base de datos: Supabase falló la eliminación.");
          return;
       }
+
       setRoastOrders(roastOrders.filter(o => o.id !== orderId));
+   };
+
+   // ============================================
+   // MONTHLY PLANNER LOGIC
+   // ============================================
+   const handleAddDemand = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newDemand.delegation || !newDemand.profileName || !newDemand.kgRequested) return;
+
+      const demand: DelegationDemand = {
+         id: `DMD-${Date.now()}`,
+         delegation: newDemand.delegation as string,
+         profileName: newDemand.profileName as string,
+         format: newDemand.format as any,
+         kgRequested: newDemand.kgRequested as number,
+      };
+
+      setDemands([...demands, demand]);
+      
+      // Reset input maintaining format
+      setNewDemand({ ...newDemand, kgRequested: 1600, delegation: '' });
+   };
+
+   const handleRemoveDemand = (id: string) => {
+      setDemands(demands.filter(d => d.id !== id));
+   };
+
+   const generateMonthlyPlan = () => {
+      if (demands.length === 0) {
+         alert("La tabla de demanda está vacía. Añade previsiones primero.");
+         return;
+      }
+
+      // 1. Group demands by Profile and Format
+      const groups: { profileName: string, format: string, pending: number }[] = [];
+      demands.forEach(d => {
+         const existing = groups.find(g => g.profileName === d.profileName && g.format === d.format);
+         if (existing) {
+            existing.pending += d.kgRequested;
+         } else {
+            groups.push({ profileName: d.profileName, format: d.format, pending: d.kgRequested });
+         }
+      });
+
+      // 2. Sort by total demand (Volume Priority)
+      groups.sort((a, b) => b.pending - a.pending);
+
+      const computedDays: DailyPlan[] = [];
+      let dayIdx = 1;
+      
+      let currentDayKg = 0;
+      let currentDayBlocks: { profileName: string, format: string, targetKg: number }[] = [];
+
+      const flushDay = () => {
+         if (currentDayKg > 0) {
+            computedDays.push({
+               dayIndex: dayIdx,
+               targetSilos: dayIdx % 2 === 1 ? [1,2,3,4] : [5,6,7,8],
+               totalKg: currentDayKg,
+               blocks: [...currentDayBlocks]
+            });
+            dayIdx++;
+            currentDayKg = 0;
+            currentDayBlocks = [];
+         }
+      };
+
+      // 3. Consume groups 1600kg max per day
+      for (const group of groups) {
+         while (group.pending > 0) {
+            const spaceInDay = 1600 - currentDayKg;
+            if (spaceInDay <= 0) {
+               flushDay();
+               continue;
+            }
+
+            const take = Math.min(group.pending, spaceInDay);
+            currentDayBlocks.push({ profileName: group.profileName, format: group.format, targetKg: take });
+            currentDayKg += take;
+            group.pending -= take;
+
+            if (currentDayKg >= 1600) {
+               flushDay();
+            }
+         }
+      }
+      flushDay(); // Flush remainder day
+
+      setPlannedDays(computedDays);
+   };
+
+   const handleLaunchDay = async (day: DailyPlan) => {
+      const parentOrderId = `PLAN-D${day.dayIndex}-${Date.now().toString().slice(-4)}`;
+      
+      const newTasks: any[] = [];
+      let batchIdx = 1;
+
+      for (const block of day.blocks) {
+         const profile = masterProfiles.find(p => p.name === block.profileName);
+         if (!profile) continue;
+
+         // Fragmentar por saco (max 120kg por tanda)
+         let remainingKg = block.targetKg;
+         while(remainingKg > 0) {
+            const taskKg = Math.min(120, remainingKg);
+            newTasks.push({
+               id: `${parentOrderId}-T${batchIdx}`,
+               parentOrderId,
+               type: 'BLEND',
+               masterProfile: profile,
+               origins: profile.blend.map(b => b.origin),
+               targetWeightKg: taskKg,
+               status: 'PENDING',
+               category: 'MARCA_PROPIA',
+               batchIndex: batchIdx,
+               assignedSilos: day.targetSilos // El operario verá que esa tanda va a uno de estos silos
+            });
+            remainingKg -= taskKg;
+            batchIdx++;
+         }
+      }
+
+      if (newTasks.length === 0) return;
+
+      const newOrder: DailyRoastOrder = {
+         id: parentOrderId,
+         profileName: 'MIX_DIARIO',
+         totalKg: day.totalKg, // Lo anotamos como referencia del total de verde/tostado
+         priority: 'STOCK',
+         shrinkagePct: 0.16,
+         tasks: newTasks,
+         status: 'PLANNED',
+         estimatedPmpCost: 0,
+         category: 'MARCA_PROPIA'
+      };
+
+      const isSuccess = await createDailyOrder(newOrder);
+      if (!isSuccess) {
+         alert("Error insertando el Plan en la Base de Datos");
+         return;
+      }
+
+      setRoastOrders([...roastOrders, newOrder]);
+      setPlannedDays(plannedDays.filter(d => d.dayIndex !== day.dayIndex));
+      
+      // Toast notification
+      const toast = document.createElement('div');
+      toast.className = 'fixed bottom-4 right-4 bg-green-500/90 text-white px-6 py-4 rounded-xl font-bold z-50 animate-bounce flex flex-col space-y-1';
+      toast.innerHTML = `<span>🚀 Día ${day.dayIndex} inyectado (Silos ${day.targetSilos.join(', ')})</span>`;
+      document.body.appendChild(toast);
+      setTimeout(() => document.body.removeChild(toast), 3000);
    };
 
    return (
@@ -179,26 +355,164 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                </div>
             </div>
 
-            <div className="flex bg-[#14161a] border border-dashboard-border rounded-lg p-1 w-full md:w-auto">
+            <div className="flex bg-[#14161a] border border-dashboard-border rounded-lg p-1 w-full md:w-auto overflow-x-auto">
+               <button
+                  onClick={() => setViewMode('PLAN_MENSUAL')}
+                  className={`flex-none px-6 py-2 text-xs font-bold uppercase tracking-widest rounded-md transition-all flex items-center justify-center ${viewMode === 'PLAN_MENSUAL' ? 'bg-gradient-to-r from-coffee-accent to-coffee-light text-white shadow ring-1 ring-coffee-light/50' : 'text-gray-500 hover:text-white'}`}
+               >
+                  <Package className="w-4 h-4 mr-2" />
+                  Plan Mensual (Delegaciones)
+               </button>
                <button
                   onClick={() => setViewMode('MANAGER')}
-                  className={`flex-1 md:flex-none px-6 py-2 text-xs font-bold uppercase tracking-widest rounded-md transition-all flex items-center justify-center ${viewMode === 'MANAGER' ? 'bg-[#1e222b] text-white shadow ring-1 ring-white/10' : 'text-gray-500 hover:text-gray-300'}`}
+                  className={`flex-none px-6 py-2 text-xs font-bold uppercase tracking-widest rounded-md transition-all flex items-center justify-center ${viewMode === 'MANAGER' ? 'bg-[#1e222b] text-white shadow ring-1 ring-white/10' : 'text-gray-500 hover:text-gray-300'}`}
                >
                   <Settings className="w-4 h-4 mr-2 text-coffee-light" />
-                  Jefe de Producto (MDD/Industrial)
+                  Agenda (Manual)
                </button>
                <button
                   onClick={() => setViewMode('OPERATOR')}
-                  className={`flex-1 md:flex-none px-6 py-2 text-xs font-bold uppercase tracking-widest rounded-md transition-all flex items-center justify-center ${viewMode === 'OPERATOR' ? 'bg-[#1e222b] text-blue-400 shadow ring-1 ring-blue-500/50' : 'text-gray-500 hover:text-blue-400/50'}`}
+                  className={`flex-none px-6 py-2 text-xs font-bold uppercase tracking-widest rounded-md transition-all flex items-center justify-center ${viewMode === 'OPERATOR' ? 'bg-[#1e222b] text-blue-400 shadow ring-1 ring-blue-500/50' : 'text-gray-500 hover:text-blue-400/50'}`}
                >
                   <Cpu className="w-4 h-4 mr-2" />
-                  Operario de Máquina
+                  Planta (Operario)
                </button>
             </div>
          </div>
 
          <div className="flex-1 overflow-y-auto p-8 relative">
-            {viewMode === 'MANAGER' ? (
+            {viewMode === 'PLAN_MENSUAL' ? (
+               <div className="max-w-7xl mx-auto space-y-8">
+                  <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-8 shadow-2xl">
+                     <h2 className="text-2xl font-black text-white mb-2 uppercase tracking-wider flex items-center">
+                        <Package className="w-6 h-6 mr-3 text-coffee-light" /> Previsión de Demanda: Delegaciones
+                     </h2>
+                     <p className="text-gray-400 text-sm mb-8">Inserta la petición mensual por delegación. El motor automático fraccionará el total en jornadas perfectas de 1600kg, agrupando por formato para agilizar los cambios de bobina de envasado.</p>
+                     
+                     {/* Demands Table */}
+                     <div className="overflow-x-auto w-full mb-8 border border-dashboard-border rounded-xl">
+                        <table className="w-full text-left text-sm text-gray-400">
+                           <thead className="bg-[#14161a] text-xs uppercase text-gray-500 font-black tracking-widest border-b border-dashboard-border">
+                              <tr>
+                                 <th className="px-6 py-4">Delegación</th>
+                                 <th className="px-6 py-4">Gama/Perfil</th>
+                                 <th className="px-6 py-4">Formato Envasado</th>
+                                 <th className="px-6 py-4">Demanda (Kg)</th>
+                                 <th className="px-6 py-4 text-right">Quitar</th>
+                              </tr>
+                           </thead>
+                           <tbody>
+                              {demands.length === 0 && (
+                                 <tr>
+                                    <td colSpan={5} className="px-6 py-8 text-center text-gray-600 font-bold tracking-widest uppercase">
+                                       No hay demanda insertada. Utiliza el formulario inferior.
+                                    </td>
+                                 </tr>
+                              )}
+                              {demands.map(d => (
+                                 <tr key={d.id} className="border-b border-dashboard-border/50 hover:bg-white/5 transition-colors">
+                                    <td className="px-6 py-4 font-bold text-white">{d.delegation}</td>
+                                    <td className="px-6 py-4 text-coffee-light font-black">{d.profileName}</td>
+                                    <td className="px-6 py-4"><span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-1 rounded font-mono text-xs font-bold">{d.format}</span></td>
+                                    <td className="px-6 py-4 font-mono font-bold text-white">{d.kgRequested} kg</td>
+                                    <td className="px-6 py-4 text-right">
+                                       <button onClick={() => handleRemoveDemand(d.id)} className="text-gray-500 hover:text-red-500 transition-colors">
+                                          <Trash2 className="w-4 h-4 inline" />
+                                       </button>
+                                    </td>
+                                 </tr>
+                              ))}
+                           </tbody>
+                        </table>
+                     </div>
+
+                     {/* Add Demand Form */}
+                     <form onSubmit={handleAddDemand} className="bg-[#14161a] p-6 rounded-xl border border-dashboard-border flex flex-col lg:flex-row items-end gap-4 shadow-inner">
+                        <div className="flex-1 w-full relative">
+                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Delegación Destino</label>
+                           <input type="text" required placeholder="Ej: Las Palmas, Madrid..." 
+                                  value={newDemand.delegation || ''} onChange={e => setNewDemand({...newDemand, delegation: e.target.value})}
+                                  className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-coffee-light font-semibold" />
+                        </div>
+                        <div className="flex-1 w-full">
+                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Perfil Requerido</label>
+                           <select required value={newDemand.profileName || ''} onChange={e => setNewDemand({...newDemand, profileName: e.target.value})}
+                                   className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-coffee-light font-bold">
+                              <option value="" disabled>Selecciona...</option>
+                              {masterProfiles.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                           </select>
+                        </div>
+                        <div className="w-full lg:w-40 relative">
+                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Formato</label>
+                           <select required value={newDemand.format} onChange={e => setNewDemand({...newDemand, format: e.target.value as any})}
+                                   className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-blue-400 focus:outline-none focus:border-blue-500 font-bold font-mono">
+                              <option value="250g">250g</option>
+                              <option value="450g">450g</option>
+                              <option value="500g">500g</option>
+                              <option value="1000g">1000g</option>
+                              <option value="2KG">2KG</option>
+                              <option value="GRANEL">GRANEL</option>
+                           </select>
+                        </div>
+                        <div className="w-full lg:w-40 relative">
+                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Total Kilos</label>
+                           <input type="number" required min="10" step="10"
+                                  value={newDemand.kgRequested || ''} onChange={e => setNewDemand({...newDemand, kgRequested: Number(e.target.value)})}
+                                  className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white font-mono focus:outline-none focus:border-coffee-light" />
+                        </div>
+                        <button type="submit" className="w-full lg:w-auto px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold tracking-widest uppercase rounded-lg border border-gray-600 transition-colors">
+                           Añadir
+                        </button>
+                     </form>
+                  </div>
+
+                  {/* Submit AI Engine Button */}
+                  <div className="flex justify-end p-4">
+                     <button onClick={generateMonthlyPlan} className="bg-coffee-accent hover:bg-coffee-light text-white font-black uppercase tracking-[0.2em] px-10 py-5 rounded-2xl shadow-[0_0_30px_rgba(217,119,6,0.3)] transition-all flex items-center hover:scale-105 active:scale-95">
+                        <Cpu className="w-6 h-6 mr-3" />
+                        Arrancar Planificador de 1600kg/día
+                     </button>
+                  </div>
+
+                  {/* Planned Days Output Grid */}
+                  {plannedDays.length > 0 && (
+                     <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-8 shadow-2xl mt-8">
+                        <h3 className="text-xl font-black text-white mb-6 uppercase tracking-wider flex items-center border-b border-dashboard-border pb-4">
+                           <ClipboardList className="w-5 h-5 mr-3 text-blue-400" /> Planificación Generada
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                           {plannedDays.map(day => (
+                              <div key={day.dayIndex} className="bg-[#14161a] border border-dashboard-border rounded-2xl overflow-hidden flex flex-col group hover:border-blue-500/50 transition-colors">
+                                 <div className="bg-gradient-to-r from-blue-900/30 to-[#14161a] p-4 border-b border-dashboard-border flex justify-between items-center">
+                                    <span className="font-black text-white tracking-widest uppercase">Día {day.dayIndex}</span>
+                                    <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-1 rounded font-bold border border-blue-500/30">
+                                       Silos {day.targetSilos.join(', ')}
+                                    </span>
+                                 </div>
+                                 <div className="p-4 space-y-3 flex-1 max-h-64 overflow-y-auto">
+                                    {day.blocks.map((b, i) => (
+                                       <div key={i} className="flex justify-between items-center bg-[#1e222b] p-2 rounded-lg border border-dashboard-border">
+                                          <div>
+                                             <div className="text-xs font-bold text-coffee-light">{b.profileName}</div>
+                                             <div className="text-[9px] text-gray-500 font-mono">FMT: {b.format}</div>
+                                          </div>
+                                          <div className="text-xs font-black text-white">{b.targetKg}kg</div>
+                                       </div>
+                                    ))}
+                                 </div>
+                                 <div className="p-4 bg-dashboard-bg border-t border-dashboard-border flex justify-between items-center">
+                                    <div className="text-[11px] font-bold text-gray-400">TOTAL: <span className="text-white">{day.totalKg}</span> kg</div>
+                                    <button onClick={() => handleLaunchDay(day)} className="bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-lg transition-colors">
+                                       Lanzar a Planta
+                                    </button>
+                                 </div>
+                              </div>
+                           ))}
+                        </div>
+                     </div>
+                  )}
+               </div>
+            ) : viewMode === 'MANAGER' ? (
                <div className="max-w-7xl mx-auto space-y-10">
 
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
