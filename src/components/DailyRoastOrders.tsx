@@ -38,8 +38,8 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    const [newDemand, setNewDemand] = useState<Partial<DelegationDemand>>({
       delegation: 'Canarias',
       format: '1000g',
-      kgRequested: 1600,
-      totalPackages: 1600
+      kgRequested: 1890,
+      totalPackages: 1890
    });
 
    // Utility for format weight mapping
@@ -242,10 +242,11 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       setDemands([...demands, demand]);
       
       // Reset input maintaining format and sync
+      const defaultKg = 1890;
       setNewDemand(prev => ({ 
          ...prev, 
-         kgRequested: 1600, 
-         totalPackages: Math.round(1600 / getFormatWeight(prev.format || '1000g')),
+         kgRequested: defaultKg, 
+         totalPackages: Math.round(defaultKg / getFormatWeight(prev.format || '1000g')),
          delegation: prev.delegation 
       }));
    };
@@ -294,10 +295,11 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          }
       };
 
-      // 3. Consume groups 1600kg max per day
+      // 3. Consume groups 1890kg max per day
+      const DAY_CAPACITY = 1890;
       for (const group of groups) {
          while (group.pending > 0) {
-            const spaceInDay = 1600 - currentDayKg;
+            const spaceInDay = DAY_CAPACITY - currentDayKg;
             if (spaceInDay <= 0) {
                flushDay();
                continue;
@@ -308,7 +310,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
             currentDayKg += take;
             group.pending -= take;
 
-            if (currentDayKg >= 1600) {
+            if (currentDayKg >= DAY_CAPACITY) {
                flushDay();
             }
          }
@@ -321,51 +323,71 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    const handleLaunchDay = async (day: DailyPlan) => {
       const parentOrderId = `PLAN-${day.scheduledDate || 'D' + day.dayIndex}-${Date.now().toString().slice(-4)}`;
       
-      const newTasks: any[] = [];
-      let batchIdx = 1;
+      const newTasks: RoastTask[] = [];
 
       for (const block of day.blocks) {
          const profile = masterProfiles.find(p => p.name === block.profileName);
          if (!profile) continue;
 
-         // Fragmentar por saco (max 120kg por tanda)
-         let remainingKg = block.targetKg;
-         while(remainingKg > 0) {
-            const taskKg = Math.min(120, remainingKg);
-            newTasks.push({
-               id: `${parentOrderId}-T${batchIdx}`,
-               parentOrderId,
-               type: 'BLEND',
-               masterProfile: profile,
-               origins: profile.blend.map(b => b.origin),
-               targetWeightKg: taskKg,
-               status: 'PENDING',
-               category: 'MARCA_PROPIA',
-               batchIndex: batchIdx,
-               assignedSilos: day.targetSilos // El operario verá que esa tanda va a uno de estos silos
-            });
-            remainingKg -= taskKg;
-            batchIdx++;
-         }
+         const shrinkage = (profile.expectedShrinkage || 16) / 100;
+         const blockRequiredGreenKg = block.targetKg / (1 - shrinkage);
+
+         // Fragmentar por origen siguiendo la lógica industrial de 2 sacos (138kg si es 69kg)
+         profile.blend.forEach((originPart) => {
+            const originReqGreen = blockRequiredGreenKg * (originPart.percentage / 100);
+            const sackWeight = originPart.sackWeight || 69; // Default 69kg as requested
+            const batchSizeGreen = sackWeight * 2; // 138kg batches
+            const batchesCount = Math.ceil(originReqGreen / batchSizeGreen);
+
+            for (let bIdx = 0; bIdx < batchesCount; bIdx++) {
+               newTasks.push({
+                  id: `${parentOrderId}-B${newTasks.length + 1}`,
+                  parentOrderId,
+                  type: 'ROAST',
+                  masterProfile: profile,
+                  origins: [originPart.origin],
+                  targetWeightKg: batchSizeGreen,
+                  status: 'PENDING',
+                  category: 'MARCA_PROPIA',
+                  batchIndex: bIdx + 1,
+                  totalBatches: batchesCount,
+                  parentOrderTotalKg: day.totalKg,
+                  assignedSilos: day.targetSilos
+               });
+            }
+         });
+
+         // Tarea de mezcla final para este bloque
+         newTasks.push({
+            id: `${parentOrderId}-BLEND-${newTasks.length + 1}`,
+            parentOrderId,
+            type: 'BLEND',
+            masterProfile: profile,
+            origins: profile.blend.map(b => b.origin),
+            targetWeightKg: block.targetKg,
+            status: 'PENDING',
+            category: 'MARCA_PROPIA',
+            assignedSilos: day.targetSilos
+         });
       }
 
       if (newTasks.length === 0) return;
 
       const newOrder: DailyRoastOrder = {
          id: parentOrderId,
-         profileName: 'MIX_DIARIO',
-         totalKg: day.totalKg, // Lo anotamos como referencia del total de verde/tostado
+         profileName: 'PLAN_AUTOMATICO',
+         totalKg: day.totalKg,
          priority: 'STOCK',
          shrinkagePct: 0.16,
          tasks: newTasks,
          status: 'PLANNED',
-         estimatedPmpCost: 0,
+         estimatedPmpCost: 8.50,
          category: 'MARCA_PROPIA'
       };
 
       const isSuccess = await createDailyOrder(newOrder);
       if (!isSuccess) {
-         alert("Error insertando el Plan en la Base de Datos");
+         alert("Error insertando el Plan en la Base de Datos. Revisa la consola o los permisos.");
          return;
       }
 

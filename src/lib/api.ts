@@ -14,7 +14,7 @@ export const fetchSilos = async (): Promise<Silo[]> => {
     id: s.id,
     profileName: s.origin,
     currentKg: Number(s.current_kg),
-    maxKg: 470, // Harcoded bump to 470 as requested
+    maxKg: 472, // Hardcoded bump to 472kg (1890kg/4)
     lastFillDate: s.last_fill_date
   }));
 };
