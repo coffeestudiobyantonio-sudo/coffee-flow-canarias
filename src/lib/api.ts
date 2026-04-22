@@ -96,7 +96,7 @@ export const fetchDailyOrders = async (): Promise<DailyRoastOrder[]> => {
     return [];
   }
 
-  const { data: dbTasks, error: tasksError } = await supabase.from('roast_tasks').select('*').order('batch_index', { ascending: true });
+  const { data: dbTasks, error: tasksError } = await supabase.from('roast_tasks').select('*').order('id', { ascending: true });
   if (tasksError) {
     console.error('Error fetching tasks:', tasksError);
     return [];
@@ -199,7 +199,21 @@ export const updateOrderStatus = async (orderId: string, status: string) => {
 };
 
 export const deleteDailyOrder = async (orderId: string) => {
+  // Cascading deletes tasks first
+  const { error: tError } = await supabase.from('roast_tasks').delete().eq('parent_order_id', orderId);
+  if (tError) console.error('Error deleting related tasks:', tError);
+
   const { error } = await supabase.from('daily_roast_orders').delete().eq('id', orderId);
   if (error) console.error('Error deleting order:', error);
   return !error;
+};
+
+export const purgeAllProductionData = async () => {
+  // Delete all tasks
+  await supabase.from('roast_tasks').delete().neq('id', 'xyz-placeholder');
+  
+  // Delete all orders
+  await supabase.from('daily_roast_orders').delete().neq('id', 'xyz-placeholder');
+  
+  return true;
 };

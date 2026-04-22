@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
 import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, AlertTriangle, Lock, Trash2 } from 'lucide-react';
 import { ROASTING_MACHINES } from '../App';
-import { createDailyOrder, deleteDailyOrder } from '../lib/api';
+import { createDailyOrder, deleteDailyOrder, purgeAllProductionData } from '../lib/api';
 
 interface DailyRoastOrdersProps {
    masterProfiles: MasterProfile[];
@@ -222,6 +222,28 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       }
 
       setRoastOrders(roastOrders.filter(o => o.id !== orderId));
+   };
+
+   const handlePurgeAll = async () => {
+      const confirmPurge = window.confirm("⚠️ ADVERTENCIA CRÍTICA: Vas a borrar TODA la producción planificada y en curso. ¿Estás absolutamente seguro?");
+      if (!confirmPurge) return;
+      const confirmTwice = window.confirm("Por favor, confirma de nuevo. Esta acción no se puede deshacer.");
+      if (!confirmTwice) return;
+
+      const isSuccess = await purgeAllProductionData();
+      if (!isSuccess) {
+         alert("Error al purgar los datos.");
+         return;
+      }
+      setRoastOrders([]);
+      setDemands([]);
+      setPlannedDays([]);
+      
+      const toast = document.createElement('div');
+      toast.className = 'fixed bottom-4 right-4 bg-red-500/90 text-white px-6 py-4 rounded-xl font-bold z-50 animate-bounce flex flex-col space-y-1';
+      toast.innerHTML = `<span>🚨 Agenda Borrada Exitosamente</span>`;
+      document.body.appendChild(toast);
+      setTimeout(() => document.body.removeChild(toast), 3000);
    };
 
    // ============================================
@@ -507,6 +529,17 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                >
                   <Cpu className="w-4 h-4 mr-2" />
                   Planta (Operario)
+               </button>
+            </div>
+            
+            <div className="ml-0 md:ml-4 mt-4 md:mt-0 flex shrink-0">
+               <button
+                  onClick={handlePurgeAll}
+                  className="px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white text-xs font-bold uppercase tracking-widest rounded-lg transition-colors border border-red-500/30 flex items-center shadow-lg"
+                  title="Borrar toda la agenda de producción"
+               >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Reset Total
                </button>
             </div>
          </div>
