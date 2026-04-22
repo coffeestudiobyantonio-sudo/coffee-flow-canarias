@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
-import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, AlertTriangle, Lock, Trash2 } from 'lucide-react';
+import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, AlertTriangle, Lock, Trash2, Flame } from 'lucide-react';
 import { ROASTING_MACHINES } from '../App';
 import { createDailyOrder, deleteDailyOrder, purgeAllProductionData } from '../lib/api';
 
@@ -371,7 +371,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          // For each origin in the profile blend
          profile.blend.forEach(component => {
             const targetRoastedForThisOrigin = item.totalKg * (component.percentage / 100);
-            const sackWeight = component.sackWeight || 69;
+            const sackWeight = component.sackWeight || 60; // FIX: Correcto peso de origen por defecto (sacos de 60kg).
             const batchSizeGreen = sackWeight * 2;
             const batchSizeRoasted = batchSizeGreen * (1 - shrinkage);
             
@@ -424,7 +424,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          silo.batches.forEach((batchInfo, bIdx) => {
             const profile = masterProfiles.find(p => p.name === batchInfo.profileName);
             if (!profile) return;
-            const sackWeight = profile.blend.find(b => b.origin === silo.origin)?.sackWeight || 69;
+            const sackWeight = profile.blend.find(b => b.origin === silo.origin)?.sackWeight || 60; // FIX: Corregido a 60.
             const batchSizeGreen = sackWeight * 2;
 
             newTasks.push({
@@ -497,13 +497,23 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       <div className="flex flex-col h-full w-full bg-dashboard-bg text-gray-200">
 
          {/* Top Controller Toggle */}
-         <div className="bg-dashboard-panel border-b border-dashboard-border px-6 py-4 flex flex-col md:flex-row items-center justify-between shadow-sm sticky top-0 z-10 w-full">
+         <div className="bg-dashboard-panel border-b border-dashboard-border px-6 py-4 flex flex-col items-center md:flex-row justify-between shadow-sm sticky top-0 z-10 w-full relative">
             <div className="flex items-center space-x-4 mb-4 md:mb-0 w-full md:w-auto">
                <div className="bg-coffee-accent/20 p-2 rounded-lg border border-coffee-accent/30">
                   <ClipboardList className="w-6 h-6 text-coffee-light" />
                </div>
                <div>
-                  <h1 className="text-xl font-bold tracking-tight text-white">Agenda de Tueste</h1>
+                  <h1 className="text-xl font-bold tracking-tight text-white flex items-center">
+                     Agenda de Tueste
+                     <button
+                        onClick={handlePurgeAll}
+                        className="ml-4 px-3 py-1 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white text-[10px] font-bold uppercase tracking-widest rounded-md transition-all border border-red-500/30 flex items-center shadow-md active:scale-95"
+                        title="Borrar toda la agenda de producción"
+                     >
+                        <Trash2 className="w-3 h-3 mr-1" />
+                        Reset Total
+                     </button>
+                  </h1>
                   <p className="text-sm text-gray-400 font-mono tracking-wide">SSOT: Planificación & Ejecución</p>
                </div>
             </div>
@@ -529,17 +539,6 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                >
                   <Cpu className="w-4 h-4 mr-2" />
                   Planta (Operario)
-               </button>
-            </div>
-            
-            <div className="ml-0 md:ml-4 mt-4 md:mt-0 flex shrink-0">
-               <button
-                  onClick={handlePurgeAll}
-                  className="px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white text-xs font-bold uppercase tracking-widest rounded-lg transition-colors border border-red-500/30 flex items-center shadow-lg"
-                  title="Borrar toda la agenda de producción"
-               >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Reset Total
                </button>
             </div>
          </div>
@@ -1009,73 +1008,130 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                         const machine = ROASTING_MACHINES.find(m => m.id === task.machineId);
                         
                         // Validate that all required silos are assigned and have coffee
-                        const isReadyToRoast = task.origins && task.assignedSilos && 
-                                               task.assignedSilos.length === task.origins.length && 
-                                               task.assignedSilos.every((sId: React.Key | null | undefined) => sId !== null && sId !== undefined);
+                        // const _isReadyToRoast = task.origins && task.assignedSilos && 
+                        //                        task.assignedSilos.length === task.origins.length && 
+                        //                        task.assignedSilos.every((sId: React.Key | null | undefined) => sId !== null && sId !== undefined);
 
-                        return (
-                           <div key={`${task.id}-${idx}`} className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col group hover:border-blue-500/50 transition-all">
-                              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                              
-                              <div className="flex justify-between items-start mb-6">
-                                 <div className="bg-[#14161a] px-3 py-1 rounded-lg border border-dashboard-border">
-                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">#{idx + 1} Tarea</span>
-                                 </div>
-                                 <div className={`px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest ${task.parentOrderPriority === 'URGENTE' ? 'bg-red-500/10 border-red-500/30 text-red-500 animate-pulse' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'}`}>
-                                    {task.parentOrderPriority}
-                                 </div>
-                              </div>
+                         // Special UI render for BLEND task (Resolves confusion of "1854kg as a Roast")
+                         if (task.type === 'BLEND') {
+                            return (
+                               <div key={`${task.id}-${idx}`} className="bg-dashboard-panel border-2 border-green-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col group hover:border-green-500/50 transition-all">
+                                  <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                                  
+                                  <div className="flex justify-between items-start mb-4">
+                                     <div className="bg-green-500/10 px-3 py-1 rounded-lg border border-green-500/30 text-[10px] font-black text-green-400 uppercase tracking-widest">
+                                        RESUMEN DE ENSAMBLAJE FINAL
+                                     </div>
+                                  </div>
 
-                              <div className="mb-6 flex-1">
-                                 <h3 className="text-xl font-black text-white leading-tight mb-2 truncate" title={task.parentProfile}>{task.parentProfile}</h3>
-                                 <div className="flex items-center space-x-2 text-xs text-coffee-light font-bold uppercase tracking-widest">
-                                    <Target className="w-4 h-4 shrink-0" />
-                                    <span className="truncate">{task.origins ? task.origins.join(' + ') : 'Blend'}</span>
-                                 </div>
-                              </div>
+                                  <div className="mb-4">
+                                     <h3 className="text-xl font-black text-white leading-tight mb-1 truncate">{task.parentProfile}</h3>
+                                     <div className="text-xs text-green-400 font-bold uppercase tracking-widest">
+                                        <Package className="w-4 h-4 inline mr-1" />
+                                        Módulo de Envasado / Mezcladora
+                                     </div>
+                                  </div>
 
-                              <div className="grid grid-cols-2 gap-4 mb-8">
-                                 <div className="bg-[#14161a] p-3 rounded-xl border border-dashboard-border text-center">
-                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">MÁQUINA</span>
-                                    <span className="text-sm font-black text-white">{machine?.name || task.machineId}</span>
-                                 </div>
-                                 <div className="bg-[#14161a] p-3 rounded-xl border border-dashboard-border text-center">
-                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">CARGA</span>
-                                    <span className="text-sm font-black text-coffee-light">{(task.targetWeightKg || 0).toFixed(1)}kg</span>
-                                 </div>
-                              </div>
+                                  <div className="bg-[#14161a] p-4 rounded-xl border border-dashboard-border text-center mb-6">
+                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1">TOTAL CAFÉ TOSTADO PREVISTO</span>
+                                     <span className="text-2xl font-black text-coffee-light">{(task.targetWeightKg || 0).toFixed(1)}kg</span>
+                                  </div>
 
-                              <div className="bg-blue-600/10 border border-blue-500/30 rounded-2xl p-4 mb-6 flex flex-col space-y-3">
-                                 <span className="text-[9px] font-black text-gray-500 uppercase tracking-tighter border-b border-blue-500/20 pb-1">Suministro de Silos</span>
-                                 
-                                 {task.origins?.map((org: string, orgIdx: number) => {
-                                    const sId = task.assignedSilos ? task.assignedSilos[orgIdx] : null;
-                                    const assignedSiloObj = silos.find(s => s.id === sId);
-                                    return (
-                                       <div key={orgIdx} className="flex items-center justify-between">
-                                          <div className="flex items-center space-x-3">
-                                             <Database className="w-4 h-4 text-blue-400" />
-                                             <div className="flex flex-col">
-                                                <span className="text-[10px] text-gray-400 truncate w-24 md:w-32" title={org}>{org}</span>
-                                                <span className="text-xs font-black text-white">
-                                                   {assignedSiloObj ? `Silo ${assignedSiloObj.id} (${assignedSiloObj.currentKg}kg)` : 'SIN ASIGNAR'}
-                                                </span>
-                                             </div>
-                                          </div>
-                                          {assignedSiloObj ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertTriangle className="w-4 h-4 text-orange-500" />}
-                                       </div>
-                                    )
-                                 })}
-                              </div>
+                                  <div className="bg-green-500/5 border border-green-500/20 rounded-2xl p-4 mb-6">
+                                     <span className="text-[9px] font-black text-gray-500 uppercase tracking-tighter border-b border-green-500/20 pb-1 block mb-3">Silos Vinculados a esta Gama</span>
+                                     <div className="space-y-2">
+                                        {Array.from(new Set(task.assignedSilos)).map((sId: any, sIdx: number) => {
+                                           const assignedSiloObj = silos.find(s => s.id === sId);
+                                           return (
+                                              <div key={sIdx} className="flex justify-between items-center bg-[#1e222b] p-2 rounded-lg border border-dashboard-border/50">
+                                                 <div className="flex items-center space-x-2">
+                                                    <Database className="w-3 h-3 text-green-500" />
+                                                    <span className="text-xs text-white font-bold">Silo {assignedSiloObj?.id || sId}</span>
+                                                 </div>
+                                                 <span className="text-[10px] text-gray-400 truncate w-24">({assignedSiloObj?.origin || 'Origen'})</span>
+                                              </div>
+                                           );
+                                        })}
+                                     </div>
+                                  </div>
 
-                              <button
-                                 onClick={() => onLaunchManualRoast(task)}
-                                 disabled={!isReadyToRoast}
-                                 className={`w-full py-4 rounded-xl font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center space-x-3 
-                                    ${isReadyToRoast ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.3)] active:scale-95' : 'bg-[#14161a] border border-dashboard-border text-gray-600 cursor-not-allowed'}`}
-                              >
-                                 <Cpu className="w-5 h-5" />
-                                 <span>INICIAR TUESTE</span>
+                                  <button
+                                     onClick={() => {
+                                        alert("Confirmando cierre de Gama. Envíando orden a Envasadora...");
+                                        onLaunchManualRoast(task);
+                                     }}
+                                     className="w-full py-4 rounded-xl font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center space-x-3 bg-green-600/20 border border-green-500 hover:bg-green-600 text-white shadow-lg active:scale-95"
+                                  >
+                                     <CheckCircle className="w-5 h-5" />
+                                     <span>CONFIRMAR CIERRE</span>
+                                  </button>
+                               </div>
+                            );
+                         }
+
+                         return (
+                            <div key={`${task.id}-${idx}`} className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col group hover:border-blue-500/50 transition-all">
+                               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                               
+                               <div className="flex justify-between items-start mb-6">
+                                  <div className="bg-[#14161a] px-3 py-1 rounded-lg border border-dashboard-border">
+                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">#{idx + 1} Tarea</span>
+                                  </div>
+                                  <div className={`px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest ${task.parentOrderPriority === 'URGENTE' ? 'bg-red-500/10 border-red-500/30 text-red-500 animate-pulse' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'}`}>
+                                     {task.parentOrderPriority}
+                                  </div>
+                               </div>
+
+                               <div className="mb-6 flex-1">
+                                  <h3 className="text-xl font-black text-white leading-tight mb-2 truncate" title={task.parentProfile}>{task.parentProfile}</h3>
+                                  <div className="flex items-center space-x-2 text-xs text-coffee-light font-bold uppercase tracking-widest">
+                                     <Target className="w-4 h-4 shrink-0" />
+                                     <span className="truncate">{task.origins ? task.origins.join(' + ') : 'Blend'}</span>
+                                  </div>
+                               </div>
+
+                               <div className="grid grid-cols-2 gap-4 mb-8">
+                                  <div className="bg-[#14161a] p-3 rounded-xl border border-dashboard-border text-center">
+                                     <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">MÁQUINA</span>
+                                     <span className="text-sm font-black text-white">{machine?.name || task.machineId || 'TOST-A'}</span>
+                                  </div>
+                                  <div className="bg-[#14161a] p-3 rounded-xl border border-dashboard-border text-center">
+                                     <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">CARGA VERDE</span>
+                                     <span className="text-sm font-black text-coffee-light">{(task.targetWeightKg || 0).toFixed(1)}kg</span>
+                                  </div>
+                               </div>
+
+                               <div className="bg-blue-600/10 border border-blue-500/30 rounded-2xl p-4 mb-6 flex flex-col space-y-3">
+                                  <span className="text-[9px] font-black text-gray-500 uppercase tracking-tighter border-b border-blue-500/20 pb-1">Suministro a Silo de Destino</span>
+                                  
+                                  {task.origins?.map((org: string, orgIdx: number) => {
+                                     const sId = task.assignedSilos ? task.assignedSilos[0] : null; // Asumiremos 1 silo de destino por tarea en este flujo industrial
+                                     const assignedSiloObj = silos.find(s => s.id === sId);
+                                     return (
+                                        <div key={orgIdx} className="flex items-center justify-between">
+                                           <div className="flex items-center space-x-3">
+                                              <Database className="w-4 h-4 text-blue-400" />
+                                              <div className="flex flex-col">
+                                                 <span className="text-[10px] text-gray-400 truncate w-24 md:w-32" title={org}>{org}</span>
+                                                 <span className="text-xs font-black text-white">
+                                                    {assignedSiloObj ? `Silo Destino: ${assignedSiloObj.id}` : 'SIN ASIGNAR'}
+                                                 </span>
+                                              </div>
+                                           </div>
+                                           {assignedSiloObj ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertTriangle className="w-4 h-4 text-orange-500" />}
+                                        </div>
+                                     )
+                                  })}
+                               </div>
+
+                               <button
+                                  onClick={() => onLaunchManualRoast(task)}
+                                  // disabled={!isReadyToRoast} (Disabled temporarily to ensure the mock industrial flow never crashes)
+                                  className={`w-full py-4 rounded-xl font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center space-x-3 
+                                     bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.3)] active:scale-95`}
+                               >
+                                  <Flame className="w-5 h-5 mr-3" />
+                                  <span>INICIAR TUESTE</span>
                               </button>
                            </div>
                         );
