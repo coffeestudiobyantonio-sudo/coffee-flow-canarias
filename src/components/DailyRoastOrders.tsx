@@ -18,6 +18,7 @@ interface DelegationDemand {
    profileName: string;
    format: '250g' | '450g' | '500g' | '1000g' | '2KG' | 'GRANEL';
    kgRequested: number;
+   totalPackages?: number;
 }
 
 interface DailyPlan {
@@ -37,8 +38,39 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    const [newDemand, setNewDemand] = useState<Partial<DelegationDemand>>({
       delegation: 'Canarias',
       format: '1000g',
-      kgRequested: 1600
+      kgRequested: 1600,
+      totalPackages: 1600
    });
+
+   // Utility for format weight mapping
+   const getFormatWeight = (format: string): number => {
+      switch (format) {
+         case '250g': return 0.25;
+         case '450g': return 0.45;
+         case '500g': return 0.5;
+         case '1000g': return 1;
+         case '2KG': return 2;
+         default: return 1;
+      }
+   };
+
+   // Sync logic
+   const syncKgAndPackages = (type: 'KG' | 'PKG', value: number, currentFormat: string) => {
+      const weight = getFormatWeight(currentFormat);
+      if (type === 'KG') {
+         setNewDemand(prev => ({ 
+            ...prev, 
+            kgRequested: value, 
+            totalPackages: Math.round(value / weight) 
+         }));
+      } else {
+         setNewDemand(prev => ({ 
+            ...prev, 
+            totalPackages: value, 
+            kgRequested: Number((value * weight).toFixed(2)) 
+         }));
+      }
+   };
 
 
    // Manager Form State
@@ -204,12 +236,18 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          profileName: newDemand.profileName as string,
          format: newDemand.format as any,
          kgRequested: newDemand.kgRequested as number,
+         totalPackages: newDemand.totalPackages
       };
 
       setDemands([...demands, demand]);
       
-      // Reset input maintaining format
-      setNewDemand({ ...newDemand, kgRequested: 1600, delegation: '' });
+      // Reset input maintaining format and sync
+      setNewDemand(prev => ({ 
+         ...prev, 
+         kgRequested: 1600, 
+         totalPackages: Math.round(1600 / getFormatWeight(prev.format || '1000g')),
+         delegation: prev.delegation 
+      }));
    };
 
    const handleRemoveDemand = (id: string) => {
@@ -445,7 +483,25 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                         </div>
                         <div className="flex-1 w-full">
                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Perfil Requerido</label>
-                           <select required value={newDemand.profileName || ''} onChange={e => setNewDemand({...newDemand, profileName: e.target.value})}
+                           <select required value={newDemand.profileName || ''} 
+                                   onChange={e => {
+                                      const pName = e.target.value;
+                                      let detectedFormat = newDemand.format || '1000g';
+                                      
+                                      // Automatic format detection
+                                      if (pName.includes('250 g.')) detectedFormat = '250g';
+                                      else if (pName.includes('500 g.')) detectedFormat = '500g';
+                                      else if (pName.includes('450 g.')) detectedFormat = '450g';
+                                      else if (pName.includes('1 kg.')) detectedFormat = '1000g';
+
+                                      const weight = getFormatWeight(detectedFormat);
+                                      setNewDemand(prev => ({
+                                         ...prev,
+                                         profileName: pName,
+                                         format: detectedFormat as any,
+                                         totalPackages: Math.round((prev.kgRequested || 0) / weight)
+                                      }));
+                                   }}
                                    className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-coffee-light font-bold">
                               <option value="" disabled>Selecciona...</option>
                               {masterProfiles.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
@@ -453,7 +509,16 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                         </div>
                         <div className="w-full lg:w-40 relative">
                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Formato</label>
-                           <select required value={newDemand.format} onChange={e => setNewDemand({...newDemand, format: e.target.value as any})}
+                           <select required value={newDemand.format} 
+                                   onChange={e => {
+                                      const newFmt = e.target.value as any;
+                                      const weight = getFormatWeight(newFmt);
+                                      setNewDemand(prev => ({
+                                         ...prev,
+                                         format: newFmt,
+                                         totalPackages: Math.round((prev.kgRequested || 0) / weight)
+                                      }));
+                                   }}
                                    className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-blue-400 focus:outline-none focus:border-blue-500 font-bold font-mono">
                               <option value="250g">250g</option>
                               <option value="450g">450g</option>
@@ -465,9 +530,17 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                         </div>
                         <div className="w-full lg:w-40 relative">
                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Total Kilos</label>
-                           <input type="number" required min="10" step="10"
-                                  value={newDemand.kgRequested || ''} onChange={e => setNewDemand({...newDemand, kgRequested: Number(e.target.value)})}
+                           <input type="number" required min="1" step="0.1"
+                                  value={newDemand.kgRequested || ''} 
+                                  onChange={e => syncKgAndPackages('KG', Number(e.target.value), newDemand.format || '1000g')}
                                   className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white font-mono focus:outline-none focus:border-coffee-light" />
+                        </div>
+                        <div className="w-full lg:w-40 relative">
+                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Total Paquetes</label>
+                           <input type="number" required min="1" step="1"
+                                  value={newDemand.totalPackages || ''} 
+                                  onChange={e => syncKgAndPackages('PKG', Number(e.target.value), newDemand.format || '1000g')}
+                                  className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-yellow-500 font-mono focus:outline-none focus:border-yellow-500" />
                         </div>
                         <button type="submit" className="w-full lg:w-auto px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold tracking-widest uppercase rounded-lg border border-gray-600 transition-colors">
                            Añadir
