@@ -171,7 +171,7 @@ function App() {
 
   const handleLaunchManualRoast = (task: RoastTask) => {
     setActiveLot({
-      id: task.id,
+      id: task?.id,
       profile: task.masterProfile,
       status: 'tueste',
       machineId: task.machineId,
@@ -190,7 +190,7 @@ function App() {
       const roastedTimestamp = Date.now();
       
       // Phase 19: Push DROP event to Supabase Cloud
-      const isSuccess = await updateTaskStatus(activeLot.id, 'ROASTED', { 
+      const isSuccess = await updateTaskStatus(activeLot?.id, 'ROASTED', { 
         actualWeightKg: actualWeight, 
         roastedAt: roastedTimestamp 
       });
@@ -202,9 +202,9 @@ function App() {
 
 
       setRoastOrders(prev => prev.map(order => {
-        if (order.id === activeLot.parentOrderId) {
+        if (order?.id === activeLot.parentOrderId) {
           const updatedTasks = order.tasks.map(t => 
-            t.id === activeLot.id ? { ...t, status: 'ROASTED' as const, actualWeightKg: actualWeight, roastedAt: roastedTimestamp } : t
+            t.id === activeLot?.id ? { ...t, status: 'ROASTED' as const, actualWeightKg: actualWeight, roastedAt: roastedTimestamp } : t
           );
           return { ...order, tasks: updatedTasks };
         }
@@ -229,7 +229,7 @@ function App() {
       tasks: o.tasks.map(t => t.id === taskId ? { ...t, status: nextStatus } : t)
     })));
 
-    if (activeLot && activeLot.id === taskId) {
+    if (activeLot && activeLot?.id === taskId) {
       setActiveLot({ ...activeLot, status: 'validado' });
     }
   };
@@ -243,14 +243,14 @@ function App() {
       { id: 'validado', label: '4. Validado', icon: <CheckCircle className="w-4 h-4" /> }
     ];
 
-    const getStatusIndex = (status: LotStatus) => steps.findIndex(s => s.id === status);
+    const getStatusIndex = (status: LotStatus) => steps.findIndex(s => s?.id === status);
     const currentIndex = activeLot ? getStatusIndex(activeLot.status) : 0;
 
     return (
       <div className="w-full bg-[#14161a] border-b border-dashboard-border px-8 py-3 flex items-center justify-between shadow-md z-40 relative">
         <div className="flex items-center space-x-6">
           <span className="text-gray-500 font-black text-xs uppercase tracking-widest flex items-center">
-            {activeLot ? <><Database className="w-4 h-4 mr-2 text-coffee-light" /> Lote Activo: <span className="text-white ml-2 bg-[#1e222b] px-2 py-0.5 rounded">{activeLot.id}</span></> : 'Sin Lote Producción'}
+            {activeLot ? <><Database className="w-4 h-4 mr-2 text-coffee-light" /> Lote Activo: <span className="text-white ml-2 bg-[#1e222b] px-2 py-0.5 rounded">{activeLot?.id}</span></> : 'Sin Lote Producción'}
           </span>
         </div>
         <div className="flex items-center space-x-3">
@@ -259,7 +259,7 @@ function App() {
             const isActive = idx === currentIndex && activeLot !== null;
 
             return (
-              <React.Fragment key={step.id}>
+              <React.Fragment key={step?.id}>
                 <div className={`flex items-center px-4 py-1.5 rounded-full text-xs font-bold transition-all
                   ${isActive ? 'bg-coffee-accent text-white shadow-[0_0_15px_rgba(217,119,6,0.3)]' : 
                     isCompleted ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 
@@ -347,7 +347,7 @@ function App() {
                 {activeLot ? activeLot.profile.name : "Ninguno en producción"}
               </span>
               {activeLot && (
-                <span className="text-xs text-gray-400 mt-1 font-mono">ID: {activeLot.id}</span>
+                <span className="text-xs text-gray-400 mt-1 font-mono">ID: {activeLot?.id}</span>
               )}
             </div>
           </div>

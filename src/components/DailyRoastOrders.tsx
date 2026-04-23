@@ -927,13 +927,13 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                         ) : (
                            <div className="space-y-4">
                               {roastOrders.map((order, oIdx) => (
-                                 <div key={`${order.id}-${oIdx}`} className="bg-dashboard-panel border border-dashboard-border rounded-2xl p-6 shadow-xl relative overflow-hidden transition-all hover:border-coffee-light/30">
+                                 <div key={`${order?.id}-${oIdx}`} className="bg-dashboard-panel border border-dashboard-border rounded-2xl p-6 shadow-xl relative overflow-hidden transition-all hover:border-coffee-light/30">
                                     {order.priority === 'URGENTE' && <div className="absolute top-0 right-0 w-16 h-16 bg-red-500/10 rounded-full blur-2xl pointer-events-none"></div>}
 
                                     <div className="flex justify-between items-start mb-4">
                                        <div className="flex flex-col">
                                           <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1 flex items-center">
-                                             Orden {order.id}
+                                             Orden {order?.id}
                                              {order.category === 'MDD' ? (
                                                 <span className="ml-3 bg-blue-500/10 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded text-[9px] font-black tracking-tighter shadow-sm flex items-center">
                                                    <Target className="w-3 h-3 mr-1" /> PROTOCOLO MDD
@@ -951,7 +951,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                              <h3 className="text-lg font-black text-white">{order.profileName} <span className="text-coffee-light font-mono">{order.totalKg}kg</span></h3>
                                              {order.status === 'PLANNED' && viewMode === 'MANAGER' && (
                                                 <button 
-                                                   onClick={() => handleDeleteOrder(order.id)}
+                                                   onClick={() => handleDeleteOrder(order?.id)}
                                                    className="p-1.5 bg-[#14161a] border border-red-500/20 text-red-500 hover:bg-red-500/20 hover:text-red-400 rounded-lg transition-all shadow-md"
                                                    title="Eliminar Orden Planificada"
                                                 >
@@ -971,7 +971,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                              {order.status === 'PLANNED' && (
                                                 <div className="flex items-center text-[9px] text-gray-500 bg-black/20 px-2 py-1 rounded">
                                                    <Zap className="w-3 h-3 mr-1 text-yellow-500" />
-                                                   Sugerencia: Tostar Tras {order.id.slice(-1)} {parseInt(order.id.slice(-1)) % 2 === 0 ? '(Inercia Alta)' : '(Inercia Baja)'}
+                                                   Sugerencia: Tostar Tras {order?.id.slice(-1)} {parseInt(order?.id.slice(-1)) % 2 === 0 ? '(Inercia Alta)' : '(Inercia Baja)'}
                                                 </div>
                                              )}
                                           </div>
@@ -986,11 +986,11 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                              const taskOrigin = task.origins[0];
                                              const matchingSilos = silos.filter(s => s.origin === taskOrigin && s.currentKg > 0);
                                              let assignedSilosText = matchingSilos.length > 0
-                                                ? matchingSilos.map(s => `Silo ${s.id} (${s.currentKg}kg ext)`).join(', ')
+                                                ? matchingSilos.map(s => `Silo ${s?.id} (${s.currentKg}kg ext)`).join(', ')
                                                 : '⚠️ SIN ASIGNACIÓN DE SILO';
 
                                              return (
-                                                <div key={`${task.id}-${idx}`} className="flex flex-col bg-[#1e222b] px-4 py-2 rounded-lg border border-dashboard-border/50 text-sm overflow-hidden">
+                                                <div key={`${task?.id}-${idx}`} className="flex flex-col bg-[#1e222b] px-4 py-2 rounded-lg border border-dashboard-border/50 text-sm overflow-hidden">
                                                    <div className="flex items-center justify-between">
                                                       <div className="flex items-center space-x-3 w-1/2">
                                                          <div className="w-6 h-6 rounded-full bg-dashboard-bg flex items-center justify-center text-[10px] font-black text-gray-500 border border-dashboard-border">
@@ -1019,7 +1019,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                                       {task.status === 'ROASTED' && task.type === 'ROAST' && (
                                                          <button
                                                             title="Imprimir Etiqueta de Silo"
-                                                            onClick={() => alert(`🖨️ Imprimiendo Etiqueta para SILO-${task.id.slice(-4)}\nComponente: ${task.origins[0]}\nESTADO: ESPERANDO MEZCLA`)}
+                                                            onClick={() => alert(`🖨️ Imprimiendo Etiqueta para SILO-${task?.id.slice(-4)}\nComponente: ${task.origins[0]}\nESTADO: ESPERANDO MEZCLA`)}
                                                             className="p-1.5 hover:bg-white/10 rounded-lg text-gray-500 hover:text-white transition-colors"
                                                          >
                                                             <QrCode className="w-4 h-4" />
@@ -1059,7 +1059,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                      {pendingTasks.map((task, idx) => {
-                        const machine = ROASTING_MACHINES.find(m => m.id === task.machineId);
+                        const machine = ROASTING_MACHINES.find(m => m?.id === task.machineId);
                         
                         // Validate that all required silos are assigned and have coffee
                         // const _isReadyToRoast = task.origins && task.assignedSilos && 
@@ -1069,7 +1069,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                          // Special UI render for BLEND task (Resolves confusion of "1854kg as a Roast")
                          if (task.type === 'BLEND') {
                             return (
-                               <div key={`${task.id}-${idx}`} className="bg-dashboard-panel border-2 border-green-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col group hover:border-green-500/50 transition-all">
+                               <div key={`${task?.id}-${idx}`} className="bg-dashboard-panel border-2 border-green-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col group hover:border-green-500/50 transition-all">
                                   <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                                   
                                   <div className="flex justify-between items-start mb-4">
@@ -1095,7 +1095,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                      <span className="text-[9px] font-black text-gray-500 uppercase tracking-tighter border-b border-green-500/20 pb-1 block mb-3">Silos Vinculados a esta Gama</span>
                                      <div className="space-y-2">
                                         {Array.from(new Set(task.assignedSilos)).map((sId: any, sIdx: number) => {
-                                           const assignedSiloObj = silos.find(s => s.id === sId);
+                                           const assignedSiloObj = silos.find(s => s?.id === sId);
                                            return (
                                               <div key={sIdx} className="flex justify-between items-center bg-[#1e222b] p-2 rounded-lg border border-dashboard-border/50">
                                                  <div className="flex items-center space-x-2">
@@ -1124,7 +1124,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                          }
 
                          return (
-                            <div key={`${task.id}-${idx}`} className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col group hover:border-blue-500/50 transition-all">
+                            <div key={`${task?.id}-${idx}`} className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col group hover:border-blue-500/50 transition-all">
                                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                                
                                <div className="flex justify-between items-start mb-6">
@@ -1160,7 +1160,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                   
                                   {task.origins?.map((org: string, orgIdx: number) => {
                                      const sId = task.assignedSilos ? task.assignedSilos[0] : null; // Asumiremos 1 silo de destino por tarea en este flujo industrial
-                                     const assignedSiloObj = silos.find(s => s.id === sId);
+                                     const assignedSiloObj = silos.find(s => s?.id === sId);
                                      return (
                                         <div key={orgIdx} className="flex items-center justify-between">
                                            <div className="flex items-center space-x-3">

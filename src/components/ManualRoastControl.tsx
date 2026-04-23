@@ -224,7 +224,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     }
 
     // Verify Target Silo compatibility
-    const pickedSilo = silos.find(s => s.id === targetSiloId);
+    const pickedSilo = silos.find(s => s?.id === targetSiloId);
     if (!pickedSilo) return;
     if (pickedSilo.currentKg > 0 && pickedSilo.profileName && activeLot?.profile?.name && pickedSilo.profileName !== activeLot.profile.name) {
        alert("Alerta: El silo seleccionado contiene una receta diferente. Vacía el silo o selecciona otro.");
@@ -236,7 +236,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     }
 
     // Calculate BBP Cooldown based on machine inertia
-    const machine = ROASTING_MACHINES.find(m => m.id === activeLot?.machineId) || ROASTING_MACHINES[1];
+    const machine = ROASTING_MACHINES.find(m => m?.id === activeLot?.machineId) || ROASTING_MACHINES[1];
     const cooldownSeconds = machine.bbpCooldownBase + (weight * machine.bbpCoefficient);
     setBbpTimeLeft(Math.round(cooldownSeconds));
 
@@ -249,17 +249,17 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
        profileName: activeLot?.profile?.name || null,
        lastFillDate: isNewFill ? new Date().toISOString() : pickedSilo.lastFillDate
     });
-    setSilos(prev => prev.map(s => s.id === targetSiloId ? { 
+    setSilos(prev => prev.map(s => s?.id === targetSiloId ? { 
        ...s, currentKg: newSiloKg, profileName: activeLot?.profile?.name || null, lastFillDate: isNewFill ? new Date().toISOString() : s.lastFillDate
     } : s));
 
 
 
     // Handle Post-Batch Logic
-    const parentOrder = allOrders.find(o => o.id === activeLot?.parentOrderId);
+    const parentOrder = allOrders.find(o => o?.id === activeLot?.parentOrderId);
     const isLastBatchOfOrder = parentOrder && parentOrder.tasks
       .filter((t: any) => t.type === 'ROAST')
-      .every((t: any) => t.status === 'ROASTED' || t.id === activeLot.id);
+      .every((t: any) => t.status === 'ROASTED' || t?.id === activeLot?.id);
 
     if (isLastBatchOfOrder && parentOrder.roastStrategy === 'POST_BLEND') {
        // Trigger Blending Workflow
@@ -280,23 +280,23 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     }
     
     // Sync POST-BLEND components to Supabase
-    const parentOrder = allOrders.find(o => o.id === activeLot?.parentOrderId);
+    const parentOrder = allOrders.find(o => o?.id === activeLot?.parentOrderId);
     const blendTask = parentOrder?.tasks.find((t: any) => t.type === 'BLEND');
     
     if (blendTask) {
-       await updateTaskStatus(blendTask.id, 'ROASTED', { actualWeightKg: parseFloat(finalMixWeight), roastedAt: Date.now() });
+       await updateTaskStatus(blendTask?.id, 'ROASTED', { actualWeightKg: parseFloat(finalMixWeight), roastedAt: Date.now() });
     }
     if (activeLot?.parentOrderId) {
        await updateOrderStatus(activeLot.parentOrderId, 'COMPLETED');
     }
 
     // Update parent order status to COMPLETED locally
-    setAllOrders(prev => prev.map(o => o.id === activeLot?.parentOrderId ? { ...o, status: 'COMPLETED' } : o));
+    setAllOrders(prev => prev.map(o => o?.id === activeLot?.parentOrderId ? { ...o, status: 'COMPLETED' } : o));
     setShowBlendingOverlay(false);
     setShowSamplePrompt(true);
   };
 
-  const currentOrder = allOrders.find(o => o.id === activeLot?.parentOrderId);
+  const currentOrder = allOrders.find(o => o?.id === activeLot?.parentOrderId);
   const roastTasks = currentOrder?.tasks.filter((t: any) => t.type === 'ROAST') || [];
   const completedRoasts = roastTasks.filter((t: any) => t.status === 'ROASTED').length;
   const mixProgress = roastTasks.length > 0 ? Math.round((completedRoasts / roastTasks.length) * 100) : 0;
@@ -306,8 +306,8 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   const restingTimeElapsed = Math.floor((Date.now() - lastRoastTime) / 1000);
   const restingTimeRemaining = Math.max(0, 1200 - restingTimeElapsed);
 
-  const currentMachine = ROASTING_MACHINES.find(m => m.id === activeLot?.machineId) || ROASTING_MACHINES[1];
-  const machineSpecificProfile = activeLot?.profile?.machineProfiles?.[currentMachine.id];
+  const currentMachine = ROASTING_MACHINES.find(m => m?.id === activeLot?.machineId) || ROASTING_MACHINES[1];
+  const machineSpecificProfile = activeLot?.profile?.machineProfiles?.[currentMachine?.id];
   const ghostCurve = machineSpecificProfile?.ghostCurve || [];
   const targetAgtron = machineSpecificProfile?.targetAgtron || activeLot?.profile?.agtron || 50;
 
@@ -413,7 +413,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
               {/* Left: Check de Preparación */}
               <div className="bg-[#14161a] p-10 rounded-[48px] border border-white/5 shadow-2xl space-y-6">
                  <h2 className="text-2xl font-black text-white uppercase tracking-tight border-b border-white/5 pb-4">
-                    {activeLot ? `Check de Verificación: ${activeLot.id}` : 'Check de Preparación'}
+                    {activeLot ? `Check de Verificación: ${activeLot?.id}` : 'Check de Preparación'}
                  </h2>
 
                  <div className="space-y-4">
@@ -768,8 +768,8 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                         >
                           <option value={0} disabled>Seleccionar Silo TS-1 a TS-8</option>
                           {silos.map(s => (
-                             <option key={s.id} value={s.id}>
-                                TS-{s.id} ({s.currentKg}kg) {s.profileName ? `- ${s.profileName}` : ''}
+                             <option key={s?.id} value={s?.id}>
+                                TS-{s?.id} ({s.currentKg}kg) {s.profileName ? `- ${s.profileName}` : ''}
                              </option>
                           ))}
                         </select>
@@ -810,7 +810,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                        <p className="text-lg font-mono font-bold text-gray-400">CAN-240KG-{Math.floor(Math.random()*90000)+10000}</p>
                     </div>
                     <div className="text-right">
-                       <p className="text-[10px] text-gray-600 font-black uppercase">Objetivo Agtron ({currentMachine.id})</p>
+                       <p className="text-[10px] text-gray-600 font-black uppercase">Objetivo Agtron ({currentMachine?.id})</p>
                        <p className="text-lg font-black text-coffee-light">{targetAgtron}</p>
                     </div>
                  </div>
@@ -861,9 +861,9 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                               const diffPct = Math.abs((t.actualWeightKg! - t.targetWeightKg) / t.targetWeightKg) * 100;
                               const isAlert = diffPct > 3;
                               return (
-                                 <tr key={t.id} className="text-white font-bold">
+                                 <tr key={t?.id} className="text-white font-bold">
                                     <td className="px-8 py-6">{t.origins ? t.origins[0] : 'Blend'}</td>
-                                    <td className="px-8 py-6 text-[10px] font-black text-gray-500">SILO-{t.id.slice(-4)}</td>
+                                    <td className="px-8 py-6 text-[10px] font-black text-gray-500">SILO-{t?.id.slice(-4)}</td>
                                     <td className="px-8 py-6 text-right font-mono">{t.targetWeightKg.toFixed(1)}</td>
                                     <td className={`px-8 py-6 text-right font-mono ${isAlert ? 'text-red-400' : 'text-coffee-light'}`}>{t.actualWeightKg?.toFixed(1)}</td>
                                     <td className="px-8 py-6 text-right">
@@ -897,7 +897,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                          <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">Instrucción de Mezcla Industrial</p>
                          <p className="text-2xl font-black text-white leading-tight">
                             "Vierta {roastTasks.map((t: any, i: number) => (
-                               <span key={t.id}>
+                               <span key={t?.id}>
                                   <span className="text-coffee-light">{t.actualWeightKg?.toFixed(1) || t.targetWeightKg?.toFixed(1) || 0} kg</span> de {t.origins ? t.origins[0] : 'Origen'}
                                   {i < roastTasks.length - 1 ? ' + ' : ''}
                                </span>
