@@ -1107,7 +1107,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                                     <Database className="w-3 h-3 text-green-500" />
                                                     <span className="text-xs text-white font-bold">Silo {assignedSiloObj?.id || sId}</span>
                                                  </div>
-                                                 <span className="text-[10px] text-gray-400 truncate w-24">({assignedSiloObj?.origin || 'Origen'})</span>
+                                                 <span className="text-[10px] text-gray-400 truncate w-24">({assignedSiloObj?.profileName || 'Origen'})</span>
                                               </div>
                                            );
                                         })}
