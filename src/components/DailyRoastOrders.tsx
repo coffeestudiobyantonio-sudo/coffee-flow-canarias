@@ -129,7 +129,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       selectedProfile.blend.forEach(b => {
          const originReqGreen = baseRequiredGreenKg * (b.percentage / 100);
          const originBatchSize = (b.sackWeight || 60) * 2;
-         const batchesNeeded = Math.ceil(originReqGreen / originBatchSize);
+         const batchesNeeded = Math.max(1, Math.round(originReqGreen / originBatchSize));
          actualTotalGreenRoasting += batchesNeeded * originBatchSize;
       });
    }
@@ -391,7 +391,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
             const batchSizeGreen = sackWeight * 2;
             const batchSizeRoasted = batchSizeGreen * (1 - shrinkage);
             
-            const batchesNeeded = Math.ceil(targetRoastedForThisOrigin / batchSizeRoasted);
+            const batchesNeeded = Math.max(1, Math.round(targetRoastedForThisOrigin / batchSizeRoasted));
             let remainingBatches = batchesNeeded;
 
             while (remainingBatches > 0) {
