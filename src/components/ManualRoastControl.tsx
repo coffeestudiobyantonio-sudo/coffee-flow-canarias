@@ -43,8 +43,6 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   const [showBlendingOverlay, setShowBlendingOverlay] = useState(false);
   const [finalMixWeight, setFinalMixWeight] = useState<string>("");
   const [showSamplePrompt, setShowSamplePrompt] = useState(false);
-  const [shrinkageJustification, setShrinkageJustification] = useState<string>("");
-  const [showShrinkageAlert, setShowShrinkageAlert] = useState(false);
   const [consistencyScore, setConsistencyScore] = useState<number>(0);
 
   const timerRef = useRef<any>(null);
@@ -174,7 +172,6 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
         setTargetSiloId(currentTask.assignedSilos[0]);
     }
     
-    setShowShrinkageAlert(false);
     setShowFinalReport(true);
 
     // Auto-log field at stop
@@ -226,15 +223,6 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   const handleFinalizeBatch = async () => {
     const weight = parseFloat(finalWeight);
     
-    // Shrinkage validation relocated here to evaluate whatever they might have changed
-    const targetWeightVal = activeLot?.batchWeight || 0;
-    const shrinkage = targetWeightVal > 0 ? (1 - weight / targetWeightVal) * 100 : 0;
-    if (shrinkage > 15 && !shrinkageJustification) {
-       setShowShrinkageAlert(true);
-       alert("Alerta de Merma: Se ha detectado una pérdida >15%. Por favor, documenta una justificación en la alerta roja antes de cerrar.");
-       return;
-    }
-
     if (targetSiloId === 0) {
        alert("Por favor, selecciona un Silo de destino para el lote tostado.");
        return;
@@ -774,7 +762,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                          value={finalWeight} 
                          onChange={(e) => setFinalWeight(e.target.value)}
                          placeholder="000.0"
-                         className={`w-full bg-black/40 border-2 rounded-3xl p-8 text-5xl font-black text-white outline-none ${showShrinkageAlert ? 'border-red-500 animate-pulse' : 'border-white/5 focus:border-coffee-accent'}`}
+                         className="w-full bg-black/40 border-2 rounded-3xl p-8 text-5xl font-black text-white outline-none border-white/5 focus:border-coffee-accent"
                        />
                        <div className="space-y-3 col-span-2">
                         <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-2">Destino (Silo Terminado)</label>
@@ -803,23 +791,6 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                        />
                     </div>
                  </div>
-
-                  {showShrinkageAlert && (
-                     <div className="bg-red-500/10 border border-red-500/30 p-6 rounded-3xl space-y-4 animate-fade-in">
-                        <div className="flex items-center space-x-3 text-red-500">
-                           <AlertCircle className="w-6 h-6" />
-                           <span className="text-sm font-black uppercase tracking-widest">Alerta de Merma Crítica (&gt;15%)</span>
-                        </div>
-                        <textarea 
-                           required
-                           value={shrinkageJustification}
-                           onChange={(e) => setShrinkageJustification(e.target.value)}
-                           placeholder="Justificación técnica obligatoria (Ej: Error de báscula, picos de gas, café excesivamente húmedo...)"
-                           className="w-full bg-black/40 border border-red-500/30 rounded-xl p-4 text-white text-sm outline-none focus:border-red-500"
-                           rows={3}
-                        />
-                     </div>
-                  )}
 
                  <div className="bg-black/20 p-6 rounded-3xl border border-white/5 flex items-center justify-between">
                     <div>
