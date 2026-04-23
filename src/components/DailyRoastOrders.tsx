@@ -411,6 +411,33 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          // Sort to perfectly interleave batches of different origins based on their progress ratio
          itemBatches.sort((a, b) => a.score - b.score);
 
+         // --- PREVENT SPLITTING SMALL ORDERS ACROSS DAYS ---
+         // If a profile order is relatively small (<= 16 batches, meaning it could fit in a single 4-silo day)
+         // we simulate if it will fit in the REMAINING capacity of the current day.
+         // If it won't fit perfectly without bridging to the next day, we proactively flush the day early
+         // so this product starts fresh and stays fully contained in a single day for blending safely.
+         if (itemBatches.length <= 16 && currentDaySiloAssignments.length > 0) {
+            let willFit = true;
+            // Create a lightweight simulation array of current capacities
+            let simSilos = currentDaySiloAssignments.map(s => ({ origin: s.origin, count: s.batches.length }));
+            
+            for (const batchDef of itemBatches) {
+               let targetSim = simSilos.find(s => s.origin === batchDef.origin && s.count < 4);
+               if (!targetSim) {
+                  if (simSilos.length >= 4) {
+                     willFit = false;
+                     break;
+                  }
+                  simSilos.push({ origin: batchDef.origin, count: 1 });
+               } else {
+                  targetSim.count++;
+               }
+            }
+            if (!willFit) {
+               flushDay(); 
+            }
+         }
+
          // Process interleaved batches into Daily Silos
          itemBatches.forEach(batchDef => {
             // Find existing silo for this origin on current day that has space
