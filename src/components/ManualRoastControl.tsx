@@ -160,15 +160,23 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   const handleStop = () => {
     setIsRunning(false);
     
-    const finalWeightVal = parseFloat(finalWeight);
+    // Auto-pre-fill values for the final report based on planning
     const targetWeightVal = activeLot?.batchWeight || 0;
-    const shrinkage = targetWeightVal > 0 ? (1 - finalWeightVal / targetWeightVal) * 100 : 0;
+    const expectedShrinkage = activeLot?.profile?.expectedShrinkage || 0.16;
+    const expectedFinalWeight = targetWeightVal * (1 - expectedShrinkage);
+    setFinalWeight(expectedFinalWeight.toFixed(1));
     
-    if (shrinkage > 15) {
-       setShowShrinkageAlert(true);
+    setAgtronColor(targetAgtron?.toString() || '');
+    
+    const parentOrder = allOrders.find(o => o?.id === activeLot?.parentOrderId);
+    const currentTask = parentOrder?.tasks.find((t: any) => t?.id === activeLot?.id);
+    if (currentTask && currentTask.assignedSilos && currentTask.assignedSilos.length > 0) {
+        setTargetSiloId(currentTask.assignedSilos[0]);
     }
     
+    setShowShrinkageAlert(false);
     setShowFinalReport(true);
+
     // Auto-log field at stop
     const lastTemp = dataPoints.length > 0 ? dataPoints[dataPoints.length - 1].temp : 220;
     handleAddTemp(lastTemp, 'DROP', elapsedTime);
@@ -218,6 +226,15 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   const handleFinalizeBatch = async () => {
     const weight = parseFloat(finalWeight);
     
+    // Shrinkage validation relocated here to evaluate whatever they might have changed
+    const targetWeightVal = activeLot?.batchWeight || 0;
+    const shrinkage = targetWeightVal > 0 ? (1 - weight / targetWeightVal) * 100 : 0;
+    if (shrinkage > 15 && !shrinkageJustification) {
+       setShowShrinkageAlert(true);
+       alert("Alerta de Merma: Se ha detectado una pérdida >15%. Por favor, documenta una justificación en la alerta roja antes de cerrar.");
+       return;
+    }
+
     if (targetSiloId === 0) {
        alert("Por favor, selecciona un Silo de destino para el lote tostado.");
        return;
