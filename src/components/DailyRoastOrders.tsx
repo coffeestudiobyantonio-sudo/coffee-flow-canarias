@@ -385,7 +385,11 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
          const shrinkage = (profile.expectedShrinkage || 16) / 100;
 
-         // For each origin in the profile blend
+         // To balance origins across Daily silos, we generate SINGLE batches and interleave them 
+         // so that silos are created and filled in proportion to the blend percentage.
+         interface PendingBatch { origin: string; score: number; component: any; batchSizeRoasted: number; }
+         const itemBatches: PendingBatch[] = [];
+
          profile.blend.forEach(component => {
             const targetRoastedForThisOrigin = item.totalKg * (component.percentage / 100);
             const sackWeight = Number(component.sackWeight || (component as any).sack_weight || 60);
@@ -393,34 +397,39 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
             const batchSizeRoasted = batchSizeGreen * (1 - shrinkage);
             
             const batchesNeeded = Math.max(1, Math.round(targetRoastedForThisOrigin / batchSizeRoasted));
-            let remainingBatches = batchesNeeded;
+            
+            for (let i = 0; i < batchesNeeded; i++) {
+               itemBatches.push({
+                  origin: component.origin,
+                  score: i / batchesNeeded, // distribute evenly 0.0 to 1.0
+                  component,
+                  batchSizeRoasted
+               });
+            }
+         });
 
-            while (remainingBatches > 0) {
-               // Find existing silo for this origin on current day
-               let silo = currentDaySiloAssignments.find(s => s.origin === component.origin && s.batches.length < 4);
-               
-               if (!silo) {
-                  if (currentDaySiloAssignments.length >= 4) flushDay();
-                  silo = { siloId: 0, origin: component.origin, batches: [] };
-                  currentDaySiloAssignments.push(silo);
-               }
+         // Sort to perfectly interleave batches of different origins based on their progress ratio
+         itemBatches.sort((a, b) => a.score - b.score);
 
-               const spaceInSilo = 4 - silo.batches.length;
-               const take = Math.min(remainingBatches, spaceInSilo);
+         // Process interleaved batches into Daily Silos
+         itemBatches.forEach(batchDef => {
+            // Find existing silo for this origin on current day that has space
+            let silo = currentDaySiloAssignments.find(s => s.origin === batchDef.origin && s.batches.length < 4);
+            
+            if (!silo) {
+               if (currentDaySiloAssignments.length >= 4) flushDay();
+               silo = { siloId: 0, origin: batchDef.origin, batches: [] };
+               currentDaySiloAssignments.push(silo);
+            }
 
-               for (let i = 0; i < take; i++) {
-                  silo.batches.push({ profileName: item.profileName, format: item.format });
-                  
-                  // Track this block's actual roasted weight
-                  const roastedWeight = batchSizeRoasted;
-                  const existingBlock = currentDayBlocks.find(b => b.profileName === item.profileName && b.format === item.format);
-                  if (existingBlock) {
-                     existingBlock.targetKg += roastedWeight;
-                  } else {
-                     currentDayBlocks.push({ profileName: item.profileName, format: item.format, targetKg: roastedWeight });
-                  }
-               }
-               remainingBatches -= take;
+            silo.batches.push({ profileName: item.profileName, format: item.format });
+            
+            // Track this block's actual roasted weight
+            const existingBlock = currentDayBlocks.find(b => b.profileName === item.profileName && b.format === item.format);
+            if (existingBlock) {
+               existingBlock.targetKg += batchDef.batchSizeRoasted;
+            } else {
+               currentDayBlocks.push({ profileName: item.profileName, format: item.format, targetKg: batchDef.batchSizeRoasted });
             }
          });
       });

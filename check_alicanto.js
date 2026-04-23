@@ -1,0 +1,18 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+async function checkAlicanto() {
+  const { data, error } = await supabase.from('master_profiles').select('name, blend').eq('name', 'Maurice Alicanto');
+  if (error) {
+    console.error(error);
+  } else {
+    console.log(JSON.stringify(data, null, 2));
+  }
+}
+
+checkAlicanto();
