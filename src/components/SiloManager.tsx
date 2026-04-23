@@ -66,10 +66,47 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos }) => {
 
   const handlePurge = async () => {
      if (!targetSilo) return;
-     if (confirm('Vaciado de emergencia. El compartimento pasará a 0kg y perderá el perfil almacenado. ¿Confirmar purga?')) {
+     if (confirm(`Vaciado de emergencia. El compartimento TS-${targetSilo.id} pasará a 0kg y perderá el perfil almacenado. ¿Confirmar purga?`)) {
         const ok = await updateSilo(targetSilo.id, { currentKg: 0, profileName: null });
         if (ok) {
             setSilos(prev => prev.map(s => s.id === targetSilo.id ? { ...s, currentKg: 0, profileName: null } : s));
+        }
+     }
+  };
+
+  const handleQuickReset = async (silo: Silo) => {
+     if (confirm(`‼️ ATENCIÓN: Estás a punto de RESETEAR el Silo TS-${silo.id} a 0 kg.\n\n¿Estás completamente seguro de esta acción?`)) {
+        if (confirm(`VERIFICACIÓN FINAL: Escribe "SI" para confirmar el reseteo del Silo TS-${silo.id}.`) || true) { // simplified double verification
+           const userTyped = prompt(`Escriba el número del silo (${silo.id}) para confirmar el borrado total:`);
+           if (userTyped === silo.id.toString()) {
+              const ok = await updateSilo(silo.id, { currentKg: 0, profileName: null });
+              if (ok) {
+                 setSilos(prev => prev.map(s => s.id === silo.id ? { ...s, currentKg: 0, profileName: null } : s));
+                 alert(`✅ Silo TS-${silo.id} purgado a 0.`);
+              } else {
+                 alert('❌ Error al conectar con la base de datos.');
+              }
+           } else {
+              if (userTyped !== null) alert('❌ Verificación fallida. Número de silo incorrecto.');
+           }
+        }
+     }
+  };
+
+  const handleQuickAdjust = async (silo: Silo) => {
+     const input = prompt(`Ajuste de inventario para TS-${silo.id}\nIntroduce la nueva cantidad (KG):`, silo.currentKg.toString());
+     if (input !== null) {
+        const newKg = parseFloat(input);
+        if (!isNaN(newKg) && newKg >= 0 && newKg <= silo.maxKg) {
+           const newProfile = newKg === 0 ? null : silo.profileName;
+           const ok = await updateSilo(silo.id, { currentKg: newKg, profileName: newProfile });
+           if (ok) {
+              setSilos(prev => prev.map(s => s.id === silo.id ? { ...s, currentKg: newKg, profileName: newProfile } : s));
+           } else {
+              alert('❌ Error al actualizar en la base de datos.');
+           }
+        } else {
+           alert(`❌ Cantidad inválida. Debe ser un número entre 0 y ${silo.maxKg}.`);
         }
      }
   };
@@ -226,13 +263,29 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos }) => {
                        {/* Border indicating fill exact height */}
                        <div className="absolute bottom-0 left-0 right-0 w-full z-0 border-t border-green-500/30 transition-all duration-1000 ease-in-out" style={{ bottom: `${rawPct}%` }}></div>
 
-                       <div className="relative z-10 flex justify-between items-start mb-2">
+                       <div className="relative z-10 flex justify-between items-start mb-2 group">
                           <span className="text-gray-500 font-black uppercase text-[10px] tracking-widest">TS-{s.id}</span>
-                          <div className={`w-2 h-2 rounded-full ${isEmpty ? 'bg-gray-600' : isFull ? 'bg-red-500 animate-pulse' : 'bg-green-500 '}`}></div>
+                          <div className="flex items-center space-x-2">
+                             <div className="hidden group-hover:flex items-center bg-black/40 rounded p-0.5 space-x-1 absolute right-4 -top-1">
+                                <button 
+                                   onClick={(e) => { e.stopPropagation(); handleQuickAdjust(s); }}
+                                   className="text-yellow-500 hover:text-yellow-400 p-1 hover:bg-white/10 rounded" title="Modificar Cantidad Manualmente"
+                                >
+                                   <ArrowUpFromLine className="w-3 h-3" />
+                                </button>
+                                <button 
+                                   onClick={(e) => { e.stopPropagation(); handleQuickReset(s); }}
+                                   className="text-red-500 hover:text-red-400 p-1 hover:bg-white/10 rounded" title="Resetear Silo (Purgar a 0)"
+                                >
+                                   <Trash2 className="w-3 h-3" />
+                                </button>
+                             </div>
+                             <div className={`w-2 h-2 rounded-full ${isEmpty ? 'bg-gray-600' : isFull ? 'bg-red-500 animate-pulse' : 'bg-green-500 '}`}></div>
+                          </div>
                        </div>
 
-                       <div className="relative z-10 text-center my-auto">
-                          <p className="text-3xl font-black text-white font-mono">{s.currentKg}<span className="text-xs text-gray-500 ml-1">kg</span></p>
+                       <div className="relative z-10 text-center my-auto group cursor-pointer" onClick={(e) => { e.stopPropagation(); handleQuickAdjust(s); }}>
+                          <p className="text-3xl font-black text-white font-mono hover:text-green-300 transition-colors">{s.currentKg}<span className="text-xs text-gray-500 ml-1">kg</span></p>
                           <p className="text-[9px] text-gray-500 uppercase font-bold tracking-widest mt-1">/ {s.maxKg} MAX</p>
                        </div>
 
