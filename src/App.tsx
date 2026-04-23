@@ -15,6 +15,28 @@ export interface MachineSpecificProfile {
   ghostCurve: { time: number, temp: number }[];
 }
 
+// Fallback Error Boundary
+class ErrorBoundary extends React.Component<{children: any}, {hasError: boolean, error: any}> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-10 bg-red-900 text-white min-h-screen">
+           <h1 className="text-3xl font-black mb-4">SYSTEM CRASH</h1>
+           <pre className="p-4 bg-black rounded whitespace-pre-wrap">{this.state.error?.stack || this.state.error?.toString()}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export interface MasterProfile {
   name: string;
   agtron: number;
@@ -336,21 +358,23 @@ function App() {
       <main className="flex-1 min-w-0 h-full flex flex-col relative z-10 overflow-hidden bg-dashboard-bg">
         <StepperBar />
         
-        <div className="flex-1 overflow-y-auto w-full relative">
-          {activeTab === 'profiles' && <MasterProfiles masterProfiles={masterProfiles} setMasterProfiles={setMasterProfiles} />}
-          {activeTab === 'orders' && <DailyRoastOrders 
-              masterProfiles={masterProfiles} 
-              roastOrders={roastOrders} setRoastOrders={setRoastOrders}
-              silos={silos}
-              onLaunchManualRoast={handleLaunchManualRoast}
-            />}
-          {activeTab === 'silos' && <SiloManager silos={silos} setSilos={setSilos} />}
-          {activeTab === 'mgmt' && <ManagementDashboard />}
-          {activeTab === 'roast' && <LiveRoastControl activeLot={activeLot} onRoastComplete={() => handleBatchComplete(activeLot?.batchWeight || 0)} />}
-          {activeTab === 'manual_roast' && <ManualRoastControl activeLot={activeLot} onBatchComplete={handleBatchComplete} allOrders={roastOrders} setAllOrders={setRoastOrders} silos={silos} setSilos={setSilos} />}
-          {activeTab === 'lab' && <QualityLab activeLot={activeLot} roastOrders={roastOrders} onQualityValidated={handleQualityValidated} />}
-          {activeTab === 'traceability' && <TraceabilityDetective activeLot={activeLot} />}
-        </div>
+        <ErrorBoundary>
+          <div className="flex-1 overflow-y-auto w-full relative">
+            {activeTab === 'profiles' && <MasterProfiles masterProfiles={masterProfiles} setMasterProfiles={setMasterProfiles} />}
+            {activeTab === 'orders' && <DailyRoastOrders 
+                masterProfiles={masterProfiles} 
+                roastOrders={roastOrders} setRoastOrders={setRoastOrders}
+                silos={silos}
+                onLaunchManualRoast={handleLaunchManualRoast}
+              />}
+            {activeTab === 'silos' && <SiloManager silos={silos} setSilos={setSilos} />}
+            {activeTab === 'mgmt' && <ManagementDashboard />}
+            {activeTab === 'roast' && <LiveRoastControl activeLot={activeLot} onRoastComplete={() => handleBatchComplete(activeLot?.batchWeight || 0)} />}
+            {activeTab === 'manual_roast' && <ManualRoastControl activeLot={activeLot} onBatchComplete={handleBatchComplete} allOrders={roastOrders} setAllOrders={setRoastOrders} silos={silos} setSilos={setSilos} />}
+            {activeTab === 'lab' && <QualityLab activeLot={activeLot} roastOrders={roastOrders} onQualityValidated={handleQualityValidated} />}
+            {activeTab === 'traceability' && <TraceabilityDetective activeLot={activeLot} />}
+          </div>
+        </ErrorBoundary>
       </main>
 
     </div>

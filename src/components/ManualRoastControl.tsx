@@ -862,7 +862,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                               const isAlert = diffPct > 3;
                               return (
                                  <tr key={t.id} className="text-white font-bold">
-                                    <td className="px-8 py-6">{t.origins[0]}</td>
+                                    <td className="px-8 py-6">{t.origins ? t.origins[0] : 'Blend'}</td>
                                     <td className="px-8 py-6 text-[10px] font-black text-gray-500">SILO-{t.id.slice(-4)}</td>
                                     <td className="px-8 py-6 text-right font-mono">{t.targetWeightKg.toFixed(1)}</td>
                                     <td className={`px-8 py-6 text-right font-mono ${isAlert ? 'text-red-400' : 'text-coffee-light'}`}>{t.actualWeightKg?.toFixed(1)}</td>
@@ -898,7 +898,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                          <p className="text-2xl font-black text-white leading-tight">
                             "Vierta {roastTasks.map((t: any, i: number) => (
                                <span key={t.id}>
-                                  <span className="text-coffee-light">{t.actualWeightKg?.toFixed(1) || t.targetWeightKg.toFixed(1)} kg</span> de {t.origins[0]}
+                                  <span className="text-coffee-light">{t.actualWeightKg?.toFixed(1) || t.targetWeightKg?.toFixed(1) || 0} kg</span> de {t.origins ? t.origins[0] : 'Origen'}
                                   {i < roastTasks.length - 1 ? ' + ' : ''}
                                </span>
                             ))} en el mezclador/silo central."
