@@ -115,7 +115,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          return 0; // Natural order
       });
 
-   const selectedProfile = masterProfiles.find(p => p.name === selectedProfileName);
+   const selectedProfile = masterProfiles.find(p => p?.name === selectedProfileName);
 
    const SHRINKAGE_PCT = selectedProfile ? ((selectedProfile.expectedShrinkage || 16.0) / 100) : 0.16;
 
@@ -145,7 +145,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          return;
       }
 
-      if (!confirm(`Para fabricar ${targetKg}kg de ${selectedProfile.name} (Merma del ${(SHRINKAGE_PCT * 100).toFixed(1)}%):\nLa agenda forzará tandas cerradas de 2 SACOS según el origen (ej. 120kg o 138kg).\n\nTotal Café Verde que procesarás: ${actualTotalGreenRoasting}kg.\nEl rendimiento final que obtendrás será aprox de ${trueEstimatedRoasted.toFixed(1)}kg tostados.\n\nSobrarán: ${excessRoasted > 0 ? excessRoasted.toFixed(1) : 0}kg tostados que irán al silo de reserva.\n\n¿Proceder con la generación de tareas?`)) {
+      if (!confirm(`Para fabricar ${targetKg}kg de ${selectedProfile?.name} (Merma del ${(SHRINKAGE_PCT * 100).toFixed(1)}%):\nLa agenda forzará tandas cerradas de 2 SACOS según el origen (ej. 120kg o 138kg).\n\nTotal Café Verde que procesarás: ${actualTotalGreenRoasting}kg.\nEl rendimiento final que obtendrás será aprox de ${trueEstimatedRoasted.toFixed(1)}kg tostados.\n\nSobrarán: ${excessRoasted > 0 ? excessRoasted.toFixed(1) : 0}kg tostados que irán al silo de reserva.\n\n¿Proceder con la generación de tareas?`)) {
          return;
       }
 
@@ -195,7 +195,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
       const newOrder: DailyRoastOrder = {
          id: orderId,
-         profileName: selectedProfile.name,
+         profileName: selectedProfile?.name,
          totalKg: actualTotalGreenRoasting, // We store the GREEN weight as total request for legacy tracking if needed
          priority,
          shrinkagePct: SHRINKAGE_PCT,
@@ -380,7 +380,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       };
 
       sortedQueue.forEach(item => {
-         const profile = masterProfiles.find(p => p.name === item.profileName);
+         const profile = masterProfiles.find(p => p?.name === item.profileName);
          if (!profile) return;
 
          const shrinkage = (profile.expectedShrinkage || 16) / 100;
@@ -475,7 +475,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       // 1. Generate ROAST tasks from Sorted Silo Assignments
       sortedAssignments.forEach((silo) => {
          silo.batches.forEach((batchInfo, bIdx) => {
-            const profile = masterProfiles.find(p => p.name === batchInfo.profileName);
+            const profile = masterProfiles.find(p => p?.name === batchInfo.profileName);
             if (!profile) return;
             const blendComponent = profile.blend.find(b => b.origin === silo.origin);
             const sackWeight = Number(blendComponent?.sackWeight || (blendComponent as any)?.sack_weight || 60);
@@ -500,7 +500,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
       // 2. Generate BLEND tasks for each profile block in the day
       day.blocks.forEach((block, blIdx) => {
-         const profile = masterProfiles.find(p => p.name === block.profileName);
+         const profile = masterProfiles.find(p => p?.name === block.profileName);
          if (!profile) return;
 
          newTasks.push({
@@ -682,7 +682,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                    }}
                                    className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-coffee-light font-bold">
                               <option value="" disabled>Selecciona...</option>
-                              {masterProfiles.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                              {masterProfiles.map(p => <option key={p?.name} value={p?.name}>{p?.name}</option>)}
                            </select>
                         </div>
                         <div className="w-full lg:w-40 relative">
@@ -831,7 +831,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                     >
                                        <option value="" disabled>-- Selecciona Gama --</option>
                                        {masterProfiles.map(p => (
-                                          <option key={p.name} value={p.name}>{p.name}</option>
+                                          <option key={p?.name} value={p?.name}>{p?.name}</option>
                                        ))}
                                     </select>
                                     

@@ -198,7 +198,7 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQuali
                    </span>
                  )}
                  <span className="bg-[#1e222b] px-3 py-1 rounded border border-dashboard-border text-gray-300 text-xs font-bold shadow-sm">
-                   {activeProfile ? activeProfile.name : 'Ninguno'}
+                   {activeProfile ? activeProfile?.name : 'Ninguno'}
                  </span>
                  {currentTask?.parentCategory && (
                     <span className={`px-2 py-1 rounded text-[10px] font-black tracking-widest uppercase border flex items-center shadow-sm ${currentTask.parentCategory === 'MARCA_PROPIA' ? 'bg-gradient-to-r from-yellow-600/30 to-yellow-800/30 text-yellow-500 border-yellow-500/50' : 'bg-blue-500/10 text-blue-400 border-blue-500/30'}`}>

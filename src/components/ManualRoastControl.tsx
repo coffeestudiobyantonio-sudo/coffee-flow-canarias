@@ -226,7 +226,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     // Verify Target Silo compatibility
     const pickedSilo = silos.find(s => s?.id === targetSiloId);
     if (!pickedSilo) return;
-    if (pickedSilo.currentKg > 0 && pickedSilo.profileName && activeLot?.profile?.name && pickedSilo.profileName !== activeLot.profile.name) {
+    if (pickedSilo.currentKg > 0 && pickedSilo.profileName && activeLot?.profile?.name && pickedSilo.profileName !== activeLot?.profile?.name) {
        alert("Alerta: El silo seleccionado contiene una receta diferente. Vacía el silo o selecciona otro.");
        return;
     }
@@ -339,7 +339,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
              )}
              <div className="flex flex-col">
                 <p className="text-sm text-gray-400 font-bold uppercase tracking-wider">
-                  {activeLot ? `Perfil: ${activeLot.profile.name}` : 'MODO SIMULACIÓN'}
+                  {activeLot ? `Perfil: ${activeLot?.profile?.name}` : 'MODO SIMULACIÓN'}
                 </p>
                 {activeLot?.batchIndex && (
                   <p className="text-[10px] text-coffee-light font-black uppercase tracking-[0.2em] mt-0.5">
@@ -392,7 +392,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
            <div className="text-right">
               <p className="text-[10px] text-gray-500 font-black uppercase">Capacidad de Tueste</p>
               <p className="text-xl font-black text-white">{activeLot?.batchWeight || currentMachine.maxCapacity} <span className="text-xs text-gray-500">KG</span></p>
-              <p className="text-[10px] text-coffee-light font-bold uppercase tracking-tighter">{currentMachine.name}</p>
+              <p className="text-[10px] text-coffee-light font-bold uppercase tracking-tighter">{currentMachine?.name}</p>
            </div>
         </div>
       </div>

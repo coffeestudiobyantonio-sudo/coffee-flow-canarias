@@ -344,7 +344,7 @@ function App() {
             <span className="text-[10px] text-gray-500 font-black mb-1 uppercase tracking-widest leading-tight z-10">Lote Activo</span>
             <div className="flex flex-col mt-1 z-10">
               <span className={`text-sm font-bold truncate ${activeLot ? 'text-coffee-light' : 'text-gray-600'}`}>
-                {activeLot ? activeLot.profile.name : "Ninguno en producción"}
+                {activeLot ? activeLot?.profile?.name : "Ninguno en producción"}
               </span>
               {activeLot && (
                 <span className="text-xs text-gray-400 mt-1 font-mono">ID: {activeLot?.id}</span>

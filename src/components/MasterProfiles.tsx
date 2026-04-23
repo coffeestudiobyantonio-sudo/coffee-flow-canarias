@@ -69,7 +69,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newProfile.name.trim() !== '' && isBlendValid) {
+    if (newProfile?.name.trim() !== '' && isBlendValid) {
       
       if (editingProfileName) {
          const isSuccess = await updateMasterProfile(editingProfileName, newProfile);
@@ -77,7 +77,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
            alert("Error de red: No se pudo actualizar el perfil en Supabase.");
            return;
          }
-         setMasterProfiles(masterProfiles.map(p => p.name === editingProfileName ? newProfile : p));
+         setMasterProfiles(masterProfiles.map(p => p?.name === editingProfileName ? newProfile : p));
       } else {
          const isSuccess = await createMasterProfile(newProfile);
          if (!isSuccess) {
@@ -151,7 +151,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
                          <input 
                            type="text" required
                            className={`w-full border rounded-xl p-3 text-white transition-colors focus:outline-none ${editingProfileName ? 'bg-[#14161a] border-dashboard-border text-gray-500 cursor-not-allowed opacity-70' : 'bg-[#1e222b] border-dashboard-border focus:border-coffee-light'}`}
-                           value={newProfile.name}
+                           value={newProfile?.name}
                            onChange={e => setNewProfile({...newProfile, name: e.target.value})}
                            disabled={editingProfileName !== null}
                          />
@@ -390,7 +390,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
                 <div key={i} className="bg-dashboard-panel border border-dashboard-border rounded-3xl flex flex-col overflow-hidden shadow-xl hover:shadow-[0_0_30px_rgba(0,0,0,0.5)] transition-shadow group relative">
                   <div className="p-6 border-b border-dashboard-border bg-gradient-to-br from-[#1e222b] to-dashboard-panel z-10 flex justify-between items-start">
                      <div className="flex-1 min-w-0">
-                       <h3 className="text-xl font-black text-white truncate pr-4" title={profile.name}>{profile.name}</h3>
+                       <h3 className="text-xl font-black text-white truncate pr-4" title={profile?.name}>{profile?.name}</h3>
                        <div className="flex flex-wrap gap-2 mt-3">
                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded border ${profile.businessUnit === 'LIDL' ? 'text-coffee-light bg-coffee-accent/10 border-coffee-accent/20' : 'text-blue-400 bg-blue-500/10 border-blue-500/20'}`}>
                            {profile.businessUnit === 'LIDL' ? 'EXT: LIDL' : 'MARCA PROPIA'}
@@ -408,7 +408,7 @@ const MasterProfiles: React.FC<MasterProfilesProps> = ({ masterProfiles, setMast
                        <button
                          onClick={() => {
                            setNewProfile(profile);
-                           setEditingProfileName(profile.name);
+                           setEditingProfileName(profile?.name);
                            setIsCreating(true);
                            // Scroll to top
                            document.querySelector('.overflow-y-auto')?.scrollTo({ top: 0, behavior: 'smooth' });
