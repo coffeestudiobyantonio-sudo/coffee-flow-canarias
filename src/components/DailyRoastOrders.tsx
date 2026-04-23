@@ -128,7 +128,8 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    if (selectedProfile) {
       selectedProfile.blend.forEach(b => {
          const originReqGreen = baseRequiredGreenKg * (b.percentage / 100);
-         const originBatchSize = (b.sackWeight || 60) * 2;
+         const originSackWeight = Number(b.sackWeight || (b as any).sack_weight || 60);
+         const originBatchSize = originSackWeight * 2;
          const batchesNeeded = Math.max(1, Math.round(originReqGreen / originBatchSize));
          actualTotalGreenRoasting += batchesNeeded * originBatchSize;
       });
@@ -387,7 +388,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          // For each origin in the profile blend
          profile.blend.forEach(component => {
             const targetRoastedForThisOrigin = item.totalKg * (component.percentage / 100);
-            const sackWeight = component.sackWeight || 60; // FIX: Correcto peso de origen por defecto (sacos de 60kg).
+            const sackWeight = Number(component.sackWeight || (component as any).sack_weight || 60);
             const batchSizeGreen = sackWeight * 2;
             const batchSizeRoasted = batchSizeGreen * (1 - shrinkage);
             
@@ -440,7 +441,8 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          silo.batches.forEach((batchInfo, bIdx) => {
             const profile = masterProfiles.find(p => p.name === batchInfo.profileName);
             if (!profile) return;
-            const sackWeight = profile.blend.find(b => b.origin === silo.origin)?.sackWeight || 60; // FIX: Corregido a 60.
+            const blendComponent = profile.blend.find(b => b.origin === silo.origin);
+            const sackWeight = Number(blendComponent?.sackWeight || (blendComponent as any)?.sack_weight || 60);
             const batchSizeGreen = sackWeight * 2;
 
             newTasks.push({
