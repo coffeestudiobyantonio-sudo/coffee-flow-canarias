@@ -160,8 +160,10 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     
     // Auto-pre-fill values for the final report based on planning
     const targetWeightVal = activeLot?.batchWeight || 0;
-    const expectedShrinkage = activeLot?.profile?.expectedShrinkage || 0.16;
-    const expectedFinalWeight = targetWeightVal * (1 - expectedShrinkage);
+    const rawShrinkage = activeLot?.profile?.expectedShrinkage || 16;
+    const shrinkageDecimal = rawShrinkage > 1 ? rawShrinkage / 100 : rawShrinkage;
+    const expectedFinalWeight = targetWeightVal * (1 - shrinkageDecimal);
+    
     setFinalWeight(expectedFinalWeight.toFixed(1));
     
     setAgtronColor(targetAgtron?.toString() || '');
