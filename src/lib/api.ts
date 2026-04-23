@@ -45,6 +45,7 @@ export const fetchMasterProfiles = async (): Promise<MasterProfile[]> => {
     roastedType: p.roasted_type,
     businessUnit: p.business_unit as 'LIDL' | 'PROPIA',
     roastStrategy: p.roast_strategy as any,
+    expectedShrinkage: p.expected_shrinkage,
     blend: p.blend || [],
     sensory: p.sensory || {fragrancia: 0, aroma: 0, sabor: 0, cuerpo: 0},
     machineProfiles: p.machine_profiles || {}
@@ -58,6 +59,7 @@ export const createMasterProfile = async (profile: MasterProfile) => {
     roasted_type: profile.roastedType,
     business_unit: profile.businessUnit,
     roast_strategy: profile.roastStrategy,
+    expected_shrinkage: profile.expectedShrinkage,
     blend: profile.blend,
     sensory: profile.sensory,
     machine_profiles: profile.machineProfiles
@@ -72,6 +74,7 @@ export const updateMasterProfile = async (profileName: string, profile: MasterPr
     roasted_type: profile.roastedType,
     business_unit: profile.businessUnit,
     roast_strategy: profile.roastStrategy,
+    expected_shrinkage: profile.expectedShrinkage,
     blend: profile.blend,
     sensory: profile.sensory,
     machine_profiles: profile.machineProfiles
