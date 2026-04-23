@@ -34,14 +34,28 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    const [viewMode, setViewMode] = useState<'PLAN_MENSUAL' | 'MANAGER' | 'OPERATOR'>('PLAN_MENSUAL');
 
    // Planificador Mensual State
-   const [demands, setDemands] = useState<DelegationDemand[]>([]);
-   const [plannedDays, setPlannedDays] = useState<DailyPlan[]>([]);
+   const [demands, setDemands] = useState<DelegationDemand[]>(() => {
+      const saved = localStorage.getItem('coffee_planner_demands');
+      return saved ? JSON.parse(saved) : [];
+   });
+   const [plannedDays, setPlannedDays] = useState<DailyPlan[]>(() => {
+      const saved = localStorage.getItem('coffee_planner_days');
+      return saved ? JSON.parse(saved) : [];
+   });
    const [newDemand, setNewDemand] = useState<Partial<DelegationDemand>>({
       delegation: 'Canarias',
       format: '1000g',
       kgRequested: 1890,
       totalPackages: 1890
    });
+
+   React.useEffect(() => {
+      localStorage.setItem('coffee_planner_demands', JSON.stringify(demands));
+   }, [demands]);
+
+   React.useEffect(() => {
+      localStorage.setItem('coffee_planner_days', JSON.stringify(plannedDays));
+   }, [plannedDays]);
 
    // Utility for format weight mapping
    const getFormatWeight = (format: string): number => {
@@ -238,6 +252,8 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       setRoastOrders([]);
       setDemands([]);
       setPlannedDays([]);
+      localStorage.removeItem('coffee_planner_demands');
+      localStorage.removeItem('coffee_planner_days');
       
       const toast = document.createElement('div');
       toast.className = 'fixed bottom-4 right-4 bg-red-500/90 text-white px-6 py-4 rounded-xl font-bold z-50 animate-bounce flex flex-col space-y-1';
@@ -676,7 +692,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                   <div className="flex justify-end p-4">
                      <button onClick={generateMonthlyPlan} className="bg-coffee-accent hover:bg-coffee-light text-white font-black uppercase tracking-[0.2em] px-10 py-5 rounded-2xl shadow-[0_0_30px_rgba(217,119,6,0.3)] transition-all flex items-center hover:scale-105 active:scale-95">
                         <Cpu className="w-6 h-6 mr-3" />
-                        Arrancar Planificador de 1600kg/día
+                        Arrancar Planificador
                      </button>
                   </div>
 
