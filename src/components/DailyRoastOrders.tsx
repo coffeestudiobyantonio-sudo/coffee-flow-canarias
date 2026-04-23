@@ -91,7 +91,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    // Manager Form State
    const [selectedProfileName, setSelectedProfileName] = useState<string>('');
    const [targetKg, setTargetKg] = useState<number>(120);
-   const [priority, setPriority] = useState<'URGENTE' | 'STOCK' | 'MUESTRA'>('STOCK');
+   const [priority, setPriority] = useState<'ALTA' | 'MEDIA' | 'BAJA' | 'URGENTE'>('MEDIA');
    const [orderCategory, setOrderCategory] = useState<OrderCategory>('MARCA_PROPIA'); // Phase 12
    // Operator Form State
    
@@ -224,7 +224,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       // Reset Form
       setSelectedProfileName('');
       setTargetKg(120);
-      setPriority('STOCK');
+      setPriority('MEDIA');
    };
    const handleDeleteOrder = async (orderId: string) => {
       const confirmDelete = window.confirm("¿Estás seguro de que deseas eliminar esta orden de producción?");
@@ -522,7 +522,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          id: parentOrderId,
          profileName: `Plan D${day.dayIndex}: ` + [...new Set(day.blocks.map((b: any) => b.profileName))].join(' & '),
          totalKg: day.totalKg,
-         priority: 'STOCK',
+         priority: 'MEDIA',
          shrinkagePct: 0.16,
          tasks: newTasks,
          status: 'PLANNED',
