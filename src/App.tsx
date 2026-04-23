@@ -119,10 +119,10 @@ export interface DailyRoastOrder {
   id: string; // ORD-XXXX
   profileName: string;
   totalKg: number;
-  priority: 'ALTA' | 'MEDIA' | 'BAJA' | 'URGENTE';
+  priority: 'URGENTE' | 'STOCK' | 'MUESTRA';
   shrinkagePct: number;
   tasks: RoastTask[];
-  status: 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'PENDING';
+  status: 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED';
   estimatedPmpCost?: number; // PMP Average Price calculated at formulation
   category: OrderCategory; // Phase 12
 }

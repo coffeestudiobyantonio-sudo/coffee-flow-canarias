@@ -91,7 +91,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    // Manager Form State
    const [selectedProfileName, setSelectedProfileName] = useState<string>('');
    const [targetKg, setTargetKg] = useState<number>(120);
-   const [priority, setPriority] = useState<'ALTA' | 'MEDIA' | 'BAJA' | 'URGENTE'>('MEDIA');
+   const [priority, setPriority] = useState<'URGENTE' | 'STOCK' | 'MUESTRA'>('STOCK');
    const [orderCategory, setOrderCategory] = useState<OrderCategory>('MARCA_PROPIA'); // Phase 12
    // Operator Form State
    
@@ -224,7 +224,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       // Reset Form
       setSelectedProfileName('');
       setTargetKg(120);
-      setPriority('MEDIA');
+      setPriority('STOCK');
    };
    const handleDeleteOrder = async (orderId: string) => {
       const confirmDelete = window.confirm("¿Estás seguro de que deseas eliminar esta orden de producción?");
@@ -520,9 +520,9 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
       const newOrder: DailyRoastOrder = {
          id: parentOrderId,
-         profileName: `Plan D${day.dayIndex}: ` + [...new Set(day.blocks.map((b: any) => b.profileName))].join(' & '),
+         profileName: day.blocks[0]?.profileName || 'MAURICE ALICANTO 250 G.',
          totalKg: day.totalKg,
-         priority: 'MEDIA',
+         priority: 'STOCK',
          shrinkagePct: 0.16,
          tasks: newTasks,
          status: 'PLANNED',
@@ -948,7 +948,12 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                              )}
                                           </span>
                                           <div className="flex items-center space-x-3">
-                                             <h3 className="text-lg font-black text-white">{order.profileName} <span className="text-coffee-light font-mono ml-2 border-l border-white/20 pl-2">{order.totalKg}kg previstos</span></h3>
+                                             <h3 className="text-lg font-black text-white">
+                                                {order.id.startsWith('PLAN-') && order.tasks.length > 0 
+                                                   ? `Plan D${order.id.split('-').pop()?.replace('D','')}: ` + [...new Set(order.tasks.map(t => t.masterProfile?.name).filter(Boolean))].join(' & ') 
+                                                   : order.profileName} 
+                                                <span className="text-coffee-light font-mono ml-2 border-l border-white/20 pl-2">{order.totalKg}kg previstos</span>
+                                             </h3>
                                              {order.status === 'PLANNED' && viewMode === 'MANAGER' && (
                                                 <button 
                                                    onClick={() => handleDeleteOrder(order?.id)}
