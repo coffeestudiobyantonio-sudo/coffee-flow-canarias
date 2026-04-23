@@ -223,29 +223,33 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   };
 
   const handleFinalizeBatch = async () => {
-    const weight = parseFloat(finalWeight);
-    
-    if (targetSiloId === 0) {
-       alert("Por favor, selecciona un Silo de destino para el lote tostado.");
-       return;
-    }
+    try {
+      const weight = parseFloat(finalWeight);
+      
+      if (targetSiloId === 0) {
+         alert("Por favor, selecciona un Silo de destino para el lote tostado.");
+         return;
+      }
 
-    // Verify Target Silo compatibility
-    const pickedSilo = silos.find(s => s?.id === targetSiloId);
-    if (!pickedSilo) return;
-    if (pickedSilo.currentKg > 0 && pickedSilo.profileName && activeLot?.profile?.name && pickedSilo.profileName !== activeLot?.profile?.name) {
-       alert("Alerta: El silo seleccionado contiene una receta diferente. Vacía el silo o selecciona otro.");
-       return;
-    }
-    if (pickedSilo.currentKg + weight > pickedSilo.maxKg) {
-       alert("Alerta: El silo se desbordará. Selecciona otro silo.");
-       return;
-    }
+      // Verify Target Silo compatibility
+      const pickedSilo = silos.find(s => s?.id === targetSiloId);
+      if (!pickedSilo) {
+         alert(`DEBUG: No se encontró el silo con ID ${targetSiloId} en la lista de silos.`);
+         return;
+      }
+      if (pickedSilo.currentKg > 0 && pickedSilo.profileName && activeLot?.profile?.name && pickedSilo.profileName !== activeLot?.profile?.name) {
+         alert("Alerta: El silo seleccionado contiene una receta diferente. Vacía el silo o selecciona otro.");
+         return;
+      }
+      if (pickedSilo.currentKg + weight > pickedSilo.maxKg) {
+         alert("Alerta: El silo se desbordará. Selecciona otro silo.");
+         return;
+      }
 
-    // Calculate BBP Cooldown based on machine inertia
-    const machine = ROASTING_MACHINES.find(m => m?.id === activeLot?.machineId) || ROASTING_MACHINES[1];
-    const cooldownSeconds = machine.bbpCooldownBase + (weight * machine.bbpCoefficient);
-    setBbpTimeLeft(Math.round(cooldownSeconds));
+      // Calculate BBP Cooldown based on machine inertia
+      const machine = ROASTING_MACHINES.find(m => m?.id === activeLot?.machineId) || ROASTING_MACHINES[0];
+      const cooldownSeconds = machine ? (machine.bbpCooldownBase + (weight * machine.bbpCoefficient)) : 180;
+      setBbpTimeLeft(Math.round(cooldownSeconds));
 
     // Register into the Silo
     const newSiloKg = pickedSilo.currentKg + weight;
@@ -277,6 +281,9 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
        setShowFinalReport(false);
        setRoastCount(prev => prev + 1);
        if (roastCount + 1 >= 5) setShowMaintenance(true);
+    }
+    } catch (err: any) {
+      alert(`DEBUG CRASH: ${err.message}`);
     }
   };
 
@@ -313,7 +320,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   const restingTimeElapsed = Math.floor((Date.now() - lastRoastTime) / 1000);
   const restingTimeRemaining = Math.max(0, 1200 - restingTimeElapsed);
 
-  const currentMachine = ROASTING_MACHINES.find(m => m?.id === activeLot?.machineId) || ROASTING_MACHINES[1];
+  const currentMachine = ROASTING_MACHINES.find(m => m?.id === activeLot?.machineId) || ROASTING_MACHINES[0];
   const machineSpecificProfile = activeLot?.profile?.machineProfiles?.[currentMachine?.id];
   const ghostCurve = machineSpecificProfile?.ghostCurve || [];
   const targetAgtron = machineSpecificProfile?.targetAgtron || activeLot?.profile?.agtron || 50;
