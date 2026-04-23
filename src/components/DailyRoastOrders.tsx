@@ -130,7 +130,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          const originReqGreen = baseRequiredGreenKg * (b.percentage / 100);
          const originSackWeight = Number(b.sackWeight || (b as any).sack_weight || 60);
          const originBatchSize = originSackWeight * 2;
-         const batchesNeeded = Math.max(1, Math.round(originReqGreen / originBatchSize));
+         const batchesNeeded = Math.max(1, Math.ceil(originReqGreen / originBatchSize));
          actualTotalGreenRoasting += batchesNeeded * originBatchSize;
       });
    }
@@ -396,7 +396,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
             const batchSizeGreen = sackWeight * 2;
             const batchSizeRoasted = batchSizeGreen * (1 - shrinkage);
             
-            const batchesNeeded = Math.max(1, Math.round(targetRoastedForThisOrigin / batchSizeRoasted));
+            const batchesNeeded = Math.max(1, Math.ceil(targetRoastedForThisOrigin / batchSizeRoasted));
             
             for (let i = 0; i < batchesNeeded; i++) {
                itemBatches.push({
@@ -520,7 +520,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
       const newOrder: DailyRoastOrder = {
          id: parentOrderId,
-         profileName: day.blocks[0]?.profileName || 'MAURICE ALICANTO 250 G.',
+         profileName: `Plan D${day.dayIndex}: ` + [...new Set(day.blocks.map((b: any) => b.profileName))].join(' & '),
          totalKg: day.totalKg,
          priority: 'STOCK',
          shrinkagePct: 0.16,
@@ -948,7 +948,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                              )}
                                           </span>
                                           <div className="flex items-center space-x-3">
-                                             <h3 className="text-lg font-black text-white">{order.profileName} <span className="text-coffee-light font-mono">{order.totalKg}kg</span></h3>
+                                             <h3 className="text-lg font-black text-white">{order.profileName} <span className="text-coffee-light font-mono ml-2 border-l border-white/20 pl-2">{order.totalKg}kg previstos</span></h3>
                                              {order.status === 'PLANNED' && viewMode === 'MANAGER' && (
                                                 <button 
                                                    onClick={() => handleDeleteOrder(order?.id)}
@@ -998,7 +998,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                                          </div>
                                                          <div className="flex flex-col">
                                                             <span className="font-bold text-gray-300 truncate">
-                                                               {task.type === 'ROAST' ? `Tostada ${task.batchIndex} de ${task.totalBatches}` : task.origins.join(' + ')}
+                                                               {task.type === 'ROAST' ? `Tostada ${task.batchIndex}/${task.totalBatches} (${order.profileName})` : task.origins.join(' + ')}
                                                             </span>
                                                             {task.type === 'ROAST' && (
                                                                <span className={`text-[10px] font-bold tracking-widest uppercase mt-0.5 ${matchingSilos.length > 0 ? 'text-blue-400' : 'text-orange-500 animate-pulse'}`}>
