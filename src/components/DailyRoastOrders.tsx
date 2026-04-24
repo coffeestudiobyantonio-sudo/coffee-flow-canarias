@@ -3,6 +3,7 @@ import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '.
 import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, AlertTriangle, Lock, Trash2, Flame } from 'lucide-react';
 import { ROASTING_MACHINES } from '../App';
 import { createDailyOrder, deleteDailyOrder, purgeAllProductionData } from '../lib/api';
+import PackagingOverlay from './PackagingOverlay';
 
 interface DailyRoastOrdersProps {
    masterProfiles: MasterProfile[];
@@ -33,6 +34,9 @@ interface DailyPlan {
 const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roastOrders, setRoastOrders, silos, onLaunchManualRoast }) => {
    const [viewMode, setViewMode] = useState<'PLAN_MENSUAL' | 'MANAGER' | 'OPERATOR'>('PLAN_MENSUAL');
 
+   // Phase 20: Packaging Core State
+   const [activePackagingTask, setActivePackagingTask] = useState<any>(null);
+      
    // Planificador Mensual State
    const [demands, setDemands] = useState<DelegationDemand[]>(() => {
       const saved = localStorage.getItem('coffee_planner_demands');
@@ -1116,13 +1120,12 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
                                   <button
                                      onClick={() => {
-                                        alert("Confirmando cierre de Gama. Envíando orden a Envasadora...");
-                                        onLaunchManualRoast(task);
+                                        setActivePackagingTask(task);
                                      }}
                                      className="w-full py-4 rounded-xl font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center space-x-3 bg-green-600/20 border border-green-500 hover:bg-green-600 text-white shadow-lg active:scale-95"
                                   >
                                      <CheckCircle className="w-5 h-5" />
-                                     <span>CONFIRMAR CIERRE</span>
+                                     <span>CONFIRMAR EN REPOSO Y ENVASAR</span>
                                   </button>
                                </div>
                             );
@@ -1207,6 +1210,19 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                </div>
             )}
          </div>
+
+         {/* Packaging Overlay Injection */}
+         {activePackagingTask && (
+            <PackagingOverlay 
+               task={activePackagingTask}
+               onClose={() => setActivePackagingTask(null)}
+               silos={silos}
+               roastOrders={roastOrders}
+               onSuccess={() => {
+                  setRoastOrders(prev => prev.map(o => o.id === activePackagingTask.parentOrderId ? { ...o, status: 'COMPLETED' } : o));
+               }}
+            />
+         )}
       </div>
    );
 };
