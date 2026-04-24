@@ -59,14 +59,14 @@ export const PackagingOverlay: React.FC<PackagingOverlayProps> = ({ task, onClos
              }
          }
 
-         // Mark order as COMPLETED
-         await updateTaskStatus(task.id, 'COMPLETED');
+         // Send to Quality Lab instead of closing
+         await updateTaskStatus(task.id, 'ROASTED');
          for (const originTask of originTasks) {
-             await updateTaskStatus(originTask.id, 'COMPLETED');
+             await updateTaskStatus(originTask.id, 'ROASTED'); // Allows origins to be tested if needed
          }
-         await updateOrderStatus(task.parentOrderId, 'COMPLETED');
+         await updateOrderStatus(task.parentOrderId, 'IN_PROGRESS');
 
-         alert("Envasado Confirmado: Silos actualizados y Orden cerrada.");
+         alert("Envasado Confirmado: Silos actualizados y Orden enviada a Laboratorio de Calidad.");
          onSuccess();
          onClose();
 

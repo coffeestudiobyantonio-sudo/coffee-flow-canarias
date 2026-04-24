@@ -1221,7 +1221,15 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                setSilos={setSilos}
                roastOrders={roastOrders}
                onSuccess={() => {
-                  setRoastOrders(prev => prev.map(o => o.id === activePackagingTask.parentOrderId ? { ...o, status: 'COMPLETED' } : o));
+                  setRoastOrders(prev => prev.map(o => {
+                     if (o.id === activePackagingTask.parentOrderId) {
+                        return { 
+                           ...o, 
+                           tasks: o.tasks.map(t => ({...t, status: 'ROASTED'})) 
+                        };
+                     }
+                     return o;
+                  }));
                }}
             />
          )}
