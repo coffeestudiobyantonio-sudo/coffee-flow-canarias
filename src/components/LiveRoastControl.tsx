@@ -375,8 +375,16 @@ const LiveRoastControl: React.FC<LiveRoastControlProps> = ({ activeLot, onRoastC
                   </div>
                </div>
              </div>
-             <button onClick={() => onRoastComplete && onRoastComplete({finalTemp: Number(milestones['Drop'].temp), devTime: Number(milestones['Drop'].timeSec), dtr, merma: typeof finalWeight === 'number' ? ((initialWeight - finalWeight) / initialWeight) * 100 : null})} className="w-full py-4 rounded-xl font-black text-sm tracking-widest uppercase bg-purple-600 hover:bg-purple-500 text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center">
-               <TestTube2 className="w-5 h-5 mr-3" /> Enviar Laboratorio de Calidad
+             <button onClick={() => onRoastComplete && onRoastComplete({
+               finalTemp: Number(milestones['Drop'].temp), 
+               devTime: Number(milestones['Drop'].timeSec), 
+               chargeTemp: Number(milestones['Charge'].temp),
+               turnaroundTemp: Number(milestones['Turning Point'].temp),
+               turnaroundTime: formatTime(Number(milestones['Turning Point'].timeSec)),
+               firstCrackTemp: Number(milestones['1st Crack'].temp),
+               firstCrackTime: formatTime(Number(milestones['1st Crack'].timeSec))
+             })} className="w-full py-4 rounded-xl font-black text-sm tracking-widest uppercase bg-purple-600 hover:bg-purple-500 text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center">
+               <TestTube2 className="w-5 h-5 mr-3" /> Terminar y Validar Lote
              </button>
            </div>
         )}

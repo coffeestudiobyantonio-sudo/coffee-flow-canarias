@@ -82,7 +82,16 @@ export interface ActiveLot {
   status: LotStatus;
   machineId?: string;
   batchWeight?: number; 
-  roastData?: { finalTemp: number, finalRor: number, devTime: number };
+  roastData?: { 
+    finalTemp: number, 
+    finalRor: number, 
+    devTime: number,
+    chargeTemp?: number,
+    turnaroundTemp?: number,
+    turnaroundTime?: string,
+    firstCrackTemp?: number,
+    firstCrackTime?: string
+  };
   batchIndex?: number;    
   totalBatches?: number;  
   orderTotalKg?: number;
@@ -115,6 +124,17 @@ export interface RoastTask {
   totalBatches?: number;
   parentOrderTotalKg?: number;
   category?: OrderCategory; // Phase 12
+  roastedAt?: number;
+  roastData?: {
+    finalTemp: number,
+    finalRor: number,
+    devTime: number,
+    chargeTemp?: number,
+    turnaroundTemp?: number,
+    turnaroundTime?: string,
+    firstCrackTemp?: number,
+    firstCrackTime?: string
+  };
 }
 
 export interface DailyRoastOrder {
@@ -189,14 +209,36 @@ function App() {
     setActiveTab('manual_roast');
   };
 
-  const handleBatchComplete = async (actualWeight: number) => {
+  const handleBatchComplete = async (metrics: { 
+     actualWeight: number, 
+     finalTemp?: number, 
+     finalRor?: number, 
+     devTime?: number,
+     chargeTemp?: number,
+     turnaroundTemp?: number,
+     turnaroundTime?: string,
+     firstCrackTemp?: number,
+     firstCrackTime?: string
+  }) => {
+    const { actualWeight } = metrics;
+
     if (activeLot && activeLot.parentOrderId) {
       const roastedTimestamp = Date.now();
       
       // Phase 19: Push DROP event to Supabase Cloud
       const isSuccess = await updateTaskStatus(activeLot?.id, 'ROASTED', { 
         actualWeightKg: actualWeight, 
-        roastedAt: roastedTimestamp 
+        roastedAt: roastedTimestamp,
+        roastData: {
+            finalTemp: metrics.finalTemp || 0,
+            finalRor: metrics.finalRor || 0,
+            devTime: metrics.devTime || 0,
+            chargeTemp: metrics.chargeTemp,
+            turnaroundTemp: metrics.turnaroundTemp,
+           turnaroundTime: metrics.turnaroundTime,
+           firstCrackTemp: metrics.firstCrackTemp,
+           firstCrackTime: metrics.firstCrackTime
+        }
       });
 
       if (!isSuccess) {
@@ -233,7 +275,22 @@ function App() {
       setRoastOrders(prev => prev.map(order => {
         if (order?.id === activeLot.parentOrderId) {
           const updatedTasks = order.tasks.map(t => 
-            t.id === activeLot?.id ? { ...t, status: 'ROASTED' as const, actualWeightKg: actualWeight, roastedAt: roastedTimestamp } : t
+            t.id === activeLot?.id ? { 
+              ...t, 
+              status: 'ROASTED' as const, 
+              actualWeightKg: actualWeight, 
+              roastedAt: roastedTimestamp,
+              roastData: {
+                 finalTemp: metrics.finalTemp || 0,
+                 finalRor: metrics.finalRor || 0,
+                 devTime: metrics.devTime || 0,
+                 chargeTemp: metrics.chargeTemp,
+                 turnaroundTemp: metrics.turnaroundTemp,
+                 turnaroundTime: metrics.turnaroundTime,
+                 firstCrackTemp: metrics.firstCrackTemp,
+                 firstCrackTime: metrics.firstCrackTime
+              }
+            } : t
           );
           return { ...order, tasks: updatedTasks };
         }
@@ -398,7 +455,7 @@ function App() {
               />}
             {activeTab === 'silos' && <SiloManager silos={silos} setSilos={setSilos} />}
             {activeTab === 'mgmt' && <ManagementDashboard />}
-            {activeTab === 'roast' && <LiveRoastControl activeLot={activeLot} onRoastComplete={() => handleBatchComplete(activeLot?.batchWeight || 0)} />}
+            {activeTab === 'roast' && <LiveRoastControl activeLot={activeLot} onRoastComplete={(metrics) => handleBatchComplete({ ...metrics, actualWeight: activeLot?.batchWeight || 0 })} />}
             {activeTab === 'manual_roast' && <ManualRoastControl activeLot={activeLot} onBatchComplete={handleBatchComplete} allOrders={roastOrders} setAllOrders={setRoastOrders} silos={silos} setSilos={setSilos} />}
             {activeTab === 'lab' && <QualityLab activeLot={activeLot} roastOrders={roastOrders} onQualityValidated={handleQualityValidated} />}
             {activeTab === 'traceability' && <TraceabilityDetective activeLot={activeLot} />}

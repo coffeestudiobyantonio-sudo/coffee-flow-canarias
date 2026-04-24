@@ -7,13 +7,13 @@ import { updateTaskStatus, updateOrderStatus, updateSilo } from '../lib/api';
 interface RoastDataPoint {
   time: number; // seconds
   temp: number;
-  type?: 'CHARGE' | 'TP' | 'YELLOW' | 'FC_START' | 'FC_END' | 'DROP' | 'EVENT';
+  type?: 'CHARGE' | 'TP' | 'YELLOW' | 'FC_START' | 'FC_END' | 'DROP' | 'EVENT' | 'TURNAROUND';
   note?: string;
 }
 
 interface ManualRoastControlProps {
   activeLot: any;
-  onBatchComplete: (actualWeight: number) => void;
+  onBatchComplete: (metrics: any) => void;
   allOrders: any[];
   setAllOrders: React.Dispatch<React.SetStateAction<any[]>>;
   silos: any[];
@@ -58,6 +58,12 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isRunning]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // BBP Countdown Logic
   useEffect(() => {
@@ -285,11 +291,25 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
        setShowFinalReport(false);
        setShowBlendingOverlay(true);
     } else {
-       onBatchComplete(weight);
-       setShowFinalReport(false);
-       setRoastCount(prev => prev + 1);
-       if (roastCount + 1 >= 5) setShowMaintenance(true);
-    }
+        const turnaround = dataPoints.find(p => p.type === 'TURNAROUND');
+        const fcStart = dataPoints.find(p => p.type === 'FC_START');
+        const charge = dataPoints.find(p => p.type === 'CHARGE');
+
+        onBatchComplete({
+           actualWeight: weight,
+           finalTemp: parseFloat(dataPoints[dataPoints.length - 1].temp.toString()),
+           finalRor: currentRoR,
+           devTime: parseInt(ratios.development),
+           chargeTemp: charge?.temp,
+           turnaroundTemp: turnaround?.temp,
+           turnaroundTime: turnaround ? formatTime(turnaround.time) : undefined,
+           firstCrackTemp: fcStart?.temp,
+           firstCrackTime: fcStart ? formatTime(fcStart.time) : undefined
+        });
+        setShowFinalReport(false);
+        setRoastCount(prev => prev + 1);
+        if (roastCount + 1 >= 5) setShowMaintenance(true);
+     }
     } catch (err: any) {
       alert(`DEBUG CRASH: ${err.message}`);
     }

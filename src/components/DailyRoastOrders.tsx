@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
-import { Database, Settings, ClipboardList, Cpu, QrCode, Plus, Package, Target, CheckCircle, Zap, AlertTriangle, Lock, Trash2, Flame } from 'lucide-react';
+import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, Zap, Lock } from 'lucide-react';
+import { generateDailyProductionReport } from '../lib/reports';
 import { ROASTING_MACHINES } from '../App';
 import { createDailyOrder, deleteDailyOrder, purgeAllProductionData } from '../lib/api';
 import PackagingOverlay from './PackagingOverlay';
@@ -924,9 +925,19 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
                      {/* Right Col: Active Queue list */}
                      <div className="lg:col-span-12 xl:col-span-7 flex flex-col space-y-6">
-                        <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center border-b border-dashboard-border pb-3">
-                           <Target className="w-5 h-5 mr-3 text-gray-500" /> Planificación Activa ({roastOrders.length})
-                        </h2>
+                        <div className="flex justify-between items-center border-b border-dashboard-border pb-3">
+                           <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center">
+                              <Target className="w-5 h-5 mr-3 text-gray-500" /> Planificación Activa ({roastOrders.length})
+                           </h2>
+                           {roastOrders.length > 0 && (
+                              <button 
+                                onClick={() => generateDailyProductionReport(roastOrders)}
+                                className="bg-red-600/10 border border-red-500/30 text-red-500 px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-widest flex items-center hover:bg-red-600 hover:text-white transition-all shadow-md group"
+                              >
+                                <FileText className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" /> Exportar Informe PDF
+                              </button>
+                           )}
+                        </div>
 
                         {roastOrders.length === 0 ? (
                            <div className="flex-1 border-2 border-dashed border-dashboard-border rounded-3xl flex flex-col items-center justify-center text-gray-500 p-10 min-h-[300px]">
