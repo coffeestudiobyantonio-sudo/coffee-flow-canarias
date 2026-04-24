@@ -103,7 +103,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    const thermalSortEnabled = false;
 
    const pendingTasks = roastOrders
-      .flatMap(o => o.tasks.map(t => ({ ...t, parentOrderPriority: o.priority, parentProfile: o.profileName, parentBusinessUnit: (o.tasks[0]?.masterProfile as any)?.businessUnit })))
+      .flatMap(o => o.tasks.map(t => ({ ...t, parentOrderPriority: o.priority, parentProfile: t.masterProfile?.name || o.profileName, parentBusinessUnit: (t.masterProfile as any)?.businessUnit || (o.tasks[0]?.masterProfile as any)?.businessUnit })))
       .filter(t => t.status === 'PENDING')
       .sort((a, b) => {
          if (thermalSortEnabled) {
