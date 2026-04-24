@@ -477,49 +477,54 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       // Sort siloAssignments by origin to ensure correlative roasting
       const sortedAssignments = [...day.siloAssignments].sort((a, b) => a.origin.localeCompare(b.origin));
 
-      // 1. Generate ROAST tasks from Sorted Silo Assignments
-      sortedAssignments.forEach((silo) => {
-         silo.batches.forEach((batchInfo, bIdx) => {
-            const profile = masterProfiles.find(p => p?.name === batchInfo.profileName);
-            if (!profile) return;
-            const blendComponent = profile.blend.find(b => b.origin === silo.origin);
-            const sackWeight = Number(blendComponent?.sackWeight || (blendComponent as any)?.sack_weight || 60);
-            const batchSizeGreen = sackWeight * 2;
+        let globalTaskCounter = 1;
+        const totalTasksInSession = sortedAssignments.reduce((acc, s) => acc + s.batches.length, 0) + day.blocks.length;
 
-            newTasks.push({
-               id: `${parentOrderId}-S${silo.siloId}-B${bIdx + 1}`,
-               parentOrderId,
-               type: 'ROAST',
-               masterProfile: profile,
-               origins: [silo.origin],
-               targetWeightKg: batchSizeGreen,
-               status: 'PENDING',
-               category: 'MARCA_PROPIA',
-               batchIndex: bIdx + 1,
-               totalBatches: silo.batches.length,
-               parentOrderTotalKg: day.totalKg,
-               assignedSilos: [silo.siloId]
-            });
-         });
-      });
+        // 1. Generate ROAST tasks from Sorted Silo Assignments
+        sortedAssignments.forEach((silo) => {
+           silo.batches.forEach((batchInfo, bIdx) => {
+              const profile = masterProfiles.find(p => p?.name === batchInfo.profileName);
+              if (!profile) return;
+              const blendComponent = profile.blend.find(b => b.origin === silo.origin);
+              const sackWeight = Number(blendComponent?.sackWeight || (blendComponent as any)?.sack_weight || 60);
+              const batchSizeGreen = sackWeight * 2;
 
-      // 2. Generate BLEND tasks for each profile block in the day
-      day.blocks.forEach((block, blIdx) => {
-         const profile = masterProfiles.find(p => p?.name === block.profileName);
-         if (!profile) return;
+              newTasks.push({
+                 id: `${parentOrderId}-S${silo.siloId}-B${bIdx + 1}`,
+                 parentOrderId,
+                 type: 'ROAST',
+                 masterProfile: profile,
+                 origins: [silo.origin],
+                 targetWeightKg: batchSizeGreen,
+                 status: 'PENDING',
+                 category: 'MARCA_PROPIA',
+                 batchIndex: globalTaskCounter++,
+                 totalBatches: totalTasksInSession,
+                 parentOrderTotalKg: day.totalKg,
+                 assignedSilos: [silo.siloId]
+              });
+           });
+        });
 
-         newTasks.push({
-            id: `${parentOrderId}-BLEND-${blIdx + 1}`,
-            parentOrderId,
-            type: 'BLEND',
-            masterProfile: profile,
-            origins: profile.blend.map(b => b.origin),
-            targetWeightKg: block.targetKg,
-            status: 'PENDING',
-            category: 'MARCA_PROPIA',
-            assignedSilos: day.targetSilos 
-         });
-      });
+        // 2. Generate BLEND tasks for each profile block in the day
+        day.blocks.forEach((block, blIdx) => {
+           const profile = masterProfiles.find(p => p?.name === block.profileName);
+           if (!profile) return;
+
+           newTasks.push({
+              id: `${parentOrderId}-BLEND-${blIdx + 1}`,
+              parentOrderId,
+              type: 'BLEND',
+              masterProfile: profile,
+              origins: profile.blend.map(b => b.origin),
+              targetWeightKg: block.targetKg,
+              status: 'PENDING',
+              category: 'MARCA_PROPIA',
+              batchIndex: globalTaskCounter++,
+              totalBatches: totalTasksInSession,
+              assignedSilos: day.targetSilos 
+           });
+        });
 
       if (newTasks.length === 0) return;
 
@@ -1138,7 +1143,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                
                                <div className="flex justify-between items-start mb-6">
                                   <div className="bg-[#14161a] px-3 py-1 rounded-lg border border-dashboard-border">
-                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">#{idx + 1} Tarea</span>
+                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">#{task.batchIndex || (idx + 1)} Tarea</span>
                                   </div>
                                   <div className={`px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest ${task.parentOrderPriority === 'URGENTE' ? 'bg-red-500/10 border-red-500/30 text-red-500 animate-pulse' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'}`}>
                                      {task.parentOrderPriority}
