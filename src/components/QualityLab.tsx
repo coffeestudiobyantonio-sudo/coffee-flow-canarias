@@ -21,7 +21,7 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQuali
        parentCategory: o.category,
        parentBusinessUnit: (t.masterProfile as unknown as MasterProfile)?.businessUnit || 'PROPIA'
      }))
-  ).filter(t => t.status === 'ROASTED');
+  ).filter(t => t.status === 'ROASTED' && t.type === 'BLEND');
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(activeLot?.id || null);
 
@@ -147,7 +147,7 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQuali
           <div className="mb-2">
             <h3 className="text-sm font-bold text-gray-400 uppercase flex items-center mb-3">
               <History className="w-4 h-4 mr-2" />
-              Lotes Pendientes de QA
+              Gamas Pendientes de Certificación
             </h3>
             {pendingValidationTasks.length === 0 ? (
                <div className="bg-[#14161a] border border-dashed border-dashboard-border rounded-xl p-4 text-center">
@@ -176,7 +176,7 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQuali
             <div>
               <span className="text-xs text-coffee-accent font-black tracking-widest uppercase mb-1 flex items-center">
                 <TestTube2 className="w-4 h-4 mr-2" />
-                V2.1 - Lab de Calidad
+                V2.1 - Certificación de Gama
               </span>
               <input 
                 type="text" 
@@ -395,7 +395,7 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQuali
                  <>
                    <Target className="w-10 h-10 text-gray-400 mb-2" />
                    <div className="text-center font-bold text-gray-400">ESPERANDO CATA</div>
-                   <div className="text-center text-xs text-gray-500/70">Selecciona un Lote de la Cola</div>
+                   <div className="text-center text-xs text-gray-500/70">Selecciona una Gama de la Cola</div>
                  </>
                )}
             </div>
