@@ -34,10 +34,15 @@ export const PackagingOverlay: React.FC<PackagingOverlayProps> = ({ task, onClos
       setProcessing(true);
 
       try {
-         // Find assigned Silos and their required ratio for this blend
+         // Find assigned Silos and their required ratio for this specific recipe
          // Each ROAST task assigned to an actual silo holds its proportionate green weight.
          const parentOrder = roastOrders.find(o => o.id === task.parentOrderId);
-         const originTasks = parentOrder?.tasks.filter((t: any) => t.type === 'ROAST') || [];
+         
+         // Fix: Only count ROAST tasks that belong to the SAME recipe as the current BLEND task
+         const originTasks = parentOrder?.tasks.filter((t: any) => 
+            t.type === 'ROAST' && 
+            (t.masterProfile?.name === task.masterProfile?.name || t.parentProfile === task.parentProfile)
+         ) || [];
          
          const totalGreenRequired = originTasks.reduce((sum: number, t: any) => sum + t.targetWeightKg, 0);
 
