@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Database, AlertCircle, ArrowDownToLine, Trash2, ArrowUpFromLine } from 'lucide-react';
+import { Database, AlertCircle, ArrowDownToLine, Trash2, ArrowUpFromLine, Settings } from 'lucide-react';
 import type { Silo } from '../App';
 import { updateSilo } from '../lib/api';
 
@@ -13,6 +13,7 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos }) => {
   const [operationType, setOperationType] = useState<'FILL' | 'EMPTY' | 'ADJUST'>('FILL');
   const [adjustKg, setAdjustKg] = useState<number>(0);
   const [profileNameInput, setProfileNameInput] = useState<string>('');
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean>(false);
 
   const targetSilo = silos.find(s => s.id === selectedSiloId);
 
@@ -128,36 +129,44 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos }) => {
                 <span className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Ocupación Batería</span>
                 <span className="text-xl font-bold text-white font-mono">{((globalCurrent/globalCapacity)*100 || 0).toFixed(1)}% <span className="text-sm text-gray-500">[{globalCurrent}/{globalCapacity}kg]</span></span>
               </div>
+              <button 
+                 onClick={() => setIsMaintenanceMode(!isMaintenanceMode)}
+                 className={`px-4 py-3 rounded-2xl border text-xs font-black uppercase tracking-widest transition-all shadow-lg flex items-center ${isMaintenanceMode ? 'bg-orange-600/20 text-orange-400 border-orange-500 hover:bg-orange-600/30' : 'bg-[#14161a] text-gray-500 border-dashboard-border hover:text-white'}`}
+              >
+                 <Settings className="w-4 h-4 mr-2" />
+                 {isMaintenanceMode ? 'Cerrar Mantenimiento' : 'Modo Mantenimiento'}
+              </button>
            </div>
         </div>
       </div>
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 px-8 pb-8 overflow-y-auto">
         
-        {/* Left Column: UI de Asignación / Ajuste */}
-        <div className="lg:col-span-4 space-y-6">
-           <div className="flex bg-[#14161a] p-1 rounded-xl mb-2 border border-dashboard-border">
-             <button 
-               onClick={() => setOperationType('FILL')}
-               className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${operationType === 'FILL' ? 'bg-[#1e222b] text-green-400 shadow border border-green-500/30' : 'text-gray-500 hover:text-gray-300'}`}
-             >
-               Cargar
-             </button>
-             <button 
-               onClick={() => setOperationType('EMPTY')}
-               className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${operationType === 'EMPTY' ? 'bg-[#1e222b] text-orange-400 shadow border border-orange-500/30' : 'text-gray-500 hover:text-gray-300'}`}
-             >
-               Descargar
-             </button>
-             <button 
-               onClick={() => setOperationType('ADJUST')}
-               className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${operationType === 'ADJUST' ? 'bg-[#1e222b] text-red-500 shadow border border-red-500/30' : 'text-gray-500 hover:text-gray-300'}`}
-             >
-               Calibrar
-             </button>
-           </div>
+        {/* Left Column: UI de Asignación / Ajuste (Only visible in Maintenance) */}
+        {isMaintenanceMode && (
+          <div className="lg:col-span-4 space-y-6">
+             <div className="flex bg-[#14161a] p-1 rounded-xl mb-2 border border-dashboard-border">
+               <button 
+                 onClick={() => setOperationType('FILL')}
+                 className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${operationType === 'FILL' ? 'bg-[#1e222b] text-green-400 shadow border border-green-500/30' : 'text-gray-500 hover:text-gray-300'}`}
+               >
+                 Cargar
+               </button>
+               <button 
+                 onClick={() => setOperationType('EMPTY')}
+                 className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${operationType === 'EMPTY' ? 'bg-[#1e222b] text-orange-400 shadow border border-orange-500/30' : 'text-gray-500 hover:text-gray-300'}`}
+               >
+                 Descargar
+               </button>
+               <button 
+                 onClick={() => setOperationType('ADJUST')}
+                 className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${operationType === 'ADJUST' ? 'bg-[#1e222b] text-red-500 shadow border border-red-500/30' : 'text-gray-500 hover:text-gray-300'}`}
+               >
+                 Calibrar
+               </button>
+             </div>
 
-          <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+            <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-8 shadow-2xl relative overflow-hidden">
                <h2 className="text-xl font-bold mb-6 text-white flex items-center uppercase tracking-widest relative z-10 border-b border-dashboard-border pb-4">
                  {operationType === 'FILL' && <ArrowDownToLine className="w-6 h-6 mr-3 text-green-400" />}
                  {operationType === 'EMPTY' && <ArrowUpFromLine className="w-6 h-6 mr-3 text-orange-400" />}
@@ -229,9 +238,10 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos }) => {
                )}
           </div>
         </div>
+        )}
 
         {/* Right Column: Matriz de Silos */}
-        <div className="lg:col-span-8 flex flex-col min-h-0 bg-dashboard-panel border border-dashboard-border rounded-3xl overflow-hidden shadow-2xl">
+        <div className={`${isMaintenanceMode ? 'lg:col-span-8' : 'lg:col-span-12'} transition-all duration-500 flex flex-col min-h-0 bg-dashboard-panel border border-dashboard-border rounded-3xl overflow-hidden shadow-2xl`}>
           <div className="p-6 border-b border-dashboard-border bg-[#14161a] flex justify-between items-center">
             <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
               <Database className="w-4 h-4 mr-2" /> Batería de Almacenamiento Tostado
