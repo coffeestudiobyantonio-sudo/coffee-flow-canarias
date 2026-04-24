@@ -49,10 +49,14 @@ export const PackagingOverlay: React.FC<PackagingOverlayProps> = ({ task, onClos
          // Deduct proportional Roasted Kg from physical Silos
          for (const rawSId of (task.assignedSilos || [])) {
              const sId = Number(rawSId);
-             const siloRoastTask = originTasks.find((t: any) => t.assignedSilos?.some((tid: any) => Number(tid) === sId));
              
-             if (siloRoastTask) {
-                 const proportion = totalGreenRequired > 0 ? (siloRoastTask.targetWeightKg / totalGreenRequired) : 0;
+             // Aggregate all ROAST batches that were sent to this specific silo
+             const siloWeightSum = originTasks
+                 .filter((t: any) => t.assignedSilos?.some((tid: any) => Number(tid) === sId))
+                 .reduce((sum: number, t: any) => sum + t.targetWeightKg, 0);
+             
+             if (siloWeightSum > 0) {
+                 const proportion = totalGreenRequired > 0 ? (siloWeightSum / totalGreenRequired) : 0;
                  const expectedRoastedPull = customTotalKg * proportion;
                  
                  const physicalSilo = silos.find(s => Number(s?.id) === sId);
