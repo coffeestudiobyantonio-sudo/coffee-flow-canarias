@@ -42,18 +42,20 @@ export const PackagingOverlay: React.FC<PackagingOverlayProps> = ({ task, onClos
          const totalGreenRequired = originTasks.reduce((sum: number, t: any) => sum + t.targetWeightKg, 0);
 
          // Deduct proportional Roasted Kg from physical Silos
-         for (const sId of task.assignedSilos) {
-             const siloRoastTask = originTasks.find((t: any) => t.assignedSilos?.includes(sId));
+         for (const rawSId of (task.assignedSilos || [])) {
+             const sId = Number(rawSId);
+             const siloRoastTask = originTasks.find((t: any) => t.assignedSilos?.some((tid: any) => Number(tid) === sId));
+             
              if (siloRoastTask) {
-                 const proportion = siloRoastTask.targetWeightKg / totalGreenRequired;
+                 const proportion = totalGreenRequired > 0 ? (siloRoastTask.targetWeightKg / totalGreenRequired) : 0;
                  const expectedRoastedPull = customTotalKg * proportion;
                  
-                 const physicalSilo = silos.find(s => s?.id === sId);
+                 const physicalSilo = silos.find(s => Number(s?.id) === sId);
                  if (physicalSilo) {
                     const nextKg = Math.max(0, physicalSilo.currentKg - expectedRoastedPull);
                     await updateSilo(sId, { currentKg: nextKg });
                     if (setSilos) {
-                       setSilos((prev: any) => prev.map((s: any) => s?.id === sId ? { ...s, currentKg: nextKg } : s));
+                       setSilos((prev: any) => prev.map((s: any) => Number(s?.id) === sId ? { ...s, currentKg: nextKg } : s));
                     }
                  }
              }
@@ -188,15 +190,24 @@ export const PackagingOverlay: React.FC<PackagingOverlayProps> = ({ task, onClos
                <div className="space-y-4">
                   <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Desglose de Extracción Simultánea (Silos)</label>
                   <div className="grid grid-cols-2 gap-3">
-                     {task.assignedSilos?.map((sId: any) => (
-                        <div key={sId} className="bg-[#14161a] p-3 rounded-lg border border-dashboard-border/50 flex items-center space-x-3">
-                           <Database className="w-4 h-4 text-blue-400" />
-                           <div className="flex flex-col">
-                              <span className="text-xs font-bold text-white">Silo {sId}</span>
-                              <span className="text-[9px] text-gray-500 font-mono tracking-tighter">Proporción Receta</span>
+                     {task.assignedSilos?.map((sId: any) => {
+                        const s = silos.find(si => Number(si.id) === Number(sId));
+                        return (
+                           <div key={sId} className="bg-[#14161a] p-3 rounded-lg border border-dashboard-border/50 flex items-center space-x-3">
+                              <Database className="w-4 h-4 text-blue-400" />
+                              <div className="flex flex-col w-full">
+                                 <span className="text-xs font-bold text-white">Silo {sId}</span>
+                                 {s?.profileName ? (
+                                    <span className="text-center bg-[#1e222b] border border-gray-700 px-2 py-1.5 rounded text-[10px] font-black text-green-300 w-full overflow-hidden leading-tight">
+                                       {s.profileName}
+                                    </span>
+                                 ) : (
+                                    <span className="text-[9px] text-gray-500 font-mono tracking-tighter">Proporción Receta</span>
+                                 )}
+                              </div>
                            </div>
-                        </div>
-                     ))}
+                        );
+                     })}
                   </div>
                </div>
 

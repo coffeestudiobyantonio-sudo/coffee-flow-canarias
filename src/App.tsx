@@ -8,7 +8,7 @@ import DailyRoastOrders from './components/DailyRoastOrders';
 import ManualRoastControl from './components/ManualRoastControl';
 import SiloManager from './components/SiloManager';
 import { Database, Activity, LayoutDashboard, Target, TestTube2, Flame, CheckCircle, Lock, FileSearch, ClipboardList, Timer } from 'lucide-react';
-import { fetchSilos, fetchMasterProfiles, fetchDailyOrders, updateTaskStatus } from './lib/api';
+import { fetchSilos, fetchMasterProfiles, fetchDailyOrders, updateTaskStatus, updateSilo } from './lib/api';
 
 export interface MachineSpecificProfile {
   targetAgtron: number;
@@ -87,6 +87,8 @@ export interface ActiveLot {
   totalBatches?: number;  
   orderTotalKg?: number;
   parentOrderId?: string;
+  origins?: string[];
+  assignedSilos?: number[];
   consumedLots?: { lotId: string, weightKg: number, origin: string }[];
   category?: OrderCategory; // Phase 12
 }
@@ -180,6 +182,8 @@ function App() {
       totalBatches: task.totalBatches,
       orderTotalKg: task.parentOrderTotalKg,
       parentOrderId: task.parentOrderId,
+      origins: task.origins,
+      assignedSilos: task.assignedSilos,
       category: task.category
     });
     setActiveTab('manual_roast');
@@ -198,6 +202,31 @@ function App() {
       if (!isSuccess) {
         alert("Error de red: No se pudo registrar el tueste en Supabase.");
         return;
+      }
+
+      // Auto-update Silo if assigned (For Automatic Live Machine Roasts)
+      if (activeLot.assignedSilos && activeLot.assignedSilos.length > 0) {
+          const targetSiloId = activeLot.assignedSilos[0];
+          const pickedSilo = silos.find(s => s?.id === targetSiloId);
+          
+          if (pickedSilo) {
+             const siloDisplayName = activeLot.origins && activeLot.origins.length > 0 
+                ? `${activeLot.origins[0]} (${activeLot.profile?.name})` 
+                : activeLot.profile?.name || null;
+
+             const newSiloKg = pickedSilo.currentKg + actualWeight;
+             await updateSilo(targetSiloId, {
+                currentKg: newSiloKg,
+                profileName: siloDisplayName,
+                lastFillDate: new Date().toISOString()
+             });
+             
+             setSilos(prev => prev.map(s => s?.id === targetSiloId ? {
+                ...s,
+                currentKg: newSiloKg,
+                profileName: siloDisplayName
+             } : s));
+          }
       }
 
 

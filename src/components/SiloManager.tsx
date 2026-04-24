@@ -299,15 +299,15 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos }) => {
                           <p className="text-[9px] text-gray-500 uppercase font-bold tracking-widest mt-1">/ {s.maxKg} MAX</p>
                        </div>
 
-                       <div className="relative z-10 flex flex-col items-center mt-2 group-hover:opacity-100">
-                          {s.profileName ? (
-                             <span className="text-center bg-[#1e222b] border border-gray-700 px-2 py-1 rounded text-[9px] font-bold text-green-300 w-full truncate">
-                               {s.profileName}
-                             </span>
-                          ) : (
-                             <span className="text-center px-2 py-1 text-[9px] font-bold text-gray-600 italic">Vacio</span>
-                          )}
-                       </div>
+                        <div className="relative z-10 flex flex-col items-center mt-2">
+                           {s.profileName ? (
+                              <span className="text-center bg-[#1e222b] border border-gray-700 px-2 py-1.5 rounded text-[10px] font-black text-green-300 w-full leading-tight">
+                                {s.profileName}
+                              </span>
+                           ) : (
+                              <span className="text-center px-2 py-1 text-[9px] font-bold text-gray-600 italic">Vacio</span>
+                           )}
+                        </div>
                      </div>
                    );
                 })}
