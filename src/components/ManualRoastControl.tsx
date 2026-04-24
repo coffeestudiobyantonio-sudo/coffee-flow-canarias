@@ -237,8 +237,12 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
          alert(`DEBUG: No se encontró el silo con ID ${targetSiloId} en la lista de silos.`);
          return;
       }
-      if (pickedSilo.currentKg > 0 && pickedSilo.profileName && activeLot?.profile?.name && pickedSilo.profileName !== activeLot?.profile?.name) {
-         alert("Alerta: El silo seleccionado contiene una receta diferente. Vacía el silo o selecciona otro.");
+      const isCompatible = !pickedSilo.profileName || !activeLot?.profile?.name || 
+                          pickedSilo.profileName.includes(activeLot.profile.name) || 
+                          activeLot.profile.name.includes(pickedSilo.profileName);
+
+      if (pickedSilo.currentKg > 0 && !isCompatible) {
+         alert(`Alerta: El silo seleccionado contiene una receta diferente (${pickedSilo.profileName}). Vacía el silo o selecciona otro.`);
          return;
       }
       if (pickedSilo.currentKg + weight > pickedSilo.maxKg) {
