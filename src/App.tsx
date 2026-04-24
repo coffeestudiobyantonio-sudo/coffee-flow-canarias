@@ -364,7 +364,7 @@ function App() {
             {activeTab === 'orders' && <DailyRoastOrders 
                 masterProfiles={masterProfiles} 
                 roastOrders={roastOrders} setRoastOrders={setRoastOrders}
-                silos={silos}
+                silos={silos} setSilos={setSilos}
                 onLaunchManualRoast={handleLaunchManualRoast}
               />}
             {activeTab === 'silos' && <SiloManager silos={silos} setSilos={setSilos} />}

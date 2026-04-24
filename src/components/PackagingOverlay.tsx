@@ -6,18 +6,28 @@ interface PackagingOverlayProps {
    task: any;
    onClose: () => void;
    silos: any[];
+   setSilos?: any;
    roastOrders: any[];
    onSuccess: () => void;
 }
 
-export const PackagingOverlay: React.FC<PackagingOverlayProps> = ({ task, onClose, silos, roastOrders, onSuccess }) => {
+export const PackagingOverlay: React.FC<PackagingOverlayProps> = ({ task, onClose, silos, setSilos, roastOrders, onSuccess }) => {
    const [processing, setProcessing] = useState(false);
    const [customTotalKg, setCustomTotalKg] = useState<number>(task.targetWeightKg || 0);
 
    const profileName = task.parentProfile || 'Generico';
    const isLocalMarket = profileName.includes('Timanfaya') || profileName.includes('Laurisilva') || profileName.includes('Pinzón');
 
-   const [formatSplit, setFormatSplit] = useState(isLocalMarket ? { '1kg': 100, '450g': 0 } : { '1kg': 100, '500g': 0, '250g': 0 });
+   // Auto-detect format based on profile string
+   const lowerName = profileName.toLowerCase();
+   let inferredFormat = isLocalMarket ? { '1kg': 100, '450g': 0 } : { '1kg': 100, '500g': 0, '250g': 0 };
+   
+   if (lowerName.includes('450')) inferredFormat = { '1kg': 0, '450g': 100 };
+   else if (lowerName.includes('500')) inferredFormat = { '1kg': 0, '500g': 100, '250g': 0 };
+   else if (lowerName.includes('250')) inferredFormat = { '1kg': 0, '500g': 0, '250g': 100 };
+   else if (lowerName.includes('1kg') || lowerName.includes('1 kg')) inferredFormat = isLocalMarket ? { '1kg': 100, '450g': 0 } : { '1kg': 100, '500g': 0, '250g': 0 };
+
+   const [formatSplit] = useState(inferredFormat);
 
    const handleConfirm = async () => {
       if (customTotalKg <= 0) return alert("Cantidad incorrecta.");
@@ -40,9 +50,11 @@ export const PackagingOverlay: React.FC<PackagingOverlayProps> = ({ task, onClos
                  
                  const physicalSilo = silos.find(s => s?.id === sId);
                  if (physicalSilo) {
-                    await updateSilo(sId, {
-                        currentKg: Math.max(0, physicalSilo.currentKg - expectedRoastedPull) // Will not go below 0 theoretically, but prevents -1 on minor desajustes
-                    });
+                    const nextKg = Math.max(0, physicalSilo.currentKg - expectedRoastedPull);
+                    await updateSilo(sId, { currentKg: nextKg });
+                    if (setSilos) {
+                       setSilos((prev: any) => prev.map((s: any) => s?.id === sId ? { ...s, currentKg: nextKg } : s));
+                    }
                  }
              }
          }
@@ -106,29 +118,34 @@ export const PackagingOverlay: React.FC<PackagingOverlayProps> = ({ task, onClos
        const bx_250 = Math.floor(kg_250g / 12);
 
        const totalBoxes = bx_1 + bx_500 + bx_250;
-       const pallets = Math.floor(totalBoxes / 40);
 
        summary = (
           <div className="space-y-4">
              <div className="bg-[#1e222b] p-4 rounded-xl border border-dashboard-border">
                 <span className="text-xs font-bold text-gray-500 uppercase">Salida en Cajas (Península)</span>
                 <div className="flex flex-col space-y-2 mt-2">
-                   <div className="flex justify-between items-center text-sm">
-                      <span className="text-white">Formato 1kg (12kg/cj):</span>
-                      <span className="font-mono text-green-400">{bx_1} Cajas</span>
-                   </div>
-                   <div className="flex justify-between items-center text-sm">
-                      <span className="text-white">Formato 500g (12kg/cj):</span>
-                      <span className="font-mono text-green-400">{bx_500} Cajas</span>
-                   </div>
-                   <div className="flex justify-between items-center text-sm">
-                      <span className="text-white">Formato 250g (12kg/cj):</span>
-                      <span className="font-mono text-green-400">{bx_250} Cajas</span>
-                   </div>
+                   {bx_1 > 0 && (
+                      <div className="flex justify-between items-center text-sm">
+                         <span className="text-white">Formato 1kg (12kg/cj):</span>
+                         <span className="font-mono text-green-400">{bx_1} Cajas</span>
+                      </div>
+                   )}
+                   {bx_500 > 0 && (
+                      <div className="flex justify-between items-center text-sm">
+                         <span className="text-white">Formato 500g (12kg/cj):</span>
+                         <span className="font-mono text-green-400">{bx_500} Cajas</span>
+                      </div>
+                   )}
+                   {bx_250 > 0 && (
+                      <div className="flex justify-between items-center text-sm">
+                         <span className="text-white">Formato 250g (12kg/cj):</span>
+                         <span className="font-mono text-green-400">{bx_250} Cajas</span>
+                      </div>
+                   )}
                 </div>
                 <div className="mt-4 pt-4 border-t border-white/5 flex justify-between items-center">
                    <span className="text-xs font-black text-gray-400 uppercase">Total Logística:</span>
-                   <span className="text-lg font-black text-white">{totalBoxes} Cajas &rarr; {pallets} Pallets</span>
+                   <span className="text-lg font-black text-white">{totalBoxes} Cajas Totales</span>
                 </div>
              </div>
           </div>
@@ -184,44 +201,15 @@ export const PackagingOverlay: React.FC<PackagingOverlayProps> = ({ task, onClos
                </div>
 
                <div>
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Distribución de Formatos</label>
-                  {isLocalMarket ? (
-                     <div className="flex rounded-lg overflow-hidden border border-dashboard-border relative">
-                        <button 
-                           onClick={() => setFormatSplit({ '1kg': 100, '450g': 0 })}
-                           className={`flex-1 py-3 text-sm font-bold transition-all ${formatSplit['1kg'] === 100 ? 'bg-green-500/20 text-green-400' : 'bg-[#14161a] text-gray-500'}`}
-                        >
-                           1KG (100%)
-                        </button>
-                        <button 
-                           onClick={() => setFormatSplit({ '1kg': 0, '450g': 100 })}
-                           className={`flex-1 py-3 text-sm font-bold transition-all ${formatSplit['450g'] === 100 ? 'bg-green-500/20 text-green-400' : 'bg-[#14161a] text-gray-500'}`}
-                        >
-                           450G (100%)
-                        </button>
-                     </div>
-                  ) : (
-                     <div className="flex rounded-lg overflow-hidden border border-dashboard-border relative">
-                        <button 
-                           onClick={() => setFormatSplit({ '1kg': 100, '500g': 0, '250g': 0 })}
-                           className={`flex-1 py-3 text-sm font-bold transition-all ${formatSplit['1kg'] === 100 ? 'bg-green-500/20 text-green-400' : 'bg-[#14161a] text-gray-500'}`}
-                        >
-                           1KG (100%)
-                        </button>
-                        <button 
-                           onClick={() => setFormatSplit({ '1kg': 0, '500g': 100, '250g': 0 })}
-                           className={`flex-1 py-3 text-sm font-bold transition-all ${formatSplit['500g'] === 100 ? 'bg-green-500/20 text-green-400' : 'bg-[#14161a] text-gray-500'}`}
-                        >
-                           500G (100%)
-                        </button>
-                        <button 
-                           onClick={() => setFormatSplit({ '1kg': 0, '500g': 0, '250g': 100 })}
-                           className={`flex-1 py-3 text-sm font-bold transition-all ${formatSplit['250g'] === 100 ? 'bg-green-500/20 text-green-400' : 'bg-[#14161a] text-gray-500'}`}
-                        >
-                           250G (100%)
-                        </button>
-                     </div>
-                  )}
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Formato Detectado</label>
+                  <div className="inline-flex items-center space-x-2 px-4 py-2 bg-[#14161a] border border-dashboard-border rounded-xl">
+                     <span className="text-sm font-bold text-green-400">
+                        {formatSplit['1kg'] === 100 ? 'Formato 1 KG' : 
+                         formatSplit['500g'] === 100 ? 'Formato 500 GR' : 
+                         formatSplit['250g'] === 100 ? 'Formato 250 GR' : 
+                         formatSplit['450g'] === 100 ? 'Formato 450 GR' : 'MIX Mixto'}
+                     </span>
+                  </div>
                </div>
 
                {summary}

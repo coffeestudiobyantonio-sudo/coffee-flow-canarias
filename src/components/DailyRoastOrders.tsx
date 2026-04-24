@@ -10,6 +10,7 @@ interface DailyRoastOrdersProps {
    roastOrders: DailyRoastOrder[];
    setRoastOrders: React.Dispatch<React.SetStateAction<DailyRoastOrder[]>>;
    silos: any[];
+   setSilos: React.Dispatch<React.SetStateAction<any[]>>;
    onLaunchManualRoast: (task: RoastTask) => void;
 }
 
@@ -31,7 +32,7 @@ interface DailyPlan {
    scheduledDate?: string;
 }
 
-const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roastOrders, setRoastOrders, silos, onLaunchManualRoast }) => {
+const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roastOrders, setRoastOrders, silos, setSilos, onLaunchManualRoast }) => {
    const [viewMode, setViewMode] = useState<'PLAN_MENSUAL' | 'MANAGER' | 'OPERATOR'>('PLAN_MENSUAL');
 
    // Phase 20: Packaging Core State
@@ -1217,6 +1218,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                task={activePackagingTask}
                onClose={() => setActivePackagingTask(null)}
                silos={silos}
+               setSilos={setSilos}
                roastOrders={roastOrders}
                onSuccess={() => {
                   setRoastOrders(prev => prev.map(o => o.id === activePackagingTask.parentOrderId ? { ...o, status: 'COMPLETED' } : o));

@@ -295,7 +295,7 @@ const SiloManager: React.FC<SiloManagerProps> = ({ silos, setSilos }) => {
                        </div>
 
                        <div className="relative z-10 text-center my-auto group cursor-pointer" onClick={(e) => { e.stopPropagation(); handleQuickAdjust(s); }}>
-                          <p className="text-3xl font-black text-white font-mono hover:text-green-300 transition-colors">{s.currentKg}<span className="text-xs text-gray-500 ml-1">kg</span></p>
+                          <p className="text-3xl font-black text-white font-mono hover:text-green-300 transition-colors">{Number(s.currentKg).toFixed(1)}<span className="text-xs text-gray-500 ml-1">kg</span></p>
                           <p className="text-[9px] text-gray-500 uppercase font-bold tracking-widest mt-1">/ {s.maxKg} MAX</p>
                        </div>
 
