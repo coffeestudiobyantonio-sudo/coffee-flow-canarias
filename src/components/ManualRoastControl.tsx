@@ -251,18 +251,22 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
       const cooldownSeconds = machine ? (machine.bbpCooldownBase + (weight * machine.bbpCoefficient)) : 180;
       setBbpTimeLeft(Math.round(cooldownSeconds));
 
-    // Register into the Silo
-    const newSiloKg = pickedSilo.currentKg + weight;
-    const isNewFill = pickedSilo.currentKg === 0;
-    
-    await updateSilo(targetSiloId, { 
-       currentKg: newSiloKg, 
-       profileName: activeLot?.profile?.name || null,
-       lastFillDate: isNewFill ? new Date().toISOString() : pickedSilo.lastFillDate
-    });
-    setSilos(prev => prev.map(s => s?.id === targetSiloId ? { 
-       ...s, currentKg: newSiloKg, profileName: activeLot?.profile?.name || null, lastFillDate: isNewFill ? new Date().toISOString() : s.lastFillDate
-    } : s));
+      // Register into the Silo
+      const newSiloKg = pickedSilo.currentKg + weight;
+      const isNewFill = pickedSilo.currentKg === 0;
+      
+      const siloDisplayName = activeLot?.origins && activeLot.origins.length > 0 
+          ? `${activeLot.origins[0]} (${activeLot?.profile?.name})` 
+          : activeLot?.profile?.name || null;
+
+      await updateSilo(targetSiloId, { 
+         currentKg: newSiloKg, 
+         profileName: siloDisplayName,
+         lastFillDate: isNewFill ? new Date().toISOString() : pickedSilo.lastFillDate
+      });
+      setSilos(prev => prev.map(s => s?.id === targetSiloId ? { 
+         ...s, currentKg: newSiloKg, profileName: siloDisplayName, lastFillDate: isNewFill ? new Date().toISOString() : s.lastFillDate
+      } : s));
 
 
 
