@@ -128,11 +128,17 @@ export interface RoastTask {
   roastedAt?: number;
   roastData?: {
     finalTemp: number,
+    finalTime?: string,
     finalRor: number,
     devTime: number,
     chargeTemp?: number,
+    chargeTime?: string,
     turnaroundTemp?: number,
     turnaroundTime?: string,
+    yellowTemp?: number,
+    yellowTime?: string,
+    maillardTemp?: number,
+    maillardTime?: string,
     firstCrackTemp?: number,
     firstCrackTime?: string
   };
@@ -214,11 +220,17 @@ function App() {
   const handleBatchComplete = async (metrics: { 
      actualWeight: number, 
      finalTemp?: number, 
+     finalTime?: string,
      finalRor?: number, 
      devTime?: number,
      chargeTemp?: number,
+     chargeTime?: string,
      turnaroundTemp?: number,
      turnaroundTime?: string,
+     yellowTemp?: number,
+     yellowTime?: string,
+     maillardTemp?: number,
+     maillardTime?: string,
      firstCrackTemp?: number,
      firstCrackTime?: string
   }) => {
@@ -227,19 +239,24 @@ function App() {
     if (activeLot && activeLot.parentOrderId) {
       const roastedTimestamp = Date.now();
       
-      // Phase 19: Push DROP event to Supabase Cloud
       const isSuccess = await updateTaskStatus(activeLot?.id, 'ROASTED', { 
         actualWeightKg: actualWeight, 
         roastedAt: roastedTimestamp,
         roastData: {
             finalTemp: metrics.finalTemp || 0,
+            finalTime: metrics.finalTime || '--',
             finalRor: metrics.finalRor || 0,
             devTime: metrics.devTime || 0,
             chargeTemp: metrics.chargeTemp,
+            chargeTime: metrics.chargeTime,
             turnaroundTemp: metrics.turnaroundTemp,
-           turnaroundTime: metrics.turnaroundTime,
-           firstCrackTemp: metrics.firstCrackTemp,
-           firstCrackTime: metrics.firstCrackTime
+            turnaroundTime: metrics.turnaroundTime,
+            yellowTemp: metrics.yellowTemp,
+            yellowTime: metrics.yellowTime,
+            maillardTemp: metrics.maillardTemp,
+            maillardTime: metrics.maillardTime,
+            firstCrackTemp: metrics.firstCrackTemp,
+            firstCrackTime: metrics.firstCrackTime
         }
       });
 

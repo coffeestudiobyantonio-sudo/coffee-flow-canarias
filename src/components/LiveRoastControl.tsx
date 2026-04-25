@@ -382,10 +382,16 @@ const LiveRoastControl: React.FC<LiveRoastControlProps> = ({ activeLot, onRoastC
               <button onClick={() => onRoastComplete && onRoastComplete({
                 actualWeight: Number(finalWeight),
                 finalTemp: Number(milestones['Drop'].temp), 
+                finalTime: formatTime(Number(milestones['Drop'].timeSec)),
                 devTime: Number(milestones['Drop'].timeSec), 
                 chargeTemp: Number(milestones['Charge'].temp),
+                chargeTime: formatTime(Number(milestones['Charge'].timeSec)),
                 turnaroundTemp: Number(milestones['Turning Point'].temp),
                 turnaroundTime: formatTime(Number(milestones['Turning Point'].timeSec)),
+                yellowTemp: Number(milestones['Yellow Phase'].temp),
+                yellowTime: formatTime(Number(milestones['Yellow Phase'].timeSec)),
+                maillardTemp: Number(milestones['Browning'].temp),
+                maillardTime: formatTime(Number(milestones['Browning'].timeSec)),
                 firstCrackTemp: Number(milestones['1st Crack'].temp),
                 firstCrackTime: formatTime(Number(milestones['1st Crack'].timeSec))
               })} className="w-full py-4 rounded-xl font-black text-sm tracking-widest uppercase bg-purple-600 hover:bg-purple-500 text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center">

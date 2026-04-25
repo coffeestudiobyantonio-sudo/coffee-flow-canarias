@@ -64,21 +64,20 @@ export const generateDailyProductionReport = (orders: DailyRoastOrder[]) => {
       // For BLEND tasks, we might want a different view, but user asked for "cada tueste"
       if (t.type === 'BLEND') return [];
       
-      const shrinkage = t.actualWeightKg ? (((t.targetWeightKg - t.actualWeightKg) / t.targetWeightKg) * 100).toFixed(2) : '--';
-      
+      const shrinkage = t.actualWeightKg ? (((t.targetWeightKg - t.actualWeightKg) / t.targetWeightKg) * 100).toFixed(1) : '--';
+      const rd = t.roastData;
+
       return [[
          t.id.split('-').pop() || t.id,
          t.masterProfile?.name || '---',
-         t.origins[0] || '---',
-         `${t.targetWeightKg.toFixed(1)}`,
-         `${t.actualWeightKg?.toFixed(1) || '--'}`,
+         `${t.targetWeightKg.toFixed(1)} / ${t.actualWeightKg?.toFixed(1) || '--'}`,
          `${shrinkage}%`,
-         t.roastData?.chargeTemp ? `${t.roastData.chargeTemp}°C` : '--',
-         t.roastData?.turnaroundTemp ? `${t.roastData.turnaroundTemp}°C` : '--',
-         t.roastData?.turnaroundTime || '--',
-         t.roastData?.firstCrackTemp ? `${t.roastData.firstCrackTemp}°C` : '--',
-         t.roastData?.finalTemp ? `${t.roastData.finalTemp}°C` : '--',
-         t.roastData?.devTime ? `${t.roastData.devTime}%` : '--',
+         rd?.turnaroundTemp ? `${rd.turnaroundTemp}°C\n(${rd.turnaroundTime || '--'})` : '--',
+         rd?.yellowTemp ? `${rd.yellowTemp}°C\n(${rd.yellowTime || '--'})` : '--',
+         rd?.maillardTemp ? `${rd.maillardTemp}°C\n(${rd.maillardTime || '--'})` : '--',
+         rd?.firstCrackTemp ? `${rd.firstCrackTemp}°C\n(${rd.firstCrackTime || '--'})` : '--',
+         rd?.finalTemp ? `${rd.finalTemp}°C\n(${rd.finalTime || '--'})` : '--',
+         `${rd?.devTime || 0}%`,
          t.assignedSilos ? `Silo ${t.assignedSilos[0]}` : '--'
       ]];
    });
@@ -88,14 +87,19 @@ export const generateDailyProductionReport = (orders: DailyRoastOrder[]) => {
 
    autoTable(doc, {
       startY: 95,
-      head: [['ID', 'Gama', 'Origen', 'Verde(kg)', 'Tostado(kg)', 'Merma', 'Charge', 'TP Temp', 'TP Time', '1C Temp', 'Drop Temp', 'DTR', 'Silo']],
+      head: [['ID', 'Gama', 'Verde/Tost (kg)', 'Merma', 'TP (Inflex)', 'Amarilla', 'Maillard', '1C (Crack)', 'Drop (Desc)', 'DTR', 'Silo']],
       body: tableRows,
       theme: 'striped',
-      headStyles: { fillColor: [217, 119, 6], textColor: [255, 255, 255], fontSize: 9, halign: 'center' },
-      styles: { fontSize: 8, halign: 'center', cellPadding: 2 },
+      headStyles: { fillColor: [30, 34, 43], textColor: [217, 119, 6], fontSize: 8, halign: 'center' },
+      styles: { fontSize: 7, halign: 'center', cellPadding: 2 },
       columnStyles: {
-         1: { halign: 'left', fontStyle: 'bold' },
-         2: { halign: 'left' }
+         1: { halign: 'left', fontStyle: 'bold', cellWidth: 35 },
+         2: { cellWidth: 25 },
+         4: { cellWidth: 20 },
+         5: { cellWidth: 20 },
+         6: { cellWidth: 20 },
+         7: { cellWidth: 20 },
+         8: { cellWidth: 20 }
       }
    });
 

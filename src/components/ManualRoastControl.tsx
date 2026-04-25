@@ -297,18 +297,26 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
        setShowFinalReport(false);
        setShowBlendingOverlay(true);
     } else {
-        const turnaround = dataPoints.find(p => p.type === 'TURNAROUND');
+        const turnaround = dataPoints.find(p => p.type === 'TP' || p.type === 'TURNAROUND');
+        const yellow = dataPoints.find(p => p.type === 'YELLOW');
+        const maillard = dataPoints.find(p => p.type === 'MAILLARD');
         const fcStart = dataPoints.find(p => p.type === 'FC_START');
         const charge = dataPoints.find(p => p.type === 'CHARGE');
 
         onBatchComplete({
            actualWeight: weight,
            finalTemp: parseFloat(dataPoints[dataPoints.length - 1].temp.toString()),
+           finalTime: formatTime(dataPoints[dataPoints.length - 1].time),
            finalRor: currentRoR,
            devTime: parseInt(ratios.development),
            chargeTemp: charge?.temp,
+           chargeTime: charge ? formatTime(charge.time) : undefined,
            turnaroundTemp: turnaround?.temp,
            turnaroundTime: turnaround ? formatTime(turnaround.time) : undefined,
+           yellowTemp: yellow?.temp,
+           yellowTime: yellow ? formatTime(yellow.time) : undefined,
+           maillardTemp: maillard?.temp,
+           maillardTime: maillard ? formatTime(maillard.time) : undefined,
            firstCrackTemp: fcStart?.temp,
            firstCrackTime: fcStart ? formatTime(fcStart.time) : undefined
         });

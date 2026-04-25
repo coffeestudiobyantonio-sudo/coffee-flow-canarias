@@ -189,6 +189,7 @@ export const updateTaskStatus = async (taskId: string, status: string, additiona
   const dbUpdates: any = { status };
   if (additionalData.actualWeightKg !== undefined) dbUpdates.actual_weight_kg = additionalData.actualWeightKg;
   if (additionalData.roastedAt !== undefined) dbUpdates.roasted_at = additionalData.roastedAt;
+  if (additionalData.roastData !== undefined) dbUpdates.roast_data = additionalData.roastData;
 
   const { error } = await supabase.from('roast_tasks').update(dbUpdates).eq('id', taskId);
   if (error) console.error('Error updating task:', error);
