@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } from 'recharts';
-import { AlertTriangle, Flame, Activity, Target, Droplets, ArrowDown, CheckCircle2, TestTube2, Wind, Plus, Minus } from 'lucide-react';
+import { AlertTriangle, Flame, CheckCircle2, TestTube2, Wind } from 'lucide-react';
 import type { ActiveLot } from '../App';
 
 interface RoastData {
@@ -166,16 +166,7 @@ const LiveRoastControl: React.FC<LiveRoastControlProps> = ({ activeLot, onRoastC
     }
   };
 
-  const getMilestoneIcon = (type: MilestoneType) => {
-    switch(type) {
-      case 'Charge': return <ArrowDown className="w-5 h-5 text-blue-400" />;
-      case 'Turning Point': return <Activity className="w-5 h-5 text-purple-400" />;
-      case 'Yellow Phase': return <Target className="w-5 h-5 text-yellow-400" />;
-      case 'Browning': return <Droplets className="w-5 h-5 text-orange-400" />;
-      case '1st Crack': return <Flame className="w-5 h-5 text-red-500" />;
-      case 'Drop': return <CheckCircle2 className="w-5 h-5 text-green-400" />;
-    }
-  };
+
 
   // Build plotted dots array
   const activeDots = MILESTONE_SEQUENCE.filter(k => milestones[k].timeSec !== '' && milestones[k].temp !== '').map(k => ({
@@ -201,16 +192,7 @@ const LiveRoastControl: React.FC<LiveRoastControlProps> = ({ activeLot, onRoastC
     }));
   };
 
-  const handleStepper = (type: MilestoneType, field: 'timeSec' | 'temp', delta: number) => {
-    setMilestones(prev => {
-      const current = prev[type][field];
-      const val = current === '' ? (field === 'timeSec' ? elapsedTime : currentTempRef.current) : Number(current);
-      return {
-        ...prev,
-        [type]: { ...prev[type], [field]: val + delta }
-      };
-    });
-  };
+
 
   return (
     <div className="flex flex-col lg:flex-row h-full w-full bg-[#0a0a0b] text-white p-6 overflow-x-hidden overflow-y-auto max-w-screen-2xl mx-auto space-y-6 lg:space-y-0 lg:space-x-6">
@@ -311,7 +293,7 @@ const LiveRoastControl: React.FC<LiveRoastControlProps> = ({ activeLot, onRoastC
             </div>
           )}
 
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {MILESTONE_SEQUENCE.map((type, idx) => {
               const current = milestones[type];
               const prev = idx > 0 ? milestones[MILESTONE_SEQUENCE[idx - 1]] : null;
@@ -320,47 +302,31 @@ const LiveRoastControl: React.FC<LiveRoastControlProps> = ({ activeLot, onRoastC
               const dTemp = (prev && current.temp !== '' && prev.temp !== '') ? Number(current.temp) - Number(prev.temp) : null;
 
               return (
-                <div key={type} className="bg-[#14161a] border border-dashboard-border rounded-xl p-4 transition-all focus-within:border-gray-500">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="flex items-center text-sm font-bold uppercase tracking-wide" style={{ color: getMilestoneColor(type) }}>
-                      {getMilestoneIcon(type)} <span className="ml-2">{type}</span>
+                <div key={type} className="bg-[#14161a] border border-dashboard-border rounded-xl p-3 transition-all focus-within:border-purple-500/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="flex items-center text-[10px] font-black uppercase tracking-widest" style={{ color: getMilestoneColor(type) }}>
+                      {type}
                     </span>
-                    <button onClick={() => handleAutofillMilestone(type)} disabled={!isRoasting} className="text-[10px] font-mono bg-[#1e222b] px-2 py-1 rounded text-gray-400 hover:text-white border border-gray-700">
-                      AUTOFILL / {type.charAt(0)}
+                    <button onClick={() => handleAutofillMilestone(type)} disabled={!isRoasting} className="text-[8px] font-black bg-[#1e222b] px-1.5 py-0.5 rounded text-gray-500 hover:text-white border border-gray-800 uppercase tracking-tighter">
+                      Auto
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                     {/* Time UX */}
-                     <div>
-                       <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 block">Time (Secs)</label>
-                       <div className="flex items-center bg-[#1e222b] rounded-lg border border-gray-700">
-                         <button onClick={()=>handleStepper(type, 'timeSec', -1)} className="p-2 hover:bg-gray-700 rounded-l text-gray-400"><Minus className="w-4 h-4"/></button>
-                         <input type="number" value={current.timeSec} onChange={e => handleGridUpdate(type, 'timeSec', e.target.value === '' ? '' : Number(e.target.value))}
-                                className="w-full bg-transparent text-center text-white font-mono font-bold focus:outline-none appearance-none" />
-                         <button onClick={()=>handleStepper(type, 'timeSec', 1)} className="p-2 hover:bg-gray-700 rounded-r text-gray-400"><Plus className="w-4 h-4"/></button>
-                       </div>
+                  <div className="grid grid-cols-2 gap-2">
+                     <div className="bg-[#1e222b] rounded-lg border border-gray-800 flex items-center h-8">
+                        <input type="number" placeholder="Secs" value={current.timeSec} onChange={e => handleGridUpdate(type, 'timeSec', e.target.value === '' ? '' : Number(e.target.value))}
+                               className="w-full bg-transparent text-center text-white font-mono text-xs font-bold focus:outline-none appearance-none" />
                      </div>
-                     
-                     {/* Temp UX */}
-                     <div>
-                       <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 block">Temp (°C)</label>
-                       <div className="flex items-center bg-[#1e222b] rounded-lg border border-gray-700">
-                         <button onClick={()=>handleStepper(type, 'temp', -0.5)} className="p-2 hover:bg-gray-700 rounded-l text-gray-400"><Minus className="w-4 h-4"/></button>
-                         <input type="number" step="0.5" value={current.temp} onChange={e => handleGridUpdate(type, 'temp',  e.target.value === '' ? '' : Number(e.target.value))}
-                                className="w-full bg-transparent text-center text-white font-mono font-bold focus:outline-none appearance-none" />
-                         <button onClick={()=>handleStepper(type, 'temp', 0.5)} className="p-2 hover:bg-gray-700 rounded-r text-gray-400"><Plus className="w-4 h-4"/></button>
-                       </div>
+                     <div className="bg-[#1e222b] rounded-lg border border-gray-800 flex items-center h-8">
+                        <input type="number" step="0.5" placeholder="Temp" value={current.temp} onChange={e => handleGridUpdate(type, 'temp',  e.target.value === '' ? '' : Number(e.target.value))}
+                               className="w-full bg-transparent text-center text-white font-mono text-xs font-bold focus:outline-none appearance-none" />
                      </div>
                   </div>
 
-                  {/* Deltas Display */}
                   {dt !== null && dTemp !== null && (
-                     <div className="flex items-center mt-3 text-[10px] font-mono text-gray-500 bg-[#0a0a0b] px-2 py-1 flex justify-between rounded border border-gray-800">
-                       <span>Δ {formatTime(dt)} min transcurridos</span>
-                       <span className={dTemp > 0 ? 'text-green-500/70' : 'text-blue-400/70'}>
-                          {dTemp > 0 ? '▲' : '▼'} {Math.abs(dTemp).toFixed(1)}°C {dTemp > 0 ? 'Ganancia' : 'Pérdida'}
-                       </span>
+                     <div className="flex items-center mt-2 text-[8px] font-mono text-gray-600 bg-black/20 p-1 rounded justify-between">
+                        <span>Δ {formatTime(dt)}</span>
+                        <span>{dTemp > 0 ? '+' : ''}{dTemp.toFixed(1)}°C</span>
                      </div>
                   )}
                 </div>

@@ -517,47 +517,49 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
           <div className="col-span-12 lg:col-span-3 flex flex-col space-y-6 overflow-y-auto pr-2 custom-scrollbar">
             
             {/* One-Touch Milestone Buttons (Improvement A) */}
-            <div className="bg-[#14161a] p-6 rounded-[32px] border border-white/5 shadow-xl space-y-4">
-               <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">Registro Instantáneo</h3>
+            <div className="bg-[#14161a] p-4 rounded-[32px] border border-white/5 shadow-xl">
+               <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 px-2">Registro Instantáneo</h3>
                
-               <QuickStageButton 
-                 label="Punto Inflexión (TP)" 
-                 icon={<TrendingUp className="w-6 h-6" />}
-                 active={dataPoints.some(p => p.type === 'TP')}
-                 onClick={() => openMilestoneModal('TP')}
-                 color="border-green-500/30 text-green-400 bg-green-500/5"
-               />
-               
-               <QuickStageButton 
-                 label="Etapa Amarilla" 
-                 icon={<TimerIcon className="w-6 h-6" />}
-                 active={dataPoints.some(p => p.type === 'YELLOW')}
-                 onClick={() => openMilestoneModal('YELLOW')}
-                 color="border-yellow-500/30 text-yellow-500 bg-yellow-500/5"
-               />
+               <div className="grid grid-cols-2 gap-2">
+                 <QuickStageButton 
+                   label="TP (Inflex.)" 
+                   icon={<TrendingUp className="w-5 h-5" />}
+                   active={dataPoints.some(p => p.type === 'TP')}
+                   onClick={() => openMilestoneModal('TP')}
+                   color="border-green-500/30 text-green-400 bg-green-500/5"
+                 />
+                 
+                 <QuickStageButton 
+                   label="Amarilla" 
+                   icon={<TimerIcon className="w-5 h-5" />}
+                   active={dataPoints.some(p => p.type === 'YELLOW')}
+                   onClick={() => openMilestoneModal('YELLOW')}
+                   color="border-yellow-500/30 text-yellow-500 bg-yellow-500/5"
+                 />
 
-               <QuickStageButton 
-                 label="Reacción Maillard" 
-                 icon={<Droplets className="w-6 h-6" />}
-                 active={dataPoints.some(p => p.type === 'MAILLARD')}
-                 onClick={() => openMilestoneModal('MAILLARD')}
-                 color="border-amber-600/30 text-amber-500 bg-amber-600/5"
-               />
+                 <QuickStageButton 
+                   label="Maillard" 
+                   icon={<Droplets className="w-5 h-5" />}
+                   active={dataPoints.some(p => p.type === 'MAILLARD')}
+                   onClick={() => openMilestoneModal('MAILLARD')}
+                   color="border-amber-600/30 text-amber-500 bg-amber-600/5"
+                 />
 
-               <QuickStageButton 
-                 label="Primer Crack (1C)" 
-                 icon={<Flame className="w-6 h-6" />}
-                 active={dataPoints.some(p => p.type === 'FC_START')}
-                 onClick={() => openMilestoneModal('FC_START')}
-                 color="border-red-500/30 text-red-500 bg-red-500/5"
-               />
+                 <QuickStageButton 
+                   label="1C (Crack)" 
+                   icon={<Flame className="w-5 h-5" />}
+                   active={dataPoints.some(p => p.type === 'FC_START')}
+                   onClick={() => openMilestoneModal('FC_START')}
+                   color="border-red-500/30 text-red-500 bg-red-500/5"
+                 />
+               </div>
 
                {isRunning && (
                  <button 
                    onClick={handleStop}
-                   className="w-full bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white border-2 border-red-600/30 p-6 rounded-2xl font-black uppercase transition-all flex items-center justify-center space-x-3"
+                   className="w-full mt-3 bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white border-2 border-red-600/30 py-4 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center space-x-2"
                  >
-                    <Square className="w-6 h-6 fill-current" />
+                    <Square className="w-4 h-4 fill-current" />
                     <span>DROP (Descarga)</span>
                  </button>
                )}
@@ -1038,17 +1040,13 @@ const QuickStageButton = ({ label, icon, active, onClick, color }: { label: stri
   <button 
     onClick={onClick}
     disabled={active}
-    className={`w-full p-4 md:p-6 rounded-2xl border-2 flex items-center justify-between transition-all active:scale-95 overflow-hidden ${active ? 'opacity-30 pointer-events-none' : 'hover:scale-102'} ${active ? color : 'bg-[#1e222b] border-white/5 text-gray-400'}`}
+    className={`w-full p-3 rounded-xl border-2 transition-all active:scale-95 overflow-hidden ${active ? 'opacity-30 pointer-events-none' : 'hover:scale-[1.02]'} ${active ? color : 'bg-[#1e222b] border-white/5 text-gray-400 font-bold'}`}
   >
-     <div className="flex items-center space-x-3 md:space-x-4 flex-1 min-w-0 pr-2">
-        <div className={`p-2 md:p-3 rounded-xl flex-shrink-0 ${active ? 'bg-current/10' : 'bg-black/20'}`}>
+     <div className="flex flex-col items-center space-y-2">
+        <div className={`p-1.5 rounded-lg ${active ? 'bg-current/10' : 'bg-black/20'}`}>
            {icon}
         </div>
-        <span className="font-black uppercase tracking-widest text-[10px] sm:text-xs text-left break-words overflow-hidden w-full leading-tight">{label}</span>
-     </div>
-     <div className="flex-shrink-0">
-       {!active && <CheckCircle className="w-5 h-5 opacity-20" />}
-       {active && <CheckCircle className="w-5 h-5" />}
+        <span className="font-black uppercase tracking-widest text-[9px] text-center leading-tight">{label}</span>
      </div>
   </button>
 );
