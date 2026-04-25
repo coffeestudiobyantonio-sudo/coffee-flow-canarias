@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Square, TrendingUp, AlertCircle, Flame, Timer as TimerIcon, BarChart3, CheckCircle, QrCode, Wrench, History, ArchiveRestore, TestTube2, Info, Lock, Target } from 'lucide-react';
+import { Play, Square, TrendingUp, AlertCircle, Flame, Timer as TimerIcon, Droplets, CheckCircle, QrCode, Wrench, History, ArchiveRestore, TestTube2, Info, Lock, Target } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot, CartesianGrid } from 'recharts';
 import { ROASTING_MACHINES } from '../App';
 import { updateTaskStatus, updateOrderStatus, updateSilo } from '../lib/api';
@@ -7,7 +7,7 @@ import { updateTaskStatus, updateOrderStatus, updateSilo } from '../lib/api';
 interface RoastDataPoint {
   time: number; // seconds
   temp: number;
-  type?: 'CHARGE' | 'TP' | 'YELLOW' | 'FC_START' | 'FC_END' | 'DROP' | 'EVENT' | 'TURNAROUND';
+  type?: 'CHARGE' | 'TP' | 'YELLOW' | 'MAILLARD' | 'FC_START' | 'FC_END' | 'DROP' | 'EVENT' | 'TURNAROUND';
   note?: string;
 }
 
@@ -156,14 +156,18 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   const handleConfirmMilestone = (temp: number) => {
     if (pendingMilestone) {
       handleAddTemp(temp, pendingMilestone.type, pendingMilestone.time);
+      const mType = pendingMilestone.type;
       setPendingMilestone(null);
       setShowMilestoneModal(false);
+
+      // If it was the drop, proceed to final report
+      if (mType === 'DROP') {
+         prepareFinalReport();
+      }
     }
   };
 
-  const handleStop = () => {
-    setIsRunning(false);
-    
+  const prepareFinalReport = () => {
     // Auto-pre-fill values for the final report based on planning
     const targetWeightVal = activeLot?.batchWeight || 0;
     const rawShrinkage = activeLot?.profile?.expectedShrinkage || 16;
@@ -171,7 +175,6 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     const expectedFinalWeight = targetWeightVal * (1 - shrinkageDecimal);
     
     setFinalWeight(expectedFinalWeight.toFixed(1));
-    
     setAgtronColor(targetAgtron?.toString() || '');
     
     const parentOrder = allOrders.find(o => o?.id === activeLot?.parentOrderId);
@@ -179,12 +182,15 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     if (currentTask && currentTask.assignedSilos && currentTask.assignedSilos.length > 0) {
         setTargetSiloId(currentTask.assignedSilos[0]);
     }
-    
-    setShowFinalReport(true);
 
-    // Auto-log field at stop
-    const lastTemp = dataPoints.length > 0 ? dataPoints[dataPoints.length - 1].temp : 220;
-    handleAddTemp(lastTemp, 'DROP', elapsedTime);
+    setShowFinalReport(true);
+  };
+
+  const handleStop = () => {
+    // Capture DROP milestone data before finishing
+    setPendingMilestone({ type: 'DROP', time: elapsedTime });
+    setShowMilestoneModal(true);
+    setIsRunning(false);
   };
 
   // Calculate RoR
@@ -515,7 +521,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">Registro Instantáneo</h3>
                
                <QuickStageButton 
-                 label="Turning Point" 
+                 label="Punto Inflexión (TP)" 
                  icon={<TrendingUp className="w-6 h-6" />}
                  active={dataPoints.some(p => p.type === 'TP')}
                  onClick={() => openMilestoneModal('TP')}
@@ -531,11 +537,19 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                />
 
                <QuickStageButton 
-                 label="Etapa Marrón" 
-                 icon={<BarChart3 className="w-6 h-6" />}
+                 label="Reacción Maillard" 
+                 icon={<Droplets className="w-6 h-6" />}
+                 active={dataPoints.some(p => p.type === 'MAILLARD')}
+                 onClick={() => openMilestoneModal('MAILLARD')}
+                 color="border-amber-600/30 text-amber-500 bg-amber-600/5"
+               />
+
+               <QuickStageButton 
+                 label="Primer Crack (1C)" 
+                 icon={<Flame className="w-6 h-6" />}
                  active={dataPoints.some(p => p.type === 'FC_START')}
                  onClick={() => openMilestoneModal('FC_START')}
-                 color="border-amber-700/30 text-amber-600 bg-amber-700/5"
+                 color="border-red-500/30 text-red-500 bg-red-500/5"
                />
 
                {isRunning && (
@@ -722,7 +736,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
            <div className="bg-[#14161a] border-2 border-white/10 rounded-[48px] p-10 max-w-xl w-full shadow-2xl">
               <div className="text-center mb-8">
                 <p className="text-[10px] text-coffee-accent font-black uppercase tracking-[0.3em] mb-4">Capturando Hito Industrial</p>
-                <h2 className="text-4xl font-black text-white uppercase mb-2">{pendingMilestone?.type === 'TP' ? 'Turning Point' : pendingMilestone?.type === 'YELLOW' ? 'Etapa Amarilla' : 'Etapa Marrón'}</h2>
+                <h2 className="text-4xl font-black text-white uppercase mb-2">{pendingMilestone?.type === 'TP' ? 'Turning Point' : pendingMilestone?.type === 'YELLOW' ? 'Etapa Amarilla' : pendingMilestone?.type === 'MAILLARD' ? 'Reacción Maillard' : pendingMilestone?.type === 'FC_START' ? 'Primer Crack' : 'DROP / DESCARGA'}</h2>
                 <p className="text-2xl font-mono text-gray-500 font-bold">T+: {formatTimeMinutes(pendingMilestone?.time || 0)}</p>
               </div>
               
@@ -788,6 +802,18 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                     <div>
                        <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Lote Finalizado</h2>
                        <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">Introducción de datos de trazabilidad</p>
+                    </div>
+                 </div>
+
+                 {/* Roast Summary Recap */}
+                 <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
+                       <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Duración Total</p>
+                       <p className="text-3xl font-mono font-black text-white">{formatTimeMinutes(elapsedTime)}</p>
+                    </div>
+                    <div className="bg-white/5 border border-white/10 rounded-3xl p-6 text-right">
+                       <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Temp. Descarga (Drop)</p>
+                       <p className="text-3xl font-mono font-black text-coffee-accent">{dataPoints.find(p => p.type === 'DROP')?.temp || '--'} °C</p>
                     </div>
                  </div>
 

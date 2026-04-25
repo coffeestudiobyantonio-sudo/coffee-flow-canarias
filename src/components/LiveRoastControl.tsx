@@ -269,6 +269,24 @@ const LiveRoastControl: React.FC<LiveRoastControlProps> = ({ activeLot, onRoastC
                 ))}
               </LineChart>
             </ResponsiveContainer>
+
+            {/* QUICK ACTIONS DURING ROAST */}
+            {isRoasting && (
+              <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex space-x-4 bg-[#1e222b]/80 backdrop-blur-md p-4 rounded-3xl border border-white/10 shadow-2xl z-30">
+                 <button 
+                   onClick={() => handleAutofillMilestone('1st Crack')}
+                   className="px-8 py-3 bg-red-600 hover:bg-red-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest flex items-center shadow-lg shadow-red-600/20 active:scale-95 transition-all"
+                 >
+                   <Flame className="w-5 h-5 mr-3" /> Primer Crack (1C)
+                 </button>
+                 <button 
+                   onClick={() => handleAutofillMilestone('Drop')}
+                   className="px-8 py-3 bg-green-600 hover:bg-green-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest flex items-center shadow-lg shadow-green-600/20 active:scale-95 transition-all"
+                 >
+                   <CheckCircle2 className="w-5 h-5 mr-3" /> DROP (DESCARGA)
+                 </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -364,28 +382,48 @@ const LiveRoastControl: React.FC<LiveRoastControlProps> = ({ activeLot, onRoastC
         </div>
 
         {hasDrop && (
-           <div className="bg-purple-600/10 border border-purple-500/30 rounded-2xl p-5 shadow-[0_0_30px_rgba(147,51,234,0.15)] shrink-0 animate-fade-in-up">
-             <div className="mb-4 bg-[#14161a] p-3 rounded-xl border border-dashboard-border flex justify-between items-center">
-               <span className="text-xs uppercase tracking-widest text-gray-400 font-bold">Peso Salida kg:</span>
-               <div className="flex items-center">
-                  <input type="number" placeholder="Ej: 850" value={finalWeight} onChange={(e)=>setFinalWeight(e.target.value === '' ? '' : Number(e.target.value))} className="w-24 bg-[#1e222b] border border-gray-700 rounded-lg p-2 text-white font-mono text-center appearance-none mr-3" />
-                  <div className="text-right">
+           <div className="bg-purple-600/10 border border-purple-500/30 rounded-2xl p-5 shadow-[0_0_30px_rgba(147,51,234,0.15)] shrink-0 animate-fade-in-up space-y-4">
+              
+              {/* DROP SUMMARY RECAP */}
+              <div className="bg-[#1e222b] border-2 border-purple-500/20 rounded-2xl p-4 space-y-3">
+                 <div className="flex justify-between items-center text-[10px] font-black uppercase text-purple-400 tracking-widest">
+                    <span>Registro de Descarga (Drop)</span>
+                    <CheckCircle2 className="w-4 h-4" />
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                       <p className="text-[9px] text-gray-500 font-bold uppercase">Tiempo</p>
+                       <p className="text-xl font-mono font-black text-white">{formatTime(Number(milestones['Drop'].timeSec))}</p>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-[9px] text-gray-500 font-bold uppercase">Temperatura</p>
+                       <p className="text-xl font-mono font-black text-white">{milestones['Drop'].temp} °C</p>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="flex items-center justify-between bg-[#14161a] border border-dashboard-border p-4 rounded-xl">
+                 <div className="flex flex-col flex-1">
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Peso Final (kg)</span>
+                    <input type="number" placeholder="Ej: 850" value={finalWeight} onChange={(e)=>setFinalWeight(e.target.value === '' ? '' : Number(e.target.value))} className="w-full bg-[#1e222b] border border-gray-700 rounded-lg p-2 text-white font-mono text-xl font-black text-center appearance-none" />
+                 </div>
+                 <div className="text-right ml-4">
                     <span className="block text-[10px] text-purple-400 font-bold uppercase">Merma</span>
-                    <span className="font-mono font-black text-white">{typeof finalWeight === 'number' && finalWeight > 0 ? (((initialWeight - finalWeight) / initialWeight) * 100).toFixed(1) + '%' : '--%'}</span>
-                  </div>
-               </div>
-             </div>
-             <button onClick={() => onRoastComplete && onRoastComplete({
-               finalTemp: Number(milestones['Drop'].temp), 
-               devTime: Number(milestones['Drop'].timeSec), 
-               chargeTemp: Number(milestones['Charge'].temp),
-               turnaroundTemp: Number(milestones['Turning Point'].temp),
-               turnaroundTime: formatTime(Number(milestones['Turning Point'].timeSec)),
-               firstCrackTemp: Number(milestones['1st Crack'].temp),
-               firstCrackTime: formatTime(Number(milestones['1st Crack'].timeSec))
-             })} className="w-full py-4 rounded-xl font-black text-sm tracking-widest uppercase bg-purple-600 hover:bg-purple-500 text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center">
-               <TestTube2 className="w-5 h-5 mr-3" /> Terminar y Validar Lote
-             </button>
+                    <span className="font-mono font-black text-white text-xl">{typeof finalWeight === 'number' && finalWeight > 0 ? (((initialWeight - finalWeight) / initialWeight) * 100).toFixed(1) + '%' : '--%'}</span>
+                 </div>
+              </div>
+
+              <button onClick={() => onRoastComplete && onRoastComplete({
+                finalTemp: Number(milestones['Drop'].temp), 
+                devTime: Number(milestones['Drop'].timeSec), 
+                chargeTemp: Number(milestones['Charge'].temp),
+                turnaroundTemp: Number(milestones['Turning Point'].temp),
+                turnaroundTime: formatTime(Number(milestones['Turning Point'].timeSec)),
+                firstCrackTemp: Number(milestones['1st Crack'].temp),
+                firstCrackTime: formatTime(Number(milestones['1st Crack'].timeSec))
+              })} className="w-full py-4 rounded-xl font-black text-sm tracking-widest uppercase bg-purple-600 hover:bg-purple-500 text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center">
+                <TestTube2 className="w-5 h-5 mr-3" /> Terminar y Validar Lote
+              </button>
            </div>
         )}
       </div>
