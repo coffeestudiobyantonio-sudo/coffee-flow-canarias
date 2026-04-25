@@ -100,6 +100,7 @@ export interface ActiveLot {
   assignedSilos?: number[];
   consumedLots?: { lotId: string, weightKg: number, origin: string }[];
   category?: OrderCategory; // Phase 12
+  type: 'ROAST' | 'BLEND';
 }
 
 export interface ConsumedLot {
@@ -204,7 +205,8 @@ function App() {
       parentOrderId: task.parentOrderId,
       origins: task.origins,
       assignedSilos: task.assignedSilos,
-      category: task.category
+      category: task.category,
+      type: task.type
     });
     setActiveTab('manual_roast');
   };
@@ -246,28 +248,55 @@ function App() {
         return;
       }
 
-      // Auto-update Silo if assigned (For Automatic Live Machine Roasts)
+      // Auto-update Silo if assigned
       if (activeLot.assignedSilos && activeLot.assignedSilos.length > 0) {
-          const targetSiloId = activeLot.assignedSilos[0];
-          const pickedSilo = silos.find(s => s?.id === targetSiloId);
-          
-          if (pickedSilo) {
-             const siloDisplayName = activeLot.origins && activeLot.origins.length > 0 
-                ? `${activeLot.origins[0]} (${activeLot.profile?.name})` 
-                : activeLot.profile?.name || null;
-
-             const newSiloKg = pickedSilo.currentKg + actualWeight;
-             await updateSilo(targetSiloId, {
-                currentKg: newSiloKg,
-                profileName: siloDisplayName,
-                lastFillDate: new Date().toISOString()
-             });
+          // If it's a ROAST task, we ADD to the first silo
+          if (activeLot.type === 'ROAST') {
+             const targetSiloId = activeLot.assignedSilos[0];
+             const pickedSilo = silos.find(s => s?.id === targetSiloId);
              
-             setSilos(prev => prev.map(s => s?.id === targetSiloId ? {
-                ...s,
-                currentKg: newSiloKg,
-                profileName: siloDisplayName
-             } : s));
+             if (pickedSilo) {
+                const siloDisplayName = activeLot.origins && activeLot.origins.length > 0 
+                   ? `${activeLot.origins[0]} (${activeLot.profile?.name})` 
+                   : activeLot.profile?.name || null;
+
+                const newSiloKg = pickedSilo.currentKg + actualWeight;
+                await updateSilo(targetSiloId, {
+                   currentKg: newSiloKg,
+                   profileName: siloDisplayName,
+                   lastFillDate: new Date().toISOString()
+                });
+                
+                setSilos(prev => prev.map(s => s?.id === targetSiloId ? {
+                   ...s,
+                   currentKg: newSiloKg,
+                   profileName: siloDisplayName
+                } : s));
+             }
+          } 
+          // If it's a BLEND task, we SUBTRACT proportional weights from ALL assigned silos
+          else if (activeLot.type === 'BLEND') {
+             // In a perfect system, we'd subtract each origin's proportion.
+             // For now, we find silos matching our origins and subtract the proportional actualWeight.
+             const updatedSiloIds: number[] = [];
+             
+             for (const siloId of activeLot.assignedSilos) {
+                const s = silos.find(item => item.id === siloId);
+                if (!s) continue;
+                
+                // Find blend percentage for THIS origin in THIS silo
+                // (Search by origin name stored in silo or activeLot context)
+                const component = activeLot.profile.blend.find(b => s.profileName?.includes(b.origin));
+                if (component) {
+                   const reduction = actualWeight * (component.percentage / 100);
+                   const newKg = Math.max(0, s.currentKg - reduction);
+                   
+                   await updateSilo(s.id, { currentKg: newKg });
+                   updatedSiloIds.push(s.id);
+                   
+                   setSilos(prev => prev.map(item => item.id === s.id ? { ...item, currentKg: newKg } : item));
+                }
+             }
           }
       }
 
@@ -455,7 +484,7 @@ function App() {
               />}
             {activeTab === 'silos' && <SiloManager silos={silos} setSilos={setSilos} />}
             {activeTab === 'mgmt' && <ManagementDashboard />}
-            {activeTab === 'roast' && <LiveRoastControl activeLot={activeLot} onRoastComplete={(metrics) => handleBatchComplete({ ...metrics, actualWeight: activeLot?.batchWeight || 0 })} />}
+            {activeTab === 'roast' && <LiveRoastControl activeLot={activeLot} onRoastComplete={handleBatchComplete} />}
             {activeTab === 'manual_roast' && <ManualRoastControl activeLot={activeLot} onBatchComplete={handleBatchComplete} allOrders={roastOrders} setAllOrders={setRoastOrders} silos={silos} setSilos={setSilos} />}
             {activeTab === 'lab' && <QualityLab activeLot={activeLot} roastOrders={roastOrders} onQualityValidated={handleQualityValidated} />}
             {activeTab === 'traceability' && <TraceabilityDetective activeLot={activeLot} />}

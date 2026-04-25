@@ -451,7 +451,9 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
             
             if (!silo) {
                if (currentDaySiloAssignments.length >= 4) flushDay();
-               silo = { siloId: 0, origin: batchDef.origin, batches: [] };
+               const nextIdx = currentDaySiloAssignments.length;
+               const siloSet = dayIdx % 2 === 1 ? [1, 2, 3, 4] : [5, 6, 7, 8];
+               silo = { siloId: siloSet[nextIdx], origin: batchDef.origin, batches: [] };
                currentDaySiloAssignments.push(silo);
             }
 

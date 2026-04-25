@@ -414,6 +414,7 @@ const LiveRoastControl: React.FC<LiveRoastControlProps> = ({ activeLot, onRoastC
               </div>
 
               <button onClick={() => onRoastComplete && onRoastComplete({
+                actualWeight: Number(finalWeight),
                 finalTemp: Number(milestones['Drop'].temp), 
                 devTime: Number(milestones['Drop'].timeSec), 
                 chargeTemp: Number(milestones['Charge'].temp),
