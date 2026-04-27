@@ -59,6 +59,13 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isRunning]);
 
+  // Autofill current temperature when milestone modal opens
+  useEffect(() => {
+    if (showMilestoneModal && dataPoints.length > 0) {
+      setCurrentTemp(dataPoints[dataPoints.length - 1].temp.toFixed(1));
+    }
+  }, [showMilestoneModal]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -155,13 +162,18 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
 
   const handleConfirmMilestone = (temp: number) => {
     if (pendingMilestone) {
-      handleAddTemp(temp, pendingMilestone.type, pendingMilestone.time);
-      const mType = pendingMilestone.type;
+      const type = pendingMilestone.type;
+      const time = pendingMilestone.time;
+      
+      const newPoint: RoastDataPoint = { time, temp, type };
+      setDataPoints(prev => [...prev, newPoint].sort((a, b) => a.time - b.time));
+      
       setPendingMilestone(null);
       setShowMilestoneModal(false);
+      setCurrentTemp("");
 
       // If it was the drop, proceed to final report
-      if (mType === 'DROP') {
+      if (type === 'DROP') {
          prepareFinalReport();
       }
     }
@@ -175,7 +187,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     const expectedFinalWeight = targetWeightVal * (1 - shrinkageDecimal);
     
     setFinalWeight(expectedFinalWeight.toFixed(1));
-    setAgtronColor(targetAgtron?.toString() || '');
+    setAgtronColor(activeLot?.profile?.targetAgtron?.toString() || '');
     
     const parentOrder = allOrders.find(o => o?.id === activeLot?.parentOrderId);
     const currentTask = parentOrder?.tasks.find((t: any) => t?.id === activeLot?.id);
@@ -297,16 +309,17 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
        setShowFinalReport(false);
        setShowBlendingOverlay(true);
     } else {
-        const turnaround = dataPoints.find(p => p.type === 'TP' || p.type === 'TURNAROUND');
-        const yellow = dataPoints.find(p => p.type === 'YELLOW');
-        const maillard = dataPoints.find(p => p.type === 'MAILLARD');
-        const fcStart = dataPoints.find(p => p.type === 'FC_START');
-        const charge = dataPoints.find(p => p.type === 'CHARGE');
+        const turnaround = dataPoints.find(p => p.type === 'TP' || p.type === 'TURNAROUND' || (p.type as string) === 'Turning Point');
+        const yellow = dataPoints.find(p => p.type === 'YELLOW' || (p.type as string) === 'Yellow Phase');
+        const maillard = dataPoints.find(p => p.type === 'MAILLARD' || (p.type as string) === 'Browning');
+        const fcStart = dataPoints.find(p => p.type === 'FC_START' || (p.type as string) === '1st Crack');
+        const drop = dataPoints.find(p => p.type === 'DROP' || (p.type as string) === 'Drop');
+        const charge = dataPoints.find(p => p.type === 'CHARGE' || (p.type as string) === 'Charge');
 
         onBatchComplete({
            actualWeight: weight,
-           finalTemp: parseFloat(dataPoints[dataPoints.length - 1].temp.toString()),
-           finalTime: formatTime(dataPoints[dataPoints.length - 1].time),
+           finalTemp: drop?.temp || parseFloat(dataPoints[dataPoints.length - 1].temp.toString()),
+           finalTime: drop ? formatTime(drop.time) : formatTime(dataPoints[dataPoints.length - 1].time),
            finalRor: currentRoR,
            devTime: parseInt(ratios.development),
            chargeTemp: charge?.temp,

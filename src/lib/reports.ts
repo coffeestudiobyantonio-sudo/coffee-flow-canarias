@@ -36,9 +36,11 @@ export const generateDailyProductionReport = (orders: DailyRoastOrder[]) => {
    doc.text(`INFORME DIARIO DE PRODUCCIÓN Y TRAZABILIDAD - ${today}`, 15, 30);
 
    // 2. Resumen Ejecutivo
-   const allTasks = orders.flatMap(o => o.tasks.filter(t => t.status === 'ROASTED' || t.status === 'RESTING'));
-   const totalRoastedKg = allTasks.reduce((acc, t) => acc + (t.actualWeightKg || 0), 0);
-   const totalGreenKg = allTasks.reduce((acc, t) => acc + (t.targetWeightKg || 0), 0);
+   // CRITICAL FIX: Only count ROAST type tasks for the summary to avoid double-counting BLEND tasks
+   const roastTasks = orders.flatMap(o => o.tasks.filter(t => t.type === 'ROAST' && (t.status === 'ROASTED' || t.status === 'RESTING')));
+   
+   const totalRoastedKg = roastTasks.reduce((acc, t) => acc + (t.actualWeightKg || 0), 0);
+   const totalGreenKg = roastTasks.reduce((acc, t) => acc + (t.targetWeightKg || 0), 0);
    const avgShrinkage = totalGreenKg > 0 ? ((totalGreenKg - totalRoastedKg) / totalGreenKg * 100).toFixed(2) : '0.00';
    
    doc.setTextColor(40, 40, 40);
@@ -60,24 +62,27 @@ export const generateDailyProductionReport = (orders: DailyRoastOrder[]) => {
    });
 
    // 3. Tabla Detallada de Tuestes
+   const allTasks = orders.flatMap(o => o.tasks.filter(t => t.status === 'ROASTED' || t.status === 'RESTING'));
    const tableRows = allTasks.flatMap(t => {
       // For BLEND tasks, we might want a different view, but user asked for "cada tueste"
       if (t.type === 'BLEND') return [];
       
       const shrinkage = t.actualWeightKg ? (((t.targetWeightKg - t.actualWeightKg) / t.targetWeightKg) * 100).toFixed(1) : '--';
-      const rd = t.roastData;
+      const rd = t.roastData || {} as any;
+
+      const hasData = (val: any) => val !== undefined && val !== null && val !== '' && val !== 0;
 
       return [[
          t.id.split('-').pop() || t.id,
-         t.masterProfile?.name || '---',
+         `${t.masterProfile?.name || '---'}\n(${t.origins[0] || '---'})`,
          `${t.targetWeightKg.toFixed(1)} / ${t.actualWeightKg?.toFixed(1) || '--'}`,
          `${shrinkage}%`,
-         rd?.turnaroundTemp ? `${rd.turnaroundTemp}°C\n(${rd.turnaroundTime || '--'})` : '--',
-         rd?.yellowTemp ? `${rd.yellowTemp}°C\n(${rd.yellowTime || '--'})` : '--',
-         rd?.maillardTemp ? `${rd.maillardTemp}°C\n(${rd.maillardTime || '--'})` : '--',
-         rd?.firstCrackTemp ? `${rd.firstCrackTemp}°C\n(${rd.firstCrackTime || '--'})` : '--',
-         rd?.finalTemp ? `${rd.finalTemp}°C\n(${rd.finalTime || '--'})` : '--',
-         `${rd?.devTime || 0}%`,
+         hasData(rd.turnaroundTemp) ? `${rd.turnaroundTemp}°C\n(${rd.turnaroundTime && rd.turnaroundTime !== '--' ? rd.turnaroundTime : '0:00'})` : '--',
+         hasData(rd.yellowTemp) ? `${rd.yellowTemp}°C\n(${rd.yellowTime && rd.yellowTime !== '--' ? rd.yellowTime : '0:00'})` : '--',
+         hasData(rd.maillardTemp) ? `${rd.maillardTemp}°C\n(${rd.maillardTime && rd.maillardTime !== '--' ? rd.maillardTime : '0:00'})` : '--',
+         hasData(rd.firstCrackTemp) ? `${rd.firstCrackTemp}°C\n(${rd.firstCrackTime && rd.firstCrackTime !== '--' ? rd.firstCrackTime : '0:00'})` : '--',
+         hasData(rd.finalTemp) ? `${rd.finalTemp}°C\n(${rd.finalTime && rd.finalTime !== '--' ? rd.finalTime : '0:00'})` : '--',
+         `${rd.devTime || 0}%`,
          t.assignedSilos ? `Silo ${t.assignedSilos[0]}` : '--'
       ]];
    });

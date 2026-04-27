@@ -125,7 +125,8 @@ export const fetchDailyOrders = async (): Promise<DailyRoastOrder[]> => {
         totalBatches: t.total_batches,
         parentOrderTotalKg: t.parent_order_total_kg ? Number(t.parent_order_total_kg) : undefined,
         category: t.category as any,
-        roastedAt: t.roasted_at
+        roastedAt: t.roasted_at,
+        roastData: t.roast_data
       }));
 
     return {
