@@ -127,7 +127,8 @@ export const fetchDailyOrders = async (): Promise<DailyRoastOrder[]> => {
         category: t.category as any,
         roastedAt: t.roasted_at,
         roastData: t.roast_data,
-        fulfilledDemandIds: t.fulfilled_demand_ids || []
+        fulfilledDemandIds: t.fulfilled_demand_ids || [],
+        lotNumber: t.lot_number
       }));
 
     return {
@@ -193,6 +194,7 @@ export const updateTaskStatus = async (taskId: string, status: string, additiona
   if (additionalData.actualWeightKg !== undefined) dbUpdates.actual_weight_kg = additionalData.actualWeightKg;
   if (additionalData.roastedAt !== undefined) dbUpdates.roasted_at = additionalData.roastedAt;
   if (additionalData.roastData !== undefined) dbUpdates.roast_data = additionalData.roastData;
+  if (additionalData.lotNumber !== undefined) dbUpdates.lot_number = additionalData.lotNumber;
 
   const { error } = await supabase.from('roast_tasks').update(dbUpdates).eq('id', taskId);
   if (error) console.error('Error updating task:', error);

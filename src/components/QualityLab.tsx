@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TestTube2, CheckCircle, AlertTriangle, Target, LineChart as LineChartIcon, History, Lock } from 'lucide-react';
+import { TestTube2, CheckCircle, AlertTriangle, Target, LineChart as LineChartIcon, History } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceArea } from 'recharts';
 
 import type { ActiveLot, DailyRoastOrder, MasterProfile } from '../App';
@@ -7,7 +7,7 @@ import type { ActiveLot, DailyRoastOrder, MasterProfile } from '../App';
 interface QualityLabProps {
   activeLot: ActiveLot | null;
   roastOrders: DailyRoastOrder[];
-  onQualityValidated?: (taskId: string, isApproved: boolean) => void;
+  onQualityValidated?: (taskId: string, isApproved: boolean, lotNumber: string) => void;
 }
 
 // Las tolerancias mecánicas (2% estricto Lidl, 8% flexibilidad Marca Propia)
@@ -56,6 +56,7 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQuali
   });
 
   const [agtron, setAgtron] = useState<number>(MASTER_PROFILE.agtron);
+  const [lotNumber, setLotNumber] = useState<string>('');
   const [validationState, setValidationState] = useState<'PENDING' | 'APPROVED' | 'REJECT'>('PENDING');
 
   useEffect(() => {
@@ -67,6 +68,7 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQuali
         cuerpo: MASTER_PROFILE.cuerpo,
       });
       setAgtron(MASTER_PROFILE.agtron);
+      setLotNumber(currentTask?.lotNumber || '');
       setValidationState('PENDING');
     }
   }, [activeProfile?.name, currentTask?.id]); 
@@ -128,10 +130,14 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQuali
     }
   }, [activeProfile, agtron, MASTER_PROFILE.agtron, ACTIVE_TOLERANCE_PCT]);
 
-  const handleValidate = () => {
-    if (onQualityValidated && currentTask) {
-      onQualityValidated(currentTask.id, isApproved);
+  const handleValidate = (approved: boolean) => {
+    if (!selectedTaskId || !currentTask) return;
+    if (approved && !lotNumber.trim()) {
+      alert("Por favor, introduce el número de lote antes de aprobar.");
+      return;
     }
+    setValidationState(approved ? 'APPROVED' : 'REJECT');
+    onQualityValidated?.(selectedTaskId, approved, lotNumber);
   };
 
   return (
@@ -186,11 +192,20 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQuali
                 placeholder="--- ESPERANDO LOTE ---"
               />
             </div>
-            <div className="text-right">
-              <span className="text-[10px] text-gray-500 uppercase tracking-widest block mb-1">Régimen & Tolerancia</span>
-              <span className={`px-2 py-1 rounded text-[10px] font-black tracking-widest uppercase border block mb-2 ${activeProfile?.businessUnit === 'LIDL' ? 'bg-coffee-accent/10 text-coffee-light border-coffee-accent/30' : 'bg-blue-500/10 text-blue-400 border-blue-500/30'}`}>
-                {activeProfile?.businessUnit === 'LIDL' ? 'ESTRICTO (2%)' : 'FLEXIBLE (8%)'}
-              </span>
+            <div className="text-right space-y-4">
+              <div>
+                <span className="text-[10px] text-gray-500 uppercase tracking-widest block mb-1">Identificación Manual</span>
+                <div className="flex flex-col items-end">
+                   <label className="text-[9px] text-coffee-accent font-black uppercase tracking-tighter mb-1">Número de Lote</label>
+                   <input 
+                     type="text"
+                     value={lotNumber}
+                     onChange={(e) => setLotNumber(e.target.value.toUpperCase())}
+                     placeholder="EJEM: L-240429-A"
+                     className="bg-[#0a0a0b] border border-coffee-accent/40 rounded-lg px-3 py-1.5 text-white font-mono text-xs focus:border-coffee-light outline-none transition-all shadow-[0_0_10px_rgba(217,119,6,0.1)] w-48 text-right"
+                   />
+                </div>
+              </div>
               <div className="flex items-center justify-end space-x-2">
                  {currentTask?.machineId && (
                    <span className="bg-purple-500/10 px-2 py-1 rounded border border-purple-500/30 text-purple-400 text-[10px] font-black uppercase shadow-sm flex items-center">
@@ -200,12 +215,6 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQuali
                  <span className="bg-[#1e222b] px-3 py-1 rounded border border-dashboard-border text-gray-300 text-xs font-bold shadow-sm">
                    {activeProfile ? activeProfile?.name : 'Ninguno'}
                  </span>
-                 {currentTask?.parentCategory && (
-                    <span className={`px-2 py-1 rounded text-[10px] font-black tracking-widest uppercase border flex items-center shadow-sm ${currentTask.parentCategory === 'MARCA_PROPIA' ? 'bg-gradient-to-r from-yellow-600/30 to-yellow-800/30 text-yellow-500 border-yellow-500/50' : 'bg-blue-500/10 text-blue-400 border-blue-500/30'}`}>
-                      {currentTask.parentCategory === 'MARCA_PROPIA' ? <Lock className="w-3 h-3 mr-1" /> : <Target className="w-3 h-3 mr-1" />}
-                      {currentTask.parentCategory === 'MARCA_PROPIA' ? 'MARCA PROPIA' : 'MDD EXTERNO'}
-                    </span>
-                 )}
               </div>
             </div>
           </div>
@@ -408,7 +417,7 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQuali
                 </div>
               ) : (
                 <button 
-                  onClick={handleValidate}
+                  onClick={() => handleValidate(validationState === 'APPROVED')}
                   className={`w-full h-full py-4 rounded-xl font-black text-sm tracking-widest uppercase transition-all shadow-xl flex items-center justify-center text-center px-2
                     ${validationState === 'APPROVED' 
                       ? 'bg-green-600 hover:bg-green-500 text-white shadow-[0_0_20px_rgba(22,163,74,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]' 

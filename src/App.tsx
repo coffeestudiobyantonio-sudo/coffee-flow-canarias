@@ -143,6 +143,7 @@ export interface RoastTask {
     firstCrackTime?: string
   };
   fulfilledDemandIds?: string[];
+  lotNumber?: string;
 }
 
 export interface DailyRoastOrder {
@@ -448,9 +449,9 @@ function App() {
     }
   };
 
-  const handleQualityValidated = async (taskId: string, isApproved: boolean) => {
+  const handleQualityValidated = async (taskId: string, isApproved: boolean, lotNumber?: string) => {
     const nextStatus = isApproved ? 'RESTING' : 'LAB_REJECTED';
-    const isSuccess = await updateTaskStatus(taskId, nextStatus);
+    const isSuccess = await updateTaskStatus(taskId, nextStatus, { lotNumber });
 
     if (!isSuccess) {
       alert("Error: No se pudo registrar la validación en Supabase.");
@@ -459,7 +460,7 @@ function App() {
 
     setRoastOrders(prevOrders => prevOrders.map(o => ({
       ...o,
-      tasks: o.tasks.map(t => t.id === taskId ? { ...t, status: nextStatus } : t)
+      tasks: o.tasks.map(t => t.id === taskId ? { ...t, status: nextStatus, lotNumber } : t)
     })));
 
     if (activeLot && activeLot?.id === taskId) {
