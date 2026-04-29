@@ -3,7 +3,7 @@ import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '.
 import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, Zap, Lock } from 'lucide-react';
 import { generateDailyProductionReport } from '../lib/reports';
 import { ROASTING_MACHINES } from '../App';
-import { createDailyOrder, deleteDailyOrder, purgeAllProductionData } from '../lib/api';
+import { createDailyOrder, deleteDailyOrder, purgeAllProductionData, fetchPlannerDemands, createPlannerDemand, deletePlannerDemand, fetchPlannerDays, createPlannerDay, deletePlannerDay, purgePlannerDays, updatePlannerDemandStatus } from '../lib/api';
 import PackagingOverlay from './PackagingOverlay';
 
 interface DailyRoastOrdersProps {
@@ -13,6 +13,7 @@ interface DailyRoastOrdersProps {
    silos: any[];
    setSilos: React.Dispatch<React.SetStateAction<any[]>>;
    onLaunchManualRoast: (task: RoastTask) => void;
+   forceView?: 'PLAN_MENSUAL' | 'MANAGER' | 'OPERATOR' | 'PACKAGING';
 }
 
 interface DelegationDemand {
@@ -22,6 +23,7 @@ interface DelegationDemand {
    format: '250g' | '450g' | '500g' | '1000g' | '2KG' | 'GRANEL';
    kgRequested: number;
    totalPackages?: number;
+   status?: 'PENDING' | 'PRODUCING' | 'COMPLETED' | 'REVIEWED';
 }
 
 interface DailyPlan {
@@ -31,23 +33,22 @@ interface DailyPlan {
    totalKg: number;
    blocks: { profileName: string, format: string, targetKg: number }[];
    scheduledDate?: string;
+   fulfilledDemandIds?: string[];
 }
 
-const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roastOrders, setRoastOrders, silos, setSilos, onLaunchManualRoast }) => {
-   const [viewMode, setViewMode] = useState<'PLAN_MENSUAL' | 'MANAGER' | 'OPERATOR'>('PLAN_MENSUAL');
+const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roastOrders, setRoastOrders, silos, setSilos, onLaunchManualRoast, forceView }) => {
+   const [viewMode, setViewMode] = useState<'PLAN_MENSUAL' | 'MANAGER' | 'OPERATOR' | 'PACKAGING'>(forceView || 'MANAGER');
+
+   React.useEffect(() => {
+      if (forceView) setViewMode(forceView);
+   }, [forceView]);
 
    // Phase 20: Packaging Core State
    const [activePackagingTask, setActivePackagingTask] = useState<any>(null);
       
    // Planificador Mensual State
-   const [demands, setDemands] = useState<DelegationDemand[]>(() => {
-      const saved = localStorage.getItem('coffee_planner_demands');
-      return saved ? JSON.parse(saved) : [];
-   });
-   const [plannedDays, setPlannedDays] = useState<DailyPlan[]>(() => {
-      const saved = localStorage.getItem('coffee_planner_days');
-      return saved ? JSON.parse(saved) : [];
-   });
+   const [demands, setDemands] = useState<DelegationDemand[]>([]);
+   const [plannedDays, setPlannedDays] = useState<DailyPlan[]>([]);
    const [newDemand, setNewDemand] = useState<Partial<DelegationDemand>>({
       delegation: 'Canarias',
       format: '1000g',
@@ -56,12 +57,16 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    });
 
    React.useEffect(() => {
-      localStorage.setItem('coffee_planner_demands', JSON.stringify(demands));
-   }, [demands]);
-
-   React.useEffect(() => {
-      localStorage.setItem('coffee_planner_days', JSON.stringify(plannedDays));
-   }, [plannedDays]);
+      const loadPlannerData = async () => {
+         const [dbDemands, dbDays] = await Promise.all([
+            fetchPlannerDemands(),
+            fetchPlannerDays()
+         ]);
+         setDemands(dbDemands as any[]);
+         setPlannedDays(dbDays as any[]);
+      };
+      loadPlannerData();
+   }, []);
 
    // Utility for format weight mapping
    const getFormatWeight = (format: string): number => {
@@ -259,8 +264,8 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       setRoastOrders([]);
       setDemands([]);
       setPlannedDays([]);
-      localStorage.removeItem('coffee_planner_demands');
-      localStorage.removeItem('coffee_planner_days');
+      await purgePlannerDays();
+      // Demands are intentionally kept so they don't have to be re-entered if the user just wants to purge the execution agenda
       
       const toast = document.createElement('div');
       toast.className = 'fixed bottom-4 right-4 bg-red-500/90 text-white px-6 py-4 rounded-xl font-bold z-50 animate-bounce flex flex-col space-y-1';
@@ -285,7 +290,9 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          totalPackages: newDemand.totalPackages
       };
 
-      setDemands([...demands, demand]);
+      createPlannerDemand(demand).then((success) => {
+         if(success) setDemands([...demands, demand]);
+      });
       
       // Reset input maintaining format and sync
       const defaultKg = 1890;
@@ -298,7 +305,9 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    };
 
    const handleRemoveDemand = (id: string) => {
-      setDemands(demands.filter(d => d.id !== id));
+      deletePlannerDemand(id).then(success => {
+         if(success) setDemands(demands.filter(d => d.id !== id));
+      });
    };
 
    const generateMonthlyPlan = () => {
@@ -308,19 +317,19 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       }
 
       // 1. Group demands by Profile + Format (Independent Lines)
-      let queue: { profileName: string, format: string, totalKg: number }[] = [];
-      demands.forEach(d => {
+      let queue: { profileName: string, format: string, totalKg: number, demandIds: string[] }[] = [];
+      demands.filter(d => d.status !== 'COMPLETED' && d.status !== 'REVIEWED').forEach(d => {
          const existing = queue.find(g => g.profileName === d.profileName && g.format === d.format);
          if (existing) {
             existing.totalKg += d.kgRequested;
+            existing.demandIds.push(d.id);
          } else {
-            queue.push({ profileName: d.profileName, format: d.format, totalKg: d.kgRequested });
+            queue.push({ profileName: d.profileName, format: d.format, totalKg: d.kgRequested, demandIds: [d.id] });
          }
       });
 
-      // 2. Sort by Format Affinity (The Greedy Algorithm)
       // Pick highest volume -> then all same format -> then next highest...
-      const sortedQueue: { profileName: string, format: string, totalKg: number }[] = [];
+      const sortedQueue: { profileName: string, format: string, totalKg: number, demandIds: string[] }[] = [];
       let currentFormat: string | null = null;
 
       while (queue.length > 0) {
@@ -360,6 +369,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       // Distributor State
       let currentDaySiloAssignments: { siloId: number, origin: string, batches: { profileName: string, format: string }[] }[] = [];
       let currentDayBlocks: { profileName: string, format: string, targetKg: number }[] = [];
+      let currentDayFulfilledIds: string[] = [];
 
       const flushDay = () => {
          if (currentDaySiloAssignments.length > 0) {
@@ -377,17 +387,22 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                targetSilos: siloSet,
                siloAssignments: finalSiloAssignments,
                totalKg: Number(dayTotalKg.toFixed(1)),
-               blocks: currentDayBlocks.map(b => ({ ...b, targetKg: Number(b.targetKg.toFixed(1)) }))
+               blocks: currentDayBlocks.map(b => ({ ...b, targetKg: Number(b.targetKg.toFixed(1)) })),
+               fulfilledDemandIds: Array.from(new Set(currentDayFulfilledIds))
             });
             dayIdx++;
             currentDaySiloAssignments = [];
             currentDayBlocks = [];
+            currentDayFulfilledIds = [];
          }
       };
 
       sortedQueue.forEach(item => {
          const profile = masterProfiles.find(p => p?.name === item.profileName);
          if (!profile) return;
+
+         // Accumulate demand IDs into the current day
+         currentDayFulfilledIds.push(...item.demandIds);
 
          const shrinkage = (profile.expectedShrinkage || 16) / 100;
 
@@ -470,7 +485,12 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       });
 
       flushDay();
-      setPlannedDays(computedDays);
+
+      // Wipe old plan and save the new one
+      purgePlannerDays().then(() => {
+         computedDays.forEach(day => createPlannerDay(day));
+         setPlannedDays(computedDays);
+      });
    };
 
    const handleLaunchDay = async (day: DailyPlan) => {
@@ -525,7 +545,8 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
               category: 'MARCA_PROPIA',
               batchIndex: globalTaskCounter++,
               totalBatches: totalTasksInSession,
-              assignedSilos: day.targetSilos 
+              assignedSilos: day.targetSilos,
+              fulfilledDemandIds: day.fulfilledDemandIds || []
            });
         });
 
@@ -549,8 +570,16 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          return;
       }
 
+      // Mark demands as PRODUCING
+      if (day.fulfilledDemandIds) {
+         for (const dId of day.fulfilledDemandIds) {
+            await updatePlannerDemandStatus(dId, 'PRODUCING');
+         }
+      }
+
       setRoastOrders([...roastOrders, newOrder]);
       setPlannedDays(plannedDays.filter(d => d.dayIndex !== day.dayIndex));
+      deletePlannerDay(day.dayIndex);
       
       // Toast notification
       const toast = document.createElement('div');
@@ -607,6 +636,13 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                   <Cpu className="w-4 h-4 mr-2" />
                   Planta (Operario)
                </button>
+               <button
+                  onClick={() => setViewMode('PACKAGING')}
+                  className={`flex-none px-6 py-2 text-xs font-bold uppercase tracking-widest rounded-md transition-all flex items-center justify-center ${viewMode === 'PACKAGING' ? 'bg-[#1e222b] text-green-400 shadow ring-1 ring-green-500/50' : 'text-gray-500 hover:text-green-400/50'}`}
+               >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Ejecución de Planta
+               </button>
             </div>
          </div>
 
@@ -624,30 +660,45 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                         <table className="w-full text-left text-sm text-gray-400">
                            <thead className="bg-[#14161a] text-xs uppercase text-gray-500 font-black tracking-widest border-b border-dashboard-border">
                               <tr>
-                                 <th className="px-6 py-4">Delegación</th>
-                                 <th className="px-6 py-4">Gama/Perfil</th>
-                                 <th className="px-6 py-4">Formato Envasado</th>
-                                 <th className="px-6 py-4">Demanda (Kg)</th>
-                                 <th className="px-6 py-4 text-right">Quitar</th>
+                                 <th className="px-6 py-3 text-left text-[10px] font-black text-coffee-accent uppercase tracking-widest">Delegación</th>
+                                 <th className="px-6 py-3 text-left text-[10px] font-black text-coffee-accent uppercase tracking-widest">Gama/Perfil</th>
+                                 <th className="px-6 py-3 text-left text-[10px] font-black text-coffee-accent uppercase tracking-widest">Formato</th>
+                                 <th className="px-6 py-3 text-left text-[10px] font-black text-coffee-accent uppercase tracking-widest text-center">Estado</th>
+                                 <th className="px-6 py-3 text-left text-[10px] font-black text-coffee-accent uppercase tracking-widest">Demanda (Kg)</th>
+                                 <th className="px-6 py-3 text-center text-[10px] font-black text-coffee-accent uppercase tracking-widest">Acción</th>
                               </tr>
                            </thead>
-                           <tbody>
-                              {demands.length === 0 && (
-                                 <tr>
-                                    <td colSpan={5} className="px-6 py-8 text-center text-gray-600 font-bold tracking-widest uppercase">
-                                       No hay demanda insertada. Utiliza el formulario inferior.
+                           <tbody className="divide-y divide-dashboard-border/50">
+                              {demands.map((d) => (
+                                 <tr key={d.id} className="hover:bg-white/5 transition-colors">
+                                    <td className="px-6 py-4">
+                                       <span className="bg-coffee-accent/10 px-2 py-1 rounded text-[10px] font-bold text-coffee-light border border-coffee-accent/20 uppercase tracking-widest">{d.delegation}</span>
                                     </td>
-                                 </tr>
-                              )}
-                              {demands.map(d => (
-                                 <tr key={d.id} className="border-b border-dashboard-border/50 hover:bg-white/5 transition-colors">
-                                    <td className="px-6 py-4 font-bold text-white">{d.delegation}</td>
-                                    <td className="px-6 py-4 text-coffee-light font-black">{d.profileName}</td>
-                                    <td className="px-6 py-4"><span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-1 rounded font-mono text-xs font-bold">{d.format}</span></td>
+                                    <td className="px-6 py-4 font-black text-white">{d.profileName}</td>
+                                    <td className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">{d.format}</td>
+                                    <td className="px-6 py-4 text-center">
+                                       {d.status === 'COMPLETED' ? (
+                                          <div className="flex flex-col items-center">
+                                             <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-green-500/30 animate-pulse">
+                                                Terminado: revisar
+                                             </span>
+                                          </div>
+                                       ) : d.status === 'PRODUCING' ? (
+                                          <span className="bg-blue-500/10 text-blue-400 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-blue-500/20">
+                                             En Producción
+                                          </span>
+                                       ) : (
+                                          <span className="text-gray-600 text-[9px] font-black uppercase tracking-widest">Pendiente</span>
+                                       )}
+                                    </td>
                                     <td className="px-6 py-4 font-mono font-bold text-white">{d.kgRequested} kg</td>
-                                    <td className="px-6 py-4 text-right">
-                                       <button onClick={() => handleRemoveDemand(d.id)} className="text-gray-500 hover:text-red-500 transition-colors">
-                                          <Trash2 className="w-4 h-4 inline" />
+                                    <td className="px-6 py-4 text-center">
+                                       <button 
+                                          onClick={() => handleRemoveDemand(d.id)}
+                                          className="p-2 text-gray-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                                          title={d.status === 'COMPLETED' ? "Quitar de la lista" : "Borrar petición"}
+                                       >
+                                          {d.status === 'COMPLETED' ? <CheckCircle className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
                                        </button>
                                     </td>
                                  </tr>
@@ -1071,8 +1122,12 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                <div className="max-w-7xl mx-auto space-y-8">
                   <div className="flex justify-between items-center bg-[#14161a] p-6 rounded-2xl border border-dashboard-border shadow-lg">
                      <div>
-                        <h2 className="text-xl font-black text-white uppercase tracking-tighter">Panel de Ejecución de Planta</h2>
-                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Cola de Producción Activa — Sincronización Silos OK</p>
+                        <h2 className="text-xl font-black text-white uppercase tracking-tighter">
+                           {viewMode === 'PACKAGING' ? 'Ejecución de Planta (Ensamblaje)' : 'Planta (Operario)'}
+                        </h2>
+                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">
+                           {viewMode === 'PACKAGING' ? 'Cola de Envasado & Reposo Operativa' : 'Cola de Tostado Activa'}
+                        </p>
                      </div>
                      <div className="flex items-center space-x-4">
                         <div className="flex flex-col items-end">
@@ -1089,12 +1144,13 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                      {pendingTasks.map((task, idx) => {
                         const machine = ROASTING_MACHINES.find(m => m?.id === task.machineId);
                         
-                        // Validate that all required silos are assigned and have coffee
-                        // const _isReadyToRoast = task.origins && task.assignedSilos && 
-                        //                        task.assignedSilos.length === task.origins.length && 
-                        //                        task.assignedSilos.every((sId: React.Key | null | undefined) => sId !== null && sId !== undefined);
+                        // Segregate displays strictly:
+                        // 'OPERATOR' shows only 'ROAST' tasks.
+                        // 'PACKAGING' ('Ejecución de Planta') shows only 'BLEND' tasks.
+                        if (viewMode === 'OPERATOR' && task.type !== 'ROAST') return null;
+                        if (viewMode === 'PACKAGING' && task.type !== 'BLEND') return null;
 
-                         // Special UI render for BLEND task (Resolves confusion of "1854kg as a Roast")
+                         // Special UI render for BLEND task (Ejecución de Planta)
                          if (task.type === 'BLEND') {
                             return (
                                <div key={`${task?.id}-${idx}`} className="bg-dashboard-panel border-2 border-green-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col group hover:border-green-500/50 transition-all">

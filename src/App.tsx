@@ -7,7 +7,7 @@ import TraceabilityDetective from './components/TraceabilityDetective';
 import DailyRoastOrders from './components/DailyRoastOrders';
 import ManualRoastControl from './components/ManualRoastControl';
 import SiloManager from './components/SiloManager';
-import { Database, Activity, LayoutDashboard, Target, TestTube2, Flame, CheckCircle, Lock, FileSearch, ClipboardList, Timer } from 'lucide-react';
+import { Database, Activity, LayoutDashboard, Target, TestTube2, Flame, CheckCircle, Lock, FileSearch, Timer, Package, Cpu } from 'lucide-react';
 import { fetchSilos, fetchMasterProfiles, fetchDailyOrders, updateTaskStatus, updateSilo } from './lib/api';
 
 export interface MachineSpecificProfile {
@@ -142,6 +142,7 @@ export interface RoastTask {
     firstCrackTemp?: number,
     firstCrackTime?: string
   };
+  fulfilledDemandIds?: string[];
 }
 
 export interface DailyRoastOrder {
@@ -161,13 +162,54 @@ export const ROASTING_MACHINES: RoastingMachine[] = [
 ];
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'orders' | 'profiles' | 'mgmt' | 'roast' | 'manual_roast' | 'lab' | 'traceability' | 'silos'>('profiles');
+  const [activeTab, setActiveTab] = useState<'orders' | 'profiles' | 'mgmt' | 'roast' | 'manual_roast' | 'lab' | 'traceability' | 'silos' | 'planning' | 'packaging'>('profiles');
   const [activeLot, setActiveLot] = useState<ActiveLot | null>(null);
 
   const [masterProfiles, setMasterProfiles] = useState<MasterProfile[]>([]);
   const [roastOrders, setRoastOrders] = useState<DailyRoastOrder[]>([]);
   const [silos, setSilos] = useState<Silo[]>([]);
   const [isDbLoaded, setIsDbLoaded] = useState(false);
+
+  // Persistence State for Manual Roast (to prevent loss on tab switch)
+  const [roastSession, setRoastSession] = useState<{
+    isRunning: boolean,
+    elapsedTime: number,
+    dataPoints: any[],
+    finalWeight: string,
+    targetSiloId: number,
+    checklist: any,
+    showFinalReport: boolean,
+    showBlendingOverlay: boolean,
+    agtronColor: string,
+    roastCount: number,
+    chargeTempInput: string,
+    currentRoR: number,
+    consistencyScore: number,
+    finalMixWeight: string,
+    showSamplePrompt: boolean,
+    currentTemp: string,
+    showMilestoneModal: boolean,
+    pendingMilestone: any | null
+  }>({
+    isRunning: false,
+    elapsedTime: 0,
+    dataPoints: [],
+    finalWeight: "",
+    targetSiloId: 0,
+    checklist: { silo: false, coffee: false, temp: false, discharge: false },
+    showFinalReport: false,
+    showBlendingOverlay: false,
+    agtronColor: "",
+    roastCount: 0,
+    chargeTempInput: "150",
+    currentRoR: 0,
+    consistencyScore: 0,
+    finalMixWeight: "",
+    showSamplePrompt: false,
+    currentTemp: "",
+    showMilestoneModal: false,
+    pendingMilestone: null
+  });
 
   // Phase 18: Hydrate Initial State from Supabase
   useEffect(() => {
@@ -186,6 +228,17 @@ function App() {
     };
     loadData();
   }, []);
+
+  // Centralized Roast Timer (to keep running when switching tabs)
+  useEffect(() => {
+    let interval: any;
+    if (roastSession.isRunning) {
+       interval = setInterval(() => {
+          setRoastSession(prev => ({ ...prev, elapsedTime: prev.elapsedTime + 1 }));
+       }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [roastSession.isRunning]);
 
   if (!isDbLoaded) {
     return (
@@ -232,7 +285,8 @@ function App() {
      maillardTemp?: number,
      maillardTime?: string,
      firstCrackTemp?: number,
-     firstCrackTime?: string
+     firstCrackTime?: string,
+     agtronColor?: string
   }) => {
     const { actualWeight } = metrics;
 
@@ -256,7 +310,8 @@ function App() {
             maillardTemp: metrics.maillardTemp,
             maillardTime: metrics.maillardTime,
             firstCrackTemp: metrics.firstCrackTemp,
-            firstCrackTime: metrics.firstCrackTime
+            firstCrackTime: metrics.firstCrackTime,
+            agtronColor: metrics.agtronColor
         }
       });
 
@@ -264,6 +319,27 @@ function App() {
         alert("Error de red: No se pudo registrar el tueste en Supabase.");
         return;
       }
+
+      setRoastSession({
+        isRunning: false,
+        elapsedTime: 0,
+        dataPoints: [],
+        finalWeight: "",
+        targetSiloId: 0,
+        checklist: { silo: false, coffee: false, temp: false, discharge: false },
+        showFinalReport: false,
+        showBlendingOverlay: false,
+        agtronColor: "",
+        roastCount: roastSession.roastCount + 1,
+        chargeTempInput: "150",
+        currentRoR: 0,
+        consistencyScore: 0,
+        finalMixWeight: "",
+        showSamplePrompt: false,
+        currentTemp: "",
+        showMilestoneModal: false,
+        pendingMilestone: null
+      });
 
       // Auto-update Silo if assigned
       if (activeLot.assignedSilos && activeLot.assignedSilos.length > 0) {
@@ -277,17 +353,19 @@ function App() {
                    ? `${activeLot.origins[0]} (${activeLot.profile?.name})` 
                    : activeLot.profile?.name || null;
 
-                const newSiloKg = pickedSilo.currentKg + actualWeight;
+                const newSiloKg = Math.max(0, pickedSilo.currentKg + actualWeight);
+                const finalProfileName = newSiloKg <= 0.1 ? null : siloDisplayName;
+
                 await updateSilo(targetSiloId, {
                    currentKg: newSiloKg,
-                   profileName: siloDisplayName,
+                   profileName: finalProfileName,
                    lastFillDate: new Date().toISOString()
                 });
                 
                 setSilos(prev => prev.map(s => s?.id === targetSiloId ? {
                    ...s,
                    currentKg: newSiloKg,
-                   profileName: siloDisplayName
+                   profileName: finalProfileName
                 } : s));
              }
           } 
@@ -307,11 +385,19 @@ function App() {
                 if (component) {
                    const reduction = actualWeight * (component.percentage / 100);
                    const newKg = Math.max(0, s.currentKg - reduction);
+                   const finalProfileName = newKg <= 0.1 ? null : s.profileName;
                    
-                   await updateSilo(s.id, { currentKg: newKg });
+                   await updateSilo(s.id, { 
+                      currentKg: newKg,
+                      profileName: finalProfileName
+                   });
                    updatedSiloIds.push(s.id);
                    
-                   setSilos(prev => prev.map(item => item.id === s.id ? { ...item, currentKg: newKg } : item));
+                   setSilos(prev => prev.map(item => item.id === s.id ? { 
+                      ...item, 
+                      currentKg: newKg,
+                      profileName: finalProfileName
+                   } : item));
                 }
              }
           }
@@ -328,13 +414,20 @@ function App() {
               roastedAt: roastedTimestamp,
               roastData: {
                  finalTemp: metrics.finalTemp || 0,
+                 finalTime: metrics.finalTime || '0:00',
                  finalRor: metrics.finalRor || 0,
                  devTime: metrics.devTime || 0,
                  chargeTemp: metrics.chargeTemp,
+                 chargeTime: metrics.chargeTime,
                  turnaroundTemp: metrics.turnaroundTemp,
                  turnaroundTime: metrics.turnaroundTime,
+                 yellowTemp: metrics.yellowTemp,
+                 yellowTime: metrics.yellowTime,
+                 maillardTemp: metrics.maillardTemp,
+                 maillardTime: metrics.maillardTime,
                  firstCrackTemp: metrics.firstCrackTemp,
-                 firstCrackTime: metrics.firstCrackTime
+                 firstCrackTime: metrics.firstCrackTime,
+                 agtronColor: metrics.agtronColor
               }
             } : t
           );
@@ -364,6 +457,9 @@ function App() {
     if (activeLot && activeLot?.id === taskId) {
       setActiveLot({ ...activeLot, status: 'validado' });
     }
+
+    // Auto-return to Operator Panel (Agenda) after validation
+    setActiveTab('orders');
   };
 
   // Stepper UI Component
@@ -451,9 +547,11 @@ function App() {
           <div className="hidden lg:block w-full px-4 mb-2 mt-6">
             <span className="text-[10px] font-black justify-start text-coffee-accent uppercase tracking-widest">Módulo 2: Planta y Producción</span>
           </div>
-          <NavItem icon={<ClipboardList />} label="3. Agenda de Tueste" active={activeTab === 'orders'} onClick={() => handleNavClick('orders')} highlight={true} />
+          <NavItem icon={<Package />} label="2. Plan Mensual" active={activeTab === 'planning'} onClick={() => handleNavClick('planning')} />
+          <NavItem icon={<Cpu />} label="3. Agenda de Tueste" active={activeTab === 'orders'} onClick={() => handleNavClick('orders')} highlight={true} />
           <NavItem icon={<Timer />} label="4. Control de Tueste" active={activeTab === 'manual_roast'} onClick={() => handleNavClick('manual_roast')} pulse={activeLot?.status === 'tueste'} />
           <NavItem icon={<Database />} label="5. Gestión de Silos" active={activeTab === 'silos'} onClick={() => handleNavClick('silos')} />
+          <NavItem icon={<CheckCircle />} label="6. Ejecución de Planta" active={activeTab === 'packaging'} onClick={() => handleNavClick('packaging')} highlight={true} />
 
           {/* MÓDULO 3: CALIDAD Y DIRECCIÓN */}
           <div className="hidden lg:block w-full px-4 mb-2 mt-6">
@@ -493,17 +591,46 @@ function App() {
         <ErrorBoundary>
           <div className="flex-1 overflow-y-auto w-full relative">
             {activeTab === 'profiles' && <MasterProfiles masterProfiles={masterProfiles} setMasterProfiles={setMasterProfiles} />}
+            {activeTab === 'planning' && (
+              <DailyRoastOrders 
+                masterProfiles={masterProfiles} 
+                roastOrders={roastOrders} setRoastOrders={setRoastOrders}
+                silos={silos} setSilos={setSilos}
+                onLaunchManualRoast={handleLaunchManualRoast}
+                forceView="PLAN_MENSUAL"
+              />
+            )}
+            {activeTab === 'packaging' && (
+              <DailyRoastOrders 
+                masterProfiles={masterProfiles} 
+                roastOrders={roastOrders} setRoastOrders={setRoastOrders}
+                silos={silos} setSilos={setSilos}
+                onLaunchManualRoast={handleLaunchManualRoast}
+                forceView="PACKAGING"
+              />
+            )}
             {activeTab === 'orders' && <DailyRoastOrders 
                 masterProfiles={masterProfiles} 
                 roastOrders={roastOrders} setRoastOrders={setRoastOrders}
                 silos={silos} setSilos={setSilos}
                 onLaunchManualRoast={handleLaunchManualRoast}
+                forceView="OPERATOR"
               />}
             {activeTab === 'silos' && <SiloManager silos={silos} setSilos={setSilos} />}
             {activeTab === 'mgmt' && <ManagementDashboard />}
             {activeTab === 'roast' && <LiveRoastControl activeLot={activeLot} onRoastComplete={handleBatchComplete} />}
-            {activeTab === 'manual_roast' && <ManualRoastControl activeLot={activeLot} onBatchComplete={handleBatchComplete} allOrders={roastOrders} setAllOrders={setRoastOrders} silos={silos} setSilos={setSilos} />}
-            {activeTab === 'lab' && <QualityLab activeLot={activeLot} roastOrders={roastOrders} onQualityValidated={handleQualityValidated} />}
+            {activeTab === 'manual_roast' && (
+              <ManualRoastControl 
+                activeLot={activeLot} 
+                onBatchComplete={handleBatchComplete}
+                allOrders={roastOrders}
+                setAllOrders={setRoastOrders}
+                silos={silos}
+                setSilos={setSilos}
+                session={roastSession}
+                setSession={setRoastSession}
+              />
+            )}{activeTab === 'lab' && <QualityLab activeLot={activeLot} roastOrders={roastOrders} onQualityValidated={handleQualityValidated} />}
             {activeTab === 'traceability' && <TraceabilityDetective activeLot={activeLot} />}
           </div>
         </ErrorBoundary>

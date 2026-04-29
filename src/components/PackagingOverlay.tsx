@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Package, X, CheckCircle, Database, LayoutTemplate } from 'lucide-react';
-import { updateSilo, updateTaskStatus, updateOrderStatus } from '../lib/api';
+import { updateSilo, updateTaskStatus, updateOrderStatus, updatePlannerDemandStatus } from '../lib/api';
 
 interface PackagingOverlayProps {
    task: any;
@@ -60,13 +60,15 @@ export const PackagingOverlay: React.FC<PackagingOverlayProps> = ({ task, onClos
                  const expectedRoastedPull = customTotalKg * proportion;
                  
                  const physicalSilo = silos.find(s => Number(s?.id) === sId);
-                 if (physicalSilo) {
-                    const nextKg = Math.max(0, physicalSilo.currentKg - expectedRoastedPull);
-                    await updateSilo(sId, { currentKg: nextKg });
-                    if (setSilos) {
-                       setSilos((prev: any) => prev.map((s: any) => Number(s?.id) === sId ? { ...s, currentKg: nextKg } : s));
-                    }
-                 }
+                  if (physicalSilo) {
+                     const nextKg = Math.max(0, physicalSilo.currentKg - expectedRoastedPull);
+                     const nextProfile = nextKg <= 0 ? null : physicalSilo.profileName;
+                     
+                     await updateSilo(sId, { currentKg: nextKg, profileName: nextProfile });
+                     if (setSilos) {
+                        setSilos((prev: any) => prev.map((s: any) => Number(s?.id) === sId ? { ...s, currentKg: nextKg, profileName: nextProfile } : s));
+                     }
+                  }
              }
          }
 
@@ -76,6 +78,13 @@ export const PackagingOverlay: React.FC<PackagingOverlayProps> = ({ task, onClos
              await updateTaskStatus(originTask.id, 'ROASTED'); // Allows origins to be tested if needed
          }
          await updateOrderStatus(task.parentOrderId, 'IN_PROGRESS');
+ 
+         // Mark linked demands as COMPLETED
+         if (task.fulfilledDemandIds && task.fulfilledDemandIds.length > 0) {
+            for (const dId of task.fulfilledDemandIds) {
+               await updatePlannerDemandStatus(dId, 'COMPLETED');
+            }
+         }
 
          alert("Envasado Confirmado: Silos actualizados y Orden enviada a Laboratorio de Calidad.");
          onSuccess();

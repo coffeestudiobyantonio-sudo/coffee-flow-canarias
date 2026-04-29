@@ -62,49 +62,58 @@ export const generateDailyProductionReport = (orders: DailyRoastOrder[]) => {
    });
 
    // 3. Tabla Detallada de Tuestes
+   doc.setFontSize(11);
+   doc.text('DESGLOSE DE CRONOMETRÍA Y HITOS:', 15, 82);
+
    const allTasks = orders.flatMap(o => o.tasks.filter(t => t.status === 'ROASTED' || t.status === 'RESTING'));
+   let batchCounter = 0;
+   
    const tableRows = allTasks.flatMap(t => {
       // For BLEND tasks, we might want a different view, but user asked for "cada tueste"
       if (t.type === 'BLEND') return [];
       
+      batchCounter++;
       const shrinkage = t.actualWeightKg ? (((t.targetWeightKg - t.actualWeightKg) / t.targetWeightKg) * 100).toFixed(1) : '--';
       const rd = t.roastData || {} as any;
 
       const hasData = (val: any) => val !== undefined && val !== null && val !== '' && val !== 0;
+      
+      // Sequential ID and Origen (Gama)
+      const batchId = batchCounter.toString();
+      const originGama = `${t.origins[0] || 'Origen'}\n(${t.masterProfile?.name || 'Gama'})`;
 
       return [[
-         t.id.split('-').pop() || t.id,
-         `${t.masterProfile?.name || '---'}\n(${t.origins[0] || '---'})`,
+         batchId,
+         originGama,
          `${t.targetWeightKg.toFixed(1)} / ${t.actualWeightKg?.toFixed(1) || '--'}`,
          `${shrinkage}%`,
-         hasData(rd.turnaroundTemp) ? `${rd.turnaroundTemp}°C\n(${rd.turnaroundTime && rd.turnaroundTime !== '--' ? rd.turnaroundTime : '0:00'})` : '--',
-         hasData(rd.yellowTemp) ? `${rd.yellowTemp}°C\n(${rd.yellowTime && rd.yellowTime !== '--' ? rd.yellowTime : '0:00'})` : '--',
-         hasData(rd.maillardTemp) ? `${rd.maillardTemp}°C\n(${rd.maillardTime && rd.maillardTime !== '--' ? rd.maillardTime : '0:00'})` : '--',
-         hasData(rd.firstCrackTemp) ? `${rd.firstCrackTemp}°C\n(${rd.firstCrackTime && rd.firstCrackTime !== '--' ? rd.firstCrackTime : '0:00'})` : '--',
-         hasData(rd.finalTemp) ? `${rd.finalTemp}°C\n(${rd.finalTime && rd.finalTime !== '--' ? rd.finalTime : '0:00'})` : '--',
-         `${rd.devTime || 0}%`,
+         hasData(rd.turnaroundTemp) ? `${rd.turnaroundTemp}°C\n(${rd.turnaroundTime || '0:00'})` : '--',
+         hasData(rd.yellowTemp) ? `${rd.yellowTemp}°C\n(${rd.yellowTime || '0:00'})` : '--',
+         hasData(rd.maillardTemp) ? `${rd.maillardTemp}°C\n(${rd.maillardTime || '0:00'})` : '--',
+         hasData(rd.firstCrackTemp) ? `${rd.firstCrackTemp}°C\n(${rd.firstCrackTime || '0:00'})` : '--',
+         hasData(rd.finalTemp) ? `${rd.finalTemp}°C\n(${rd.finalTime || '0:00'})` : '--',
          t.assignedSilos ? `Silo ${t.assignedSilos[0]}` : '--'
       ]];
    });
 
-   doc.setFontSize(11);
-   doc.text('DESGLOSE POR TANDA (BATCHES):', 15, 90);
-
    autoTable(doc, {
-      startY: 95,
-      head: [['ID', 'Gama', 'Verde/Tost (kg)', 'Merma', 'TP (Inflex)', 'Amarilla', 'Maillard', '1C (Crack)', 'Drop (Desc)', 'DTR', 'Silo']],
+      startY: 85,
+      head: [['Batch #', 'Origen / Perfil', 'Verde/Tost (kg)', 'Merma', 'TP (Inflex)', 'Amarilla', 'Maillard', '1C (Crack)', 'Drop (Desc)', 'Silo']],
       body: tableRows,
-      theme: 'striped',
-      headStyles: { fillColor: [30, 34, 43], textColor: [217, 119, 6], fontSize: 8, halign: 'center' },
-      styles: { fontSize: 7, halign: 'center', cellPadding: 2 },
+      theme: 'grid',
+      headStyles: { fillColor: [40, 40, 40], fontSize: 8, halign: 'center' },
+      styles: { fontSize: 8, halign: 'center', cellPadding: 2 },
       columnStyles: {
-         1: { halign: 'left', fontStyle: 'bold', cellWidth: 35 },
-         2: { cellWidth: 25 },
-         4: { cellWidth: 20 },
-         5: { cellWidth: 20 },
-         6: { cellWidth: 20 },
-         7: { cellWidth: 20 },
-         8: { cellWidth: 20 }
+         0: { cellWidth: 10 },
+         1: { cellWidth: 45, halign: 'left', fontStyle: 'bold' },
+         2: { cellWidth: 30 },
+         3: { cellWidth: 15 },
+         4: { cellWidth: 25 },
+         5: { cellWidth: 25 },
+         6: { cellWidth: 25 },
+         7: { cellWidth: 25 },
+         8: { cellWidth: 25 },
+         9: { cellWidth: 20 }
       }
    });
 

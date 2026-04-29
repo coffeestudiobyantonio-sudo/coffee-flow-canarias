@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, Square, TrendingUp, AlertCircle, Flame, Timer as TimerIcon, Droplets, CheckCircle, QrCode, Wrench, History, ArchiveRestore, TestTube2, Info, Lock, Target } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot, CartesianGrid } from 'recharts';
 import { ROASTING_MACHINES } from '../App';
-import { updateTaskStatus, updateOrderStatus, updateSilo } from '../lib/api';
+import { updateTaskStatus, updateOrderStatus } from '../lib/api';
 
 interface RoastDataPoint {
   time: number; // seconds
@@ -18,53 +18,84 @@ interface ManualRoastControlProps {
   setAllOrders: React.Dispatch<React.SetStateAction<any[]>>;
   silos: any[];
   setSilos: React.Dispatch<React.SetStateAction<any[]>>;
+  session: any;
+  setSession: React.Dispatch<React.SetStateAction<any>>;
 }
 
-const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBatchComplete, allOrders, setAllOrders, silos, setSilos }) => {
-  const [isRunning, setIsRunning] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0); // in seconds
-  const [dataPoints, setDataPoints] = useState<RoastDataPoint[]>([]);
-  const [currentTemp, setCurrentTemp] = useState<string>("");
+const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ 
+  activeLot, onBatchComplete, allOrders, setAllOrders, silos, session, setSession 
+}) => {
+  const isRunning = session.isRunning;
+  const setIsRunning = (val: boolean) => setSession((prev: any) => ({ ...prev, isRunning: val }));
+  
+  const elapsedTime = session.elapsedTime;
+  const setElapsedTime = (val: number | ((p: number) => number)) => setSession((prev: any) => ({ 
+    ...prev, 
+    elapsedTime: typeof val === 'function' ? (val as (p: number) => number)(prev.elapsedTime) : val 
+  }));
+
+  const dataPoints = session.dataPoints;
+  const setDataPoints = (val: any[] | ((p: any[]) => any[])) => setSession((prev: any) => ({ 
+    ...prev, 
+    dataPoints: typeof val === 'function' ? (val as (p: any[]) => any[])(prev.dataPoints) : val 
+  }));
+
+  const currentTemp = session.currentTemp || "";
+  const setCurrentTemp = (val: string | ((p: string) => string)) => setSession((prev: any) => ({ 
+    ...prev, 
+    currentTemp: typeof val === 'function' ? val((prev.currentTemp || "").toString()) : val 
+  }));
   const [showMaintenance, setShowMaintenance] = useState(false);
-  const [showFinalReport, setShowFinalReport] = useState(false);
-  const [finalWeight, setFinalWeight] = useState<string>("");
-  const [targetSiloId, setTargetSiloId] = useState<number>(0);
-  const [agtronColor, setAgtronColor] = useState<string>("");
-  const [roastCount, setRoastCount] = useState(0);
-  const [bbpTimeLeft, setBbpTimeLeft] = useState<number>(0);
+  
+  const consistencyScore = session.consistencyScore;
+  const setConsistencyScore = (val: number) => setSession((prev: any) => ({ ...prev, consistencyScore: val }));
+  const showFinalReport = session.showFinalReport;
+  const setShowFinalReport = (val: boolean) => setSession((prev: any) => ({ ...prev, showFinalReport: val }));
+
+  const finalWeight = session.finalWeight;
+  const setFinalWeight = (val: string) => setSession((prev: any) => ({ ...prev, finalWeight: val }));
+
+  const targetSiloId = session.targetSiloId;
+  const setTargetSiloId = (val: number) => setSession((prev: any) => ({ ...prev, targetSiloId: val }));
+  
+  const agtronColor = session.agtronColor;
+  const setAgtronColor = (val: string) => setSession((prev: any) => ({ ...prev, agtronColor: val }));
+
+  const roastCount = session.roastCount;
+
+  const bbpTimeLeft = session.bbpTimeLeft || 0;
+  const setBbpTimeLeft = (val: number | ((p: number) => number)) => setSession((prev: any) => ({ 
+    ...prev, 
+    bbpTimeLeft: typeof val === 'function' ? (val as (p: number) => number)(prev.bbpTimeLeft || 0) : val 
+  }));
 
   // Artisan 2.0 - New UX State
-  const [chargeTempInput, setChargeTempInput] = useState<string>("150");
-  const [checklist, setChecklist] = useState({ silo: false, coffee: false, temp: false, discharge: false });
-  const [selectedSiloId, setSelectedSiloId] = useState<number | null>(null);
-  const [pendingMilestone, setPendingMilestone] = useState<{ type: RoastDataPoint['type'], time: number } | null>(null);
-  const [showMilestoneModal, setShowMilestoneModal] = useState(false);
+  const chargeTempInput = session.chargeTempInput;
+  const setChargeTempInput = (val: string) => setSession((prev: any) => ({ ...prev, chargeTempInput: val }));
+  const checklist = session.checklist;
+  const setChecklist = (val: any | ((p: any) => any)) => setSession((prev: any) => ({ 
+    ...prev, 
+    checklist: typeof val === 'function' ? val(prev.checklist) : val 
+  }));
+  
+  const pendingMilestone = session.pendingMilestone;
+  const setPendingMilestone = (val: any) => setSession((prev: any) => ({ ...prev, pendingMilestone: val }));
+
+  const showMilestoneModal = session.showMilestoneModal;
+  const setShowMilestoneModal = (val: boolean) => setSession((prev: any) => ({ ...prev, showMilestoneModal: val }));
+
   const [consistencyAlert, setConsistencyAlert] = useState<string | null>(null);
-  const [showBlendingOverlay, setShowBlendingOverlay] = useState(false);
-  const [finalMixWeight, setFinalMixWeight] = useState<string>("");
-  const [showSamplePrompt, setShowSamplePrompt] = useState(false);
-  const [consistencyScore, setConsistencyScore] = useState<number>(0);
 
-  const timerRef = useRef<any>(null);
+  const showBlendingOverlay = session.showBlendingOverlay;
+  const setShowBlendingOverlay = (val: boolean) => setSession((prev: any) => ({ ...prev, showBlendingOverlay: val }));
 
-  // Stopwatch Logic
-  useEffect(() => {
-    if (isRunning) {
-      timerRef.current = setInterval(() => {
-        setElapsedTime(prev => prev + 1);
-      }, 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [isRunning]);
+  const finalMixWeight = session.finalMixWeight || "";
+  const setFinalMixWeight = (val: string) => setSession((prev: any) => ({ ...prev, finalMixWeight: val }));
 
-  // Autofill current temperature when milestone modal opens
-  useEffect(() => {
-    if (showMilestoneModal && dataPoints.length > 0) {
-      setCurrentTemp(dataPoints[dataPoints.length - 1].temp.toFixed(1));
-    }
-  }, [showMilestoneModal]);
+  const showSamplePrompt = session.showSamplePrompt;
+  const setShowSamplePrompt = (val: boolean) => setSession((prev: any) => ({ ...prev, showSamplePrompt: val }));
+
+  // const timerRef = useRef<any>(null); // Removed since timer is now in App.tsx
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -77,7 +108,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     let bbpInterval: any;
     if (bbpTimeLeft > 0) {
       bbpInterval = setInterval(() => {
-        setBbpTimeLeft(prev => Math.max(0, prev - 1));
+        setBbpTimeLeft((prev: number) => Math.max(0, prev - 1));
       }, 1000);
     }
     return () => clearInterval(bbpInterval);
@@ -86,14 +117,10 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   // Phase 11: Auto-Lock Silo Check
   useEffect(() => {
     if (activeLot?.assignedSilos && activeLot.assignedSilos.length > 0) {
-       const sId = activeLot.assignedSilos[0];
-       setSelectedSiloId(sId);
-       
        // Phase 16: Auto-Validate all checks when coming from Operator Hub
        setChecklist({ silo: true, coffee: true, temp: true, discharge: true });
     } else {
-       setSelectedSiloId(null);
-       setChecklist(prev => ({ ...prev, silo: false }));
+       setChecklist((prev: any) => ({ ...prev, silo: false }));
     }
   }, [activeLot]);
 
@@ -116,6 +143,9 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
       type
     };
 
+    setDataPoints((prev: any[]) => [...prev, newPoint].sort((a: any, b: any) => a.time - b.time));
+    setCurrentTemp("");
+
     // Consistency Alert Check (Example for TP) - Artisan 2.0 Improvement D
     if (type === 'TP') {
       const HISTORICAL_TP_AVG = 95;
@@ -124,9 +154,6 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
         setTimeout(() => setConsistencyAlert(null), 8000);
       }
     }
-
-    setDataPoints(prev => [...prev, newPoint].sort((a, b) => a.time - b.time));
-    setCurrentTemp("");
   };
 
   const handleStartRoast = () => {
@@ -157,6 +184,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     if (!isRunning) return;
     // Capture time immediately (Artisan 2.0 Improvement A)
     setPendingMilestone({ type, time: elapsedTime });
+    setCurrentTemp(""); // CRITICAL FIX: Ensure modal always starts at 0/blank
     setShowMilestoneModal(true);
   };
 
@@ -217,11 +245,11 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
 
   // Phase Ratio Logic (Artisan 2.0 Improvement B)
   const calculatePhaseRatios = () => {
-    const charge = dataPoints.find(p => p.type === 'CHARGE');
-    const yellow = dataPoints.find(p => p.type === 'YELLOW');
-    const brown = dataPoints.find(p => p.type === 'FC_START' || p.type === 'EVENT'); // Using EVENT as fallback
+    const charge = dataPoints.find((p: any) => p.type === 'CHARGE');
+    const yellow = dataPoints.find((p: any) => p.type === 'YELLOW');
+    const brown = dataPoints.find((p: any) => p.type === 'FC_START' || p.type === 'EVENT'); // Using EVENT as fallback
     
-    const totalSeconds = isRunning ? elapsedTime : (dataPoints.length > 0 ? dataPoints[dataPoints.length - 1].time : 1);
+    const totalSeconds = isRunning ? elapsedTime : (dataPoints.length > 0 ? (dataPoints[dataPoints.length - 1] as any).time : 1);
     if (totalSeconds === 0) return { drying: "0", maillard: "0", development: "0" };
 
     const dryingTime = yellow && charge ? yellow.time - charge.time : (yellow ? yellow.time : 0);
@@ -240,8 +268,8 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
   // Visual Progress Color Logic (Artisan 2.0 Improvement C)
   const getProgressColor = () => {
     if (!isRunning && dataPoints.length === 0) return 'bg-gray-700';
-    if (dataPoints.some(p => p.type === 'FC_START')) return 'bg-orange-800'; // Development
-    if (dataPoints.some(p => p.type === 'YELLOW')) return 'bg-amber-900'; // Maillard
+    if (dataPoints.some((p: any) => p.type === 'FC_START')) return 'bg-orange-800'; // Development
+    if (dataPoints.some((p: any) => p.type === 'YELLOW')) return 'bg-amber-900'; // Maillard
     if (isRunning) return 'bg-yellow-600'; // Drying
     return 'bg-gray-700';
   };
@@ -257,10 +285,8 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
 
       // Verify Target Silo compatibility
       const pickedSilo = silos.find(s => s?.id === targetSiloId);
-      if (!pickedSilo) {
-         alert(`DEBUG: No se encontró el silo con ID ${targetSiloId} en la lista de silos.`);
-         return;
-      }
+      if (!pickedSilo) return;
+
       const isCompatible = !pickedSilo.profileName || !activeLot?.profile?.name || 
                           pickedSilo.profileName.includes(activeLot.profile.name) || 
                           activeLot.profile.name.includes(pickedSilo.profileName);
@@ -269,76 +295,38 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
          alert(`Alerta: El silo seleccionado contiene una receta diferente (${pickedSilo.profileName}). Vacía el silo o selecciona otro.`);
          return;
       }
-      if (pickedSilo.currentKg + weight > pickedSilo.maxKg) {
-         alert("Alerta: El silo se desbordará. Selecciona otro silo.");
-         return;
-      }
 
-      // Calculate BBP Cooldown based on machine inertia
-      const machine = ROASTING_MACHINES.find(m => m?.id === activeLot?.machineId) || ROASTING_MACHINES[0];
-      const cooldownSeconds = machine ? (machine.bbpCooldownBase + (weight * machine.bbpCoefficient)) : 180;
-      setBbpTimeLeft(Math.round(cooldownSeconds));
+      const turnaround = dataPoints.find((p: any) => p.type === 'TP' || p.type === 'TURNAROUND' || (p.type as string) === 'Turning Point');
+      const yellow = dataPoints.find((p: any) => p.type === 'YELLOW' || (p.type as string) === 'Yellow Phase');
+      const maillard = dataPoints.find((p: any) => p.type === 'MAILLARD' || (p.type as string) === 'Browning');
+      const fcStart = dataPoints.find((p: any) => p.type === 'FC_START' || (p.type as string) === '1st Crack');
+      const drop = dataPoints.find((p: any) => p.type === 'DROP' || (p.type as string) === 'Drop');
+      const charge = dataPoints.find((p: any) => p.type === 'CHARGE' || (p.type as string) === 'Charge');
 
-      // Register into the Silo
-      const newSiloKg = pickedSilo.currentKg + weight;
-      const isNewFill = pickedSilo.currentKg === 0;
-      
-      const siloDisplayName = activeLot?.origins && activeLot.origins.length > 0 
-          ? `${activeLot.origins[0]} (${activeLot?.profile?.name})` 
-          : activeLot?.profile?.name || null;
-
-      await updateSilo(targetSiloId, { 
-         currentKg: newSiloKg, 
-         profileName: siloDisplayName,
-         lastFillDate: isNewFill ? new Date().toISOString() : pickedSilo.lastFillDate
+      onBatchComplete({
+         actualWeight: weight,
+         finalTemp: drop?.temp || (dataPoints.length > 0 ? parseFloat(dataPoints[dataPoints.length - 1].temp.toString()) : 0),
+         finalTime: drop ? formatTime(drop.time) : (dataPoints.length > 0 ? formatTime(dataPoints[dataPoints.length - 1].time) : '0:00'),
+         finalRor: 0, 
+         devTime: parseInt(ratios.development),
+         chargeTemp: charge?.temp,
+         chargeTime: charge ? formatTime(charge.time) : undefined,
+         turnaroundTemp: turnaround?.temp,
+         turnaroundTime: turnaround ? formatTime(turnaround.time) : undefined,
+         yellowTemp: yellow?.temp,
+         yellowTime: yellow ? formatTime(yellow.time) : undefined,
+         maillardTemp: maillard?.temp,
+         maillardTime: maillard ? formatTime(maillard.time) : undefined,
+         firstCrackTemp: fcStart?.temp,
+         firstCrackTime: fcStart ? formatTime(fcStart.time) : undefined,
+         agtronColor: agtronColor
       });
-      setSilos(prev => prev.map(s => s?.id === targetSiloId ? { 
-         ...s, currentKg: newSiloKg, profileName: siloDisplayName, lastFillDate: isNewFill ? new Date().toISOString() : s.lastFillDate
-      } : s));
 
-
-
-    // Handle Post-Batch Logic
-    const parentOrder = allOrders.find(o => o?.id === activeLot?.parentOrderId);
-    const isLastBatchOfOrder = parentOrder && parentOrder.tasks
-      .filter((t: any) => t.type === 'ROAST')
-      .every((t: any) => t.status === 'ROASTED' || t?.id === activeLot?.id);
-
-    if (isLastBatchOfOrder && parentOrder.roastStrategy === 'POST_BLEND') {
-       // Trigger Blending Workflow
-       setShowFinalReport(false);
-       setShowBlendingOverlay(true);
-    } else {
-        const turnaround = dataPoints.find(p => p.type === 'TP' || p.type === 'TURNAROUND' || (p.type as string) === 'Turning Point');
-        const yellow = dataPoints.find(p => p.type === 'YELLOW' || (p.type as string) === 'Yellow Phase');
-        const maillard = dataPoints.find(p => p.type === 'MAILLARD' || (p.type as string) === 'Browning');
-        const fcStart = dataPoints.find(p => p.type === 'FC_START' || (p.type as string) === '1st Crack');
-        const drop = dataPoints.find(p => p.type === 'DROP' || (p.type as string) === 'Drop');
-        const charge = dataPoints.find(p => p.type === 'CHARGE' || (p.type as string) === 'Charge');
-
-        onBatchComplete({
-           actualWeight: weight,
-           finalTemp: drop?.temp || parseFloat(dataPoints[dataPoints.length - 1].temp.toString()),
-           finalTime: drop ? formatTime(drop.time) : formatTime(dataPoints[dataPoints.length - 1].time),
-           finalRor: currentRoR,
-           devTime: parseInt(ratios.development),
-           chargeTemp: charge?.temp,
-           chargeTime: charge ? formatTime(charge.time) : undefined,
-           turnaroundTemp: turnaround?.temp,
-           turnaroundTime: turnaround ? formatTime(turnaround.time) : undefined,
-           yellowTemp: yellow?.temp,
-           yellowTime: yellow ? formatTime(yellow.time) : undefined,
-           maillardTemp: maillard?.temp,
-           maillardTime: maillard ? formatTime(maillard.time) : undefined,
-           firstCrackTemp: fcStart?.temp,
-           firstCrackTime: fcStart ? formatTime(fcStart.time) : undefined
-        });
-        setShowFinalReport(false);
-        setRoastCount(prev => prev + 1);
-        if (roastCount + 1 >= 5) setShowMaintenance(true);
-     }
-    } catch (err: any) {
-      alert(`DEBUG CRASH: ${err.message}`);
+      setShowFinalReport(false);
+      
+    } catch (err) {
+      console.error(err);
+      alert("Error al procesar los datos del lote.");
     }
   };
 
@@ -386,7 +374,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
     <div className="p-6 bg-[#0f1114] min-h-full text-white font-sans overflow-hidden">
       
       {/* Artisan 2.0 Header */}
-      <div className={`flex justify-between items-start mb-6 ${selectedSiloId && isRunning ? 'pt-14' : ''}`}>
+      <div className={`flex justify-between items-start mb-6 ${targetSiloId && isRunning ? 'pt-14' : ''}`}>
         <div className="flex-1">
           <h1 className="text-3xl font-black text-white flex items-center tracking-tighter">
             <Flame className="w-8 h-8 mr-3 text-coffee-accent animate-pulse" />
@@ -431,8 +419,8 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
             )}
             <div className="flex justify-between mb-2 px-1">
                <span className={`text-[10px] font-black uppercase ${isRunning ? 'text-yellow-500' : 'text-gray-600'}`}>Secado</span>
-               <span className={`text-[10px] font-black uppercase ${dataPoints.some(p => p.type === 'YELLOW') ? 'text-amber-600' : 'text-gray-600'}`}>Maillard</span>
-               <span className={`text-[10px] font-black uppercase ${dataPoints.some(p => p.type === 'FC_START') ? 'text-orange-700' : 'text-gray-600'}`}>Desarrollo</span>
+               <span className={`text-[10px] font-black uppercase ${dataPoints.some((p: any) => p.type === 'YELLOW') ? 'text-amber-600' : 'text-gray-600'}`}>Maillard</span>
+               <span className={`text-[10px] font-black uppercase ${dataPoints.some((p: any) => p.type === 'FC_START') ? 'text-orange-700' : 'text-gray-600'}`}>Desarrollo</span>
             </div>
             <div className="h-5 w-full bg-black/40 rounded-full overflow-hidden border border-white/5 p-1 shadow-inner">
                <div 
@@ -489,16 +477,16 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                     <CheckItem 
                       label={`1. Café verde (${activeLot?.batchWeight || '---'} kg) descargado`} 
                       checked={checklist.coffee} 
-                      onChange={() => setChecklist(prev => ({ ...prev, coffee: !prev.coffee }))} 
+                      onChange={() => setChecklist((prev: any) => ({ ...prev, coffee: !prev.coffee }))} 
                     />
                     <CheckItem 
                       label={`2. Máquina en ${chargeTempInput}°C (Termostato OK)`} 
                       checked={checklist.temp} 
-                      onChange={() => setChecklist(prev => ({ ...prev, temp: !prev.temp }))} 
+                      onChange={() => setChecklist((prev: any) => ({ ...prev, temp: !prev.temp }))} 
                     />
                     <CheckItem 
                       label={"3. Compuerta de descarga completamente verificada y asegurada"}                    checked={checklist.discharge} 
-                      onChange={() => setChecklist(prev => ({ ...prev, discharge: !prev.discharge }))} 
+                      onChange={() => setChecklist((prev: any) => ({ ...prev, discharge: !prev.discharge }))} 
                     />
                  </div>
               </div>
@@ -545,7 +533,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                  <QuickStageButton 
                    label="TP (Inflex.)" 
                    icon={<TrendingUp className="w-5 h-5" />}
-                   active={dataPoints.some(p => p.type === 'TP')}
+                   active={dataPoints.some((p: any) => p.type === 'TP')}
                    onClick={() => openMilestoneModal('TP')}
                    color="border-green-500/30 text-green-400 bg-green-500/5"
                  />
@@ -553,7 +541,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                  <QuickStageButton 
                    label="Amarilla" 
                    icon={<TimerIcon className="w-5 h-5" />}
-                   active={dataPoints.some(p => p.type === 'YELLOW')}
+                   active={dataPoints.some((p: any) => p.type === 'YELLOW')}
                    onClick={() => openMilestoneModal('YELLOW')}
                    color="border-yellow-500/30 text-yellow-500 bg-yellow-500/5"
                  />
@@ -561,7 +549,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                  <QuickStageButton 
                    label="Maillard" 
                    icon={<Droplets className="w-5 h-5" />}
-                   active={dataPoints.some(p => p.type === 'MAILLARD')}
+                   active={dataPoints.some((p: any) => p.type === 'MAILLARD')}
                    onClick={() => openMilestoneModal('MAILLARD')}
                    color="border-amber-600/30 text-amber-500 bg-amber-600/5"
                  />
@@ -569,7 +557,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                  <QuickStageButton 
                    label="1C (Crack)" 
                    icon={<Flame className="w-5 h-5" />}
-                   active={dataPoints.some(p => p.type === 'FC_START')}
+                   active={dataPoints.some((p: any) => p.type === 'FC_START')}
                    onClick={() => openMilestoneModal('FC_START')}
                    color="border-red-500/30 text-red-500 bg-red-500/5"
                  />
@@ -696,27 +684,20 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                         animationDuration={500}
                       />
                        
-                      {/* Milestone Labels on Graph */}
-                      {dataPoints.map((p, i) => p.type && (
-                         <ReferenceDot 
-                           key={i} 
-                           x={p.time} 
-                           y={p.temp} 
-                           r={14} 
-                           fill="#fff" 
-                           stroke="#d97706" 
-                           strokeWidth={3}
-                           label={{ 
-                             position: 'top', 
-                             value: p.type === 'TP' ? 'Turning P.' : p.type, 
-                             fill: '#fff', 
-                             fontSize: 10, 
-                             fontWeight: 'black',
-                             dy: -12,
-                             dx: p.time < 60 ? 15 : 0 // Offset TP if too close to axis
-                           }}
-                         />
-                      ))}
+                      {dataPoints.length > 0 && dataPoints.map((p: any, i: number) => {
+                        const isMilestone = p.type && p.type !== 'CHARGE';
+                        return (
+                           <ReferenceDot 
+                             key={i} 
+                             x={p.time} 
+                             y={p.temp} 
+                             r={isMilestone ? 6 : 0} 
+                             fill={isMilestone ? "#d97706" : "transparent"} 
+                             stroke="white" 
+                             strokeWidth={2}
+                           />
+                        );
+                     })}
                    </LineChart>
                 </ResponsiveContainer>
                 
@@ -729,7 +710,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
             {/* Rapid Temp Input (Bottom Bar) */}
             {isRunning && (
               <div className="bg-[#1a1d23] p-4 rounded-3xl border border-white/5 flex items-center space-x-4">
-                 <div className="flex-1 bg-black/40 rounded-2xl px-6 py-4 flex items-center justify-between border border-white/5">
+                 <div className="flex-1 bg-black/40 rounded-2xl px-6 py-4 flex items-center justify-between border border-white/5 font-mono">
                     <span className="text-xs font-black text-gray-500 uppercase">Muestreo Térmico</span>
                     <input 
                       type="number" 
@@ -836,7 +817,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                     </div>
                     <div className="bg-white/5 border border-white/10 rounded-3xl p-6 text-right">
                        <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Temp. Descarga (Drop)</p>
-                       <p className="text-3xl font-mono font-black text-coffee-accent">{dataPoints.find(p => p.type === 'DROP')?.temp || '--'} °C</p>
+                       <p className="text-3xl font-mono font-black text-coffee-accent">{dataPoints.find((p: any) => p.type === 'DROP')?.temp || '--'} °C</p>
                     </div>
                  </div>
 
@@ -1024,7 +1005,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
                <button 
                  onClick={() => {
                    setShowSamplePrompt(false);
-                   onBatchComplete(parseFloat(finalWeight));
+                   onBatchComplete({ actualWeight: parseFloat(finalWeight) });
                  }}
                  className="w-full bg-blue-600 hover:bg-blue-500 text-white py-6 rounded-3xl font-black text-xl uppercase tracking-widest transition-all active:scale-95"
                >
@@ -1042,7 +1023,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({ activeLot, onBa
               <h2 className="text-6xl font-black uppercase tracking-tighter">Parada Técnica</h2>
               <p className="text-xl text-red-200 font-bold">5 Ciclos de 240kg completados. Limpia tolva y filtros para continuar enviando lotes a Laboratorio.</p>
               <button 
-                onClick={() => { setShowMaintenance(false); setRoastCount(0); }}
+                onClick={() => { setShowMaintenance(false); setSession((p: any) => ({ ...p, roastCount: 0 })); }}
                 className="bg-white text-red-600 px-16 py-6 rounded-full font-black text-2xl uppercase tracking-tighter shadow-3xl hover:bg-red-600 hover:text-white transition-all"
               >
                  Mantenimiento Realizado

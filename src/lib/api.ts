@@ -126,7 +126,8 @@ export const fetchDailyOrders = async (): Promise<DailyRoastOrder[]> => {
         parentOrderTotalKg: t.parent_order_total_kg ? Number(t.parent_order_total_kg) : undefined,
         category: t.category as any,
         roastedAt: t.roasted_at,
-        roastData: t.roast_data
+        roastData: t.roast_data,
+        fulfilledDemandIds: t.fulfilled_demand_ids || []
       }));
 
     return {
@@ -175,7 +176,8 @@ export const createDailyOrder = async (order: DailyRoastOrder) => {
     batch_index: t.batchIndex,
     total_batches: t.totalBatches,
     parent_order_total_kg: t.parentOrderTotalKg,
-    category: t.category
+    category: t.category,
+    fulfilled_demand_ids: (t as any).fulfilledDemandIds || []
   }));
 
   const { error: tError } = await supabase.from('roast_tasks').insert(dbTasks);
@@ -222,3 +224,93 @@ export const purgeAllProductionData = async () => {
   
   return true;
 };
+
+// =======================
+// PLANNER
+// =======================
+
+export const fetchPlannerDemands = async () => {
+  const { data, error } = await supabase.from('planner_demands').select('*').order('created_at', { ascending: true });
+  if (error) {
+    console.error('Error fetching planner demands:', error);
+    return [];
+  }
+  return data.map(d => ({
+    id: d.id,
+    delegation: d.delegation,
+    profileName: d.profile_name,
+    format: d.format,
+    kgRequested: Number(d.kg_requested),
+    totalPackages: d.total_packages ? Number(d.total_packages) : undefined,
+    status: d.status || 'PENDING'
+  }));
+};
+
+export const updatePlannerDemandStatus = async (id: string, status: string) => {
+  const { error } = await supabase.from('planner_demands').update({ status }).eq('id', id);
+  if (error) console.error('Error updating planner demand status:', error);
+  return !error;
+};
+
+export const createPlannerDemand = async (demand: any) => {
+  const { error } = await supabase.from('planner_demands').insert([{
+    id: demand.id,
+    delegation: demand.delegation,
+    profile_name: demand.profileName,
+    format: demand.format,
+    kg_requested: demand.kgRequested,
+    total_packages: demand.totalPackages
+  }]);
+  if (error) console.error('Error creating planner demand:', error);
+  return !error;
+};
+
+export const deletePlannerDemand = async (demandId: string) => {
+  const { error } = await supabase.from('planner_demands').delete().eq('id', demandId);
+  if (error) console.error('Error deleting planner demand:', error);
+  return !error;
+};
+
+export const fetchPlannerDays = async () => {
+  const { data, error } = await supabase.from('planner_days').select('*').order('day_index', { ascending: true });
+  if (error) {
+    console.error('Error fetching planner days:', error);
+    return [];
+  }
+  return data.map(d => ({
+    dayIndex: d.day_index,
+    targetSilos: d.target_silos || [],
+    siloAssignments: d.silo_assignments || [],
+    totalKg: Number(d.total_kg),
+    blocks: d.blocks || [],
+    scheduledDate: d.scheduled_date,
+    fulfilledDemandIds: d.fulfilled_demand_ids || []
+  }));
+};
+
+export const createPlannerDay = async (day: any) => {
+  const { error } = await supabase.from('planner_days').insert([{
+    day_index: day.dayIndex,
+    target_silos: day.targetSilos,
+    silo_assignments: day.siloAssignments,
+    total_kg: day.totalKg,
+    blocks: day.blocks,
+    scheduled_date: day.scheduledDate,
+    fulfilled_demand_ids: day.fulfilledDemandIds || []
+  }]);
+  if (error) console.error('Error creating planner day:', error);
+  return !error;
+};
+
+export const purgePlannerDays = async () => {
+  const { error } = await supabase.from('planner_days').delete().neq('day_index', -1);
+  if (error) console.error('Error purging planner days:', error);
+  return !error;
+};
+
+export const deletePlannerDay = async (dayIndex: number) => {
+  const { error } = await supabase.from('planner_days').delete().eq('day_index', dayIndex);
+  if (error) console.error('Error deleting planner day:', error);
+  return !error;
+};
+
