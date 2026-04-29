@@ -201,6 +201,42 @@ export const updateTaskStatus = async (taskId: string, status: string, additiona
   return !error;
 };
 
+export const getTaskByLotNumber = async (lotNumber: string) => {
+  const { data, error } = await supabase
+    .from('roast_tasks')
+    .select(`
+      *,
+      daily_roast_orders (
+        profile_name,
+        total_kg,
+        category,
+        priority
+      )
+    `)
+    .eq('lot_number', lotNumber.trim().toUpperCase())
+    .single();
+
+  if (error) {
+    console.error('Error fetching task by lot number:', error);
+    return null;
+  }
+
+  return {
+    id: data.id,
+    type: data.type,
+    masterProfile: data.master_profile,
+    machineId: data.machine_id,
+    origins: data.origins,
+    targetWeightKg: data.target_weight_kg,
+    actualWeightKg: data.actual_weight_kg,
+    status: data.status,
+    lotNumber: data.lot_number,
+    roastedAt: data.roasted_at,
+    roastData: data.roast_data,
+    parentOrder: data.daily_roast_orders
+  };
+};
+
 export const updateOrderStatus = async (orderId: string, status: string) => {
   const { error } = await supabase.from('daily_roast_orders').update({ status }).eq('id', orderId);
   if (error) console.error('Error updating order:', error);

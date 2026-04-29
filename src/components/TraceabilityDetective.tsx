@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Search, Download, FileSignature, Droplets, Truck, Flame, Coffee, PackageCheck, AlertTriangle, CheckCircle2, QrCode } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts';
 
-import type { ActiveLot } from '../App';
+import type { ActiveLot, MasterProfile } from '../App';
+import { getTaskByLotNumber } from '../lib/api';
 
 interface TraceabilityProps {
   activeLot: ActiveLot | null;
@@ -26,31 +27,33 @@ const generateMockHistoricalData = () => {
 
 const historicalRoastData = generateMockHistoricalData();
 
-const historicalRadarData = [
-  { subject: 'Fragancia', A: 8.5, B: 8.0, fullMark: 10 },
-  { subject: 'Aroma', A: 7.8, B: 7.5, fullMark: 10 },
-  { subject: 'Sabor', A: 8.6, B: 8.5, fullMark: 10 },
-  { subject: 'Cuerpo', A: 8.1, B: 8.0, fullMark: 10 },
-];
+
 
 const TraceabilityDetective: React.FC<TraceabilityProps> = ({ activeLot }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchedLot, setSearchedLot] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [fetchedTask, setFetchedTask] = useState<any>(null);
 
-  // Determine if we are viewing the live Active Lot or the Historical Anomaly Mock
+  // Determine if we are viewing the live Active Lot or the Historical data
   const isLiveLot = searchedLot === activeLot?.id;
-  const isHistorical = searchedLot !== null && searchedLot !== activeLot?.id;
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     
     setIsSearching(true);
-    setTimeout(() => {
-      setSearchedLot(searchQuery.trim());
-      setIsSearching(false);
-    }, 800);
+    const task = await getTaskByLotNumber(searchQuery.trim());
+    
+    if (task) {
+      setFetchedTask(task);
+      setSearchedLot(task.lotNumber || task.id);
+    } else {
+      alert("No se encontró ningún lote con ese identificador.");
+      setSearchedLot(null);
+      setFetchedTask(null);
+    }
+    setIsSearching(false);
   };
 
   const handleGeneratePDF = () => {
@@ -62,17 +65,16 @@ const TraceabilityDetective: React.FC<TraceabilityProps> = ({ activeLot }) => {
   };
 
   // Compute display data based on the mode
-  const productName = isLiveLot ? activeLot?.profile.name : 'Espresso Barista PRO (Marca Propia)';
-  const destination = isLiveLot && activeLot?.profile.name.toLowerCase().includes('lidl') 
+  const currentTask = isLiveLot ? activeLot : fetchedTask;
+  const productName = currentTask?.parentOrder?.profile_name || currentTask?.profile?.name || 'Gama No Identificada';
+  const destination = productName.toLowerCase().includes('lidl') 
     ? 'Plataforma Logística Lidl Canarias' 
     : 'Distribuidora HORECA Arbitrade Canarias';
   
-  const blend = isLiveLot ? activeLot?.profile.blend : [
-    { origin: 'Brasil Cerrado', percentage: 60, internalLot: 'BR-23-441' },
-    { origin: 'Colombia Huila', percentage: 40, internalLot: 'CO-23-899' }
-  ];
-
-  const hasAnomaly = isHistorical; // The mock has a temperature spike
+  const masterProfile = (currentTask?.masterProfile as unknown as MasterProfile);
+  const blend = currentTask?.origins || masterProfile?.blend || [];
+ 
+  const hasAnomaly = false; 
   
   return (
     <div className="flex flex-col h-full bg-[#0a0a0b] text-white">
@@ -130,15 +132,15 @@ const TraceabilityDetective: React.FC<TraceabilityProps> = ({ activeLot }) => {
                      ${hasAnomaly ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-green-500/20 text-green-400 border-green-500/30'}`}>
                      {hasAnomaly ? 'Incidencia Detectada (Tueste)' : 'Lote Validado'}
                    </div>
-                   {searchedLot?.includes('MDD') || searchedLot?.toLowerCase().includes('lidl') ? (
-                     <span className="px-3 py-1 text-xs font-black uppercase tracking-widest rounded border bg-blue-500/10 text-blue-400 border-blue-500/30">
-                       Master Lot MDD (Multi-Batch)
-                     </span>
-                   ) : isLiveLot && activeLot?.machineId ? (
-                     <span className="px-3 py-1 text-xs font-black uppercase tracking-widest rounded border bg-purple-500/10 text-purple-400 border-purple-500/30">
-                       Máquina: {activeLot.machineId}
-                     </span>
-                   ) : null}
+                   {productName.toLowerCase().includes('lidl') ? (
+                      <span className="px-3 py-1 text-xs font-black uppercase tracking-widest rounded border bg-blue-500/10 text-blue-400 border-blue-500/30">
+                        Master Lot MDD (Multi-Batch)
+                      </span>
+                    ) : currentTask?.machineId ? (
+                      <span className="px-3 py-1 text-xs font-black uppercase tracking-widest rounded border bg-purple-500/10 text-purple-400 border-purple-500/30">
+                        Máquina: {currentTask.machineId}
+                      </span>
+                    ) : null}
                    <span className="text-gray-500 text-sm font-mono">{searchedLot}</span>
                  </div>
                  <h2 className="text-3xl font-black tracking-wide text-white">{productName}</h2>
@@ -148,7 +150,7 @@ const TraceabilityDetective: React.FC<TraceabilityProps> = ({ activeLot }) => {
               </div>
 
               <div className="z-10 w-full md:w-auto flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
-                {(searchedLot?.includes('MDD') || searchedLot?.toLowerCase().includes('lidl')) && (
+                {productName.toLowerCase().includes('lidl') && (
                    <button onClick={() => alert("Master QR MDD: Lote Agregado de 10 Tostadas (2.400kg Total)")} className="px-6 py-4 rounded-xl bg-blue-600 hover:bg-blue-500 transition-all flex items-center justify-center text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-500/20">
                       <QrCode className="w-5 h-5 mr-3" />
                       Master QR MDD
@@ -179,7 +181,7 @@ const TraceabilityDetective: React.FC<TraceabilityProps> = ({ activeLot }) => {
                    <div className="bg-[#14161a] p-4 rounded-xl border border-dashboard-border">
                      <p className="text-xs text-gray-500 uppercase tracking-widest font-black mb-3">Composición del Blend</p>
                      <div className="space-y-2">
-                       {blend && blend.map((b: any, idx) => (
+                       {blend && blend.map((b: any, idx: number) => (
                          <div key={idx} className="flex justify-between items-center bg-[#1e222b] px-3 py-2 rounded border border-gray-800">
                            <span className="text-sm font-medium">{b.origin}</span>
                            <div className="flex items-center space-x-2">
@@ -200,8 +202,8 @@ const TraceabilityDetective: React.FC<TraceabilityProps> = ({ activeLot }) => {
                        <span className="font-mono text-gray-300 font-bold">780 g/L</span>
                      </div>
                      <div className="flex justify-between items-center">
-                       <span className="text-sm text-gray-400">Fecha Ingreso</span>
-                       <span className="font-mono text-gray-500 font-bold">2026-03-21</span>
+                        <span className="text-sm text-gray-400">Fecha de Tueste</span>
+                        <span className="font-mono text-gray-500 font-bold">{currentTask?.roastedAt ? new Date(currentTask.roastedAt).toLocaleDateString() : 'Pendiente'}</span>
                      </div>
                    </div>
                 </div>
@@ -227,21 +229,23 @@ const TraceabilityDetective: React.FC<TraceabilityProps> = ({ activeLot }) => {
                   </div>
                 )}
                 
-                <div className="bg-[#14161a] p-4 rounded-xl border border-dashboard-border h-64 relative">
-                  <div className="absolute top-4 right-4 flex items-center space-x-3 text-xs z-10">
-                     <span className="flex items-center text-gray-400"><span className="w-3 h-3 rounded-full bg-gray-600 mr-1.5" /> Maestro</span>
-                     <span className="flex items-center text-coffee-accent"><span className="w-3 h-3 rounded-full bg-coffee-accent mr-1.5" /> Real</span>
-                  </div>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={historicalRoastData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#2e3340" />
-                      <XAxis dataKey="time" stroke="#6b7280" tick={{ fontSize: 10 }} />
-                      <YAxis stroke="#6b7280" tick={{ fontSize: 10 }} domain={['auto', 'auto']} />
-                      <RechartsTooltip contentStyle={{ backgroundColor: '#1e222b', borderColor: '#2e3340' }} />
-                      <Line type="monotone" dataKey="targetTemp" stroke="#4b5563" strokeWidth={2} dot={false} strokeDasharray="5 5" />
-                      <Line type="monotone" dataKey="actualTemp" stroke={hasAnomaly ? "#ef4444" : "#d97706"} strokeWidth={3} dot={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
+                <div className="bg-[#14161a] p-4 rounded-xl border border-dashboard-border h-64 relative flex items-center justify-center">
+                   {currentTask?.roastData ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={historicalRoastData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#2e3340" />
+                          <XAxis dataKey="time" stroke="#6b7280" tick={{ fontSize: 10 }} />
+                          <YAxis stroke="#6b7280" tick={{ fontSize: 10 }} domain={['auto', 'auto']} />
+                          <RechartsTooltip contentStyle={{ backgroundColor: '#1e222b', borderColor: '#2e3340' }} />
+                          <Line type="monotone" dataKey="targetTemp" stroke="#4b5563" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+                          <Line type="monotone" dataKey="actualTemp" stroke={hasAnomaly ? "#ef4444" : "#d97706"} strokeWidth={3} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                   ) : (
+                      <div className="text-center text-gray-600 italic text-sm">
+                         Curva IoT no disponible para este lote
+                      </div>
+                   )}
                 </div>
               </TimelineCard>
 
@@ -259,37 +263,54 @@ const TraceabilityDetective: React.FC<TraceabilityProps> = ({ activeLot }) => {
                    
                     {/* Radar Chart */}
                     <div className="bg-[#14161a] p-4 rounded-xl border border-dashboard-border flex items-center justify-center min-h-[200px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RadarChart cx="50%" cy="50%" outerRadius="65%" data={historicalRadarData}>
-                          <PolarGrid stroke="#2e3340" />
-                          <PolarAngleAxis dataKey="subject" tick={{ fill: '#9ca3af', fontSize: 10 }} />
-                          <Radar name="Maestro" dataKey="B" stroke="#9ca3af" strokeWidth={1} strokeDasharray="3 3" fill="#9ca3af" fillOpacity={0.1} />
-                          <Radar name="Real" dataKey="A" stroke="#a855f7" strokeWidth={2} fill="#a855f7" fillOpacity={0.4} />
-                        </RadarChart>
-                      </ResponsiveContainer>
+                      {(() => {
+                        const s = currentTask?.roastData?.sensory || masterProfile?.sensory || { fragrancia: 8, aroma: 8, sabor: 8, cuerpo: 8 };
+                        const ms = masterProfile?.sensory || { fragrancia: 8, aroma: 8, sabor: 8, cuerpo: 8 };
+                        const radarData = [
+                          { subject: 'Fragancia', A: s.fragrancia, B: ms.fragrancia, fullMark: 10 },
+                          { subject: 'Aroma', A: s.aroma, B: ms.aroma, fullMark: 10 },
+                          { subject: 'Sabor', A: s.sabor, B: ms.sabor, fullMark: 10 },
+                          { subject: 'Cuerpo', A: s.cuerpo, B: ms.cuerpo, fullMark: 10 },
+                        ];
+                        return (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart cx="50%" cy="50%" outerRadius="65%" data={radarData}>
+                              <PolarGrid stroke="#2e3340" />
+                              <PolarAngleAxis dataKey="subject" tick={{ fill: '#9ca3af', fontSize: 10 }} />
+                              <Radar name="Maestro" dataKey="B" stroke="#9ca3af" strokeWidth={1} strokeDasharray="3 3" fill="#9ca3af" fillOpacity={0.1} />
+                              <Radar name="Real" dataKey="A" stroke="#a855f7" strokeWidth={2} fill="#a855f7" fillOpacity={0.4} />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        );
+                      })()}
                     </div>
 
                     {/* Stats */}
                     <div className="bg-[#14161a] p-5 rounded-xl border border-dashboard-border flex flex-col justify-between">
                        
                        <div>
-                         <span className="text-xs text-gray-500 font-black uppercase tracking-widest mb-2 block">Colorimetría Oficial</span>
-                         <div className="flex items-end space-x-2 border-b border-dashboard-border pb-4">
-                           <span className="text-4xl font-mono font-black text-purple-400">44.8</span>
-                           <span className="text-sm font-bold text-gray-500 mb-1">Agtron</span>
-                           <span className="text-xs text-green-500 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20 mb-1 ml-auto">Dentro Tolerancia</span>
-                         </div>
+                          <span className="text-xs text-gray-500 font-black uppercase tracking-widest mb-2 block">Colorimetría Oficial</span>
+                          <div className="flex items-end space-x-2 border-b border-dashboard-border pb-4">
+                            <span className="text-4xl font-mono font-black text-purple-400">{currentTask?.roastData?.agtronColor || masterProfile?.agtron || '---'}</span>
+                            <span className="text-sm font-bold text-gray-500 mb-1">Agtron</span>
+                            <span className={`text-xs px-2 py-0.5 rounded border mb-1 ml-auto ${currentTask?.status === 'RESTING' || currentTask?.status === 'COMPLETED' ? 'text-green-500 bg-green-500/10 border-green-500/20' : 'text-gray-500 bg-gray-500/10 border-gray-500/20'}`}>
+                               {currentTask?.status === 'RESTING' || currentTask?.status === 'COMPLETED' ? 'Certificado' : 'Sin Validar'}
+                            </span>
+                          </div>
                        </div>
 
                        <div className="mt-4">
                          <span className="text-xs text-gray-500 font-black uppercase tracking-widest mb-2 block">Cadena de Custodia</span>
-                         <div className="flex justify-between items-center bg-[#1e222b] p-3 rounded-lg border border-dashboard-border">
-                           <div className="flex items-center text-sm font-medium">
-                             <CheckCircle2 className="w-5 h-5 text-green-400 mr-2" />
-                             Validado por Calidad
-                           </div>
-                           <span className="text-xs text-gray-400">2026-03-23 09:44 AM</span>
-                         </div>
+                          <div className="flex justify-between items-center bg-[#1e222b] p-3 rounded-lg border border-dashboard-border">
+                            <div className="flex items-center text-sm font-medium">
+                              {currentTask?.status === 'RESTING' || currentTask?.status === 'COMPLETED' ? (
+                                 <><CheckCircle2 className="w-5 h-5 text-green-400 mr-2" /> Validado por Calidad</>
+                              ) : (
+                                 <><AlertTriangle className="w-5 h-5 text-amber-500 mr-2" /> Pendiente Laboratorio</>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-400">{currentTask?.roastedAt ? new Date(currentTask.roastedAt).toLocaleString() : '---'}</span>
+                          </div>
                        </div>
                     </div>
 
@@ -301,8 +322,8 @@ const TraceabilityDetective: React.FC<TraceabilityProps> = ({ activeLot }) => {
               <TimelineCard 
                 icon={<Truck />} 
                 title="4. Destino y Logística" 
-                status={destination}
-                statusColor="text-blue-400"
+                status={currentTask?.status === 'COMPLETED' ? `Expedido: ${destination}` : 'En Reposo / Planta'}
+                statusColor={currentTask?.status === 'COMPLETED' ? "text-blue-400" : "text-amber-400"}
                 borderColor="border-dashboard-border"
                 bgColor="bg-dashboard-panel"
               >
@@ -310,15 +331,17 @@ const TraceabilityDetective: React.FC<TraceabilityProps> = ({ activeLot }) => {
                    <div className="flex items-center text-gray-300 mb-4 sm:mb-0">
                      <PackageCheck className="w-8 h-8 text-blue-500 mr-4" />
                      <div>
-                       <p className="text-sm font-bold">Lote Empaquetado y Sellado</p>
-                       <p className="text-xs text-gray-500 font-mono mt-1">Línea de Envasado #3 - Turno Mañana</p>
+                       <p className="text-sm font-bold">{currentTask?.status === 'COMPLETED' ? 'Lote Empaquetado y Sellado' : 'Esperando Finalización de Reposo'}</p>
+                       <p className="text-xs text-gray-500 font-mono mt-1">
+                          {currentTask?.status === 'COMPLETED' ? 'Expedición Confirmada' : 'Confirmación Pendiente en Planta'}
+                       </p>
                      </div>
                    </div>
                    
                    <div className="flex items-center space-x-4">
                      <div className="text-right">
-                       <p className="text-xs uppercase tracking-widest text-gray-500 font-bold">Llegada Prevista (ETA)</p>
-                       <p className="text-lg font-mono font-black text-white mt-1">HOY 18:00H</p>
+                       <p className="text-xs uppercase tracking-widest text-gray-500 font-bold">Estado Actual</p>
+                       <p className="text-lg font-mono font-black text-white mt-1">{currentTask?.status || '---'}</p>
                      </div>
                    </div>
                 </div>
