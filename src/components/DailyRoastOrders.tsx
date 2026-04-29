@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
 import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, Zap, Lock } from 'lucide-react';
-import { generateDailyProductionReport } from '../lib/reports';
+import { generateDailyProductionReport, generatePackagingOrderReport } from '../lib/reports';
 import { ROASTING_MACHINES } from '../App';
 import { createDailyOrder, deleteDailyOrder, purgeAllProductionData, fetchPlannerDemands, createPlannerDemand, deletePlannerDemand, fetchPlannerDays, createPlannerDay, deletePlannerDay, purgePlannerDays, updatePlannerDemandStatus } from '../lib/api';
 import PackagingOverlay from './PackagingOverlay';
@@ -1130,6 +1130,15 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                         </p>
                      </div>
                      <div className="flex items-center space-x-4">
+                        {viewMode === 'PACKAGING' && pendingTasks.some(t => t.type === 'BLEND') && (
+                           <button
+                              onClick={() => generatePackagingOrderReport(roastOrders)}
+                              className="flex items-center space-x-2 bg-coffee-accent hover:bg-coffee-accent/90 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg active:scale-95"
+                           >
+                              <FileText className="w-4 h-4" />
+                              <span>Imprimir Orden Envasado</span>
+                           </button>
+                        )}
                         <div className="flex flex-col items-end">
                            <span className="text-[10px] font-black text-gray-500 uppercase">Eficiencia Térmica</span>
                            <span className="text-sm font-black text-green-500">OPTIMIZADA</span>

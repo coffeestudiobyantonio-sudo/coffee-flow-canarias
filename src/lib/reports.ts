@@ -126,6 +126,71 @@ export const generateDailyProductionReport = (orders: DailyRoastOrder[]) => {
       doc.text(`Generado por Coffee Flow v2.1 - Arbitrade Canarias S.L. - Página ${i} de ${pageCount}`, 15, 200);
    }
 
-   const fileDate = new Date().toISOString().split('T')[0];
-   doc.save(`Informe_Produccion_${fileDate}.pdf`);
+   doc.save(`INFORME_PRODUCCION_${today.replace(/[\/:]/g, '_')}.pdf`);
+};
+
+/**
+ * Genera una Orden de Envasado para la cola de Ejecución de Planta.
+ */
+export const generatePackagingOrderReport = (orders: DailyRoastOrder[]) => {
+   const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+   });
+
+   const today = new Date().toLocaleDateString('es-ES', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric'
+   });
+
+   // Cabecera
+   doc.setFillColor(30, 34, 43);
+   doc.rect(0, 0, 210, 30, 'F');
+   
+   doc.setTextColor(217, 119, 6);
+   doc.setFontSize(18);
+   doc.setFont('helvetica', 'bold');
+   doc.text('ARBITRADE - ORDEN DE ENVASADO', 15, 15);
+   
+   doc.setTextColor(255, 255, 255);
+   doc.setFontSize(10);
+   doc.text(`COLA DE TRABAJO - JORNADA ${today}`, 15, 22);
+
+   const packagingTasks = orders.flatMap(o => 
+      o.tasks.filter(t => t.type === 'BLEND' && t.status === 'PENDING')
+   );
+
+   if (packagingTasks.length === 0) {
+      doc.setTextColor(100, 100, 100);
+      doc.text('No hay órdenes de envasado pendientes.', 15, 45);
+      doc.save(`ORDEN_ENVASADO_${today.replace(/\//g, '_')}.pdf`);
+      return;
+   }
+
+   const tableRows = packagingTasks.map((t, idx) => [
+      (idx + 1).toString(),
+      t.masterProfile?.name || 'GAMA DESCONOCIDA',
+      (t.masterProfile as any)?.format || 'ESTÁNDAR',
+      `${t.targetWeightKg.toFixed(1)} kg`,
+      t.assignedSilos?.join(', ') || '--',
+      '[ ] Reposo [ ] Envasado'
+   ]);
+
+   autoTable(doc, {
+      startY: 40,
+      head: [['#', 'Gama / Perfil', 'Formato', 'Cantidad', 'Silos Origen', 'Checklist']],
+      body: tableRows,
+      headStyles: { fillColor: [30, 34, 43], textColor: [255, 255, 255], fontStyle: 'bold' },
+      styles: { fontSize: 10, cellPadding: 5 },
+      columnStyles: {
+         0: { cellWidth: 10 },
+         1: { cellWidth: 60 },
+         3: { fontStyle: 'bold' },
+         5: { cellWidth: 40 }
+      }
+   });
+
+   doc.save(`ORDEN_ENVASADO_${today.replace(/\//g, '_')}.pdf`);
 };

@@ -225,6 +225,14 @@ function App() {
       setMasterProfiles(dbProfiles);
       setRoastOrders(dbOrders);
       setIsDbLoaded(true);
+
+      // Auto-focus on Packaging if there's work left from yesterday
+      const hasPendingPackaging = dbOrders.some(o => 
+        o.tasks.some(t => t.type === 'BLEND' && t.status === 'PENDING')
+      );
+      if (hasPendingPackaging) {
+        setActiveTab('packaging');
+      }
     };
     loadData();
   }, []);
