@@ -197,7 +197,18 @@ export const updateTaskStatus = async (taskId: string, status: string, additiona
   if (additionalData.lotNumber !== undefined) dbUpdates.lot_number = additionalData.lotNumber;
 
   const { error } = await supabase.from('roast_tasks').update(dbUpdates).eq('id', taskId);
-  if (error) console.error('Error updating task:', error);
+  if (error) {
+    console.error('Error updating task:', error);
+    if (error.message.includes('column "lot_number" does not exist')) {
+      alert("ERROR CRÍTICO: La columna 'lot_number' no existe en Supabase. Por favor, ejecuta el SQL: ALTER TABLE roast_tasks ADD COLUMN lot_number TEXT;");
+    }
+  }
+  return !error;
+};
+
+export const updateTaskId = async (oldId: string, newId: string) => {
+  const { error } = await supabase.from('roast_tasks').update({ id: newId }).eq('id', oldId);
+  if (error) console.error('Error updating Task ID:', error);
   return !error;
 };
 

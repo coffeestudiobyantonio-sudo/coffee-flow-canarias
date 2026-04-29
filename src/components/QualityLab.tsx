@@ -8,12 +8,13 @@ interface QualityLabProps {
   activeLot: ActiveLot | null;
   roastOrders: DailyRoastOrder[];
   onQualityValidated?: (taskId: string, isApproved: boolean, lotNumber: string) => void;
+  onTaskIdChanged?: (oldId: string, newId: string) => void;
 }
 
 // Las tolerancias mecánicas (2% estricto Lidl, 8% flexibilidad Marca Propia)
 const getTolerancePct = (bu?: 'LIDL' | 'PROPIA') => bu === 'LIDL' ? 0.02 : 0.08;
 
-const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQualityValidated }) => {
+const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQualityValidated, onTaskIdChanged }) => {
   const pendingValidationTasks = roastOrders.flatMap(o => 
      o.tasks.map(t => ({ 
        ...t, 
@@ -188,7 +189,11 @@ const QualityLab: React.FC<QualityLabProps> = ({ activeLot, roastOrders, onQuali
                 type="text" 
                 className="bg-[#1e222b] border border-dashboard-border rounded-xl p-3 text-white font-mono text-lg focus:outline-none focus:border-purple-500 transition-colors w-64 mt-2"
                 value={currentTask ? currentTask.id : ''}
-                disabled={true}
+                onChange={(e) => {
+                  if (currentTask && onTaskIdChanged) {
+                    onTaskIdChanged(currentTask.id, e.target.value.toUpperCase());
+                  }
+                }}
                 placeholder="--- ESPERANDO LOTE ---"
               />
             </div>

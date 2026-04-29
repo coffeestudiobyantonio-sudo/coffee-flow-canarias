@@ -8,7 +8,7 @@ import DailyRoastOrders from './components/DailyRoastOrders';
 import ManualRoastControl from './components/ManualRoastControl';
 import SiloManager from './components/SiloManager';
 import { Database, Activity, LayoutDashboard, Target, TestTube2, Flame, CheckCircle, Lock, FileSearch, Timer, Package, Cpu } from 'lucide-react';
-import { fetchSilos, fetchMasterProfiles, fetchDailyOrders, updateTaskStatus, updateSilo } from './lib/api';
+import { fetchSilos, fetchMasterProfiles, fetchDailyOrders, updateTaskStatus, updateSilo, updateTaskId } from './lib/api';
 
 export interface MachineSpecificProfile {
   targetAgtron: number;
@@ -471,6 +471,17 @@ function App() {
     setActiveTab('orders');
   };
 
+  const handleTaskIdChanged = async (oldId: string, newId: string) => {
+    // Update local state immediately for UI responsiveness
+    setRoastOrders(prevOrders => prevOrders.map(o => ({
+      ...o,
+      tasks: o.tasks.map(t => t.id === oldId ? { ...t, id: newId } : t)
+    })));
+
+    // Try to update in DB
+    await updateTaskId(oldId, newId);
+  };
+
   // Stepper UI Component
   const StepperBar = () => {
     const steps = [
@@ -639,7 +650,15 @@ function App() {
                 session={roastSession}
                 setSession={setRoastSession}
               />
-            )}{activeTab === 'lab' && <QualityLab activeLot={activeLot} roastOrders={roastOrders} onQualityValidated={handleQualityValidated} />}
+            )}
+            {activeTab === 'lab' && (
+              <QualityLab 
+                activeLot={activeLot} 
+                roastOrders={roastOrders}
+                onQualityValidated={handleQualityValidated}
+                onTaskIdChanged={handleTaskIdChanged}
+              />
+            )}
             {activeTab === 'traceability' && <TraceabilityDetective activeLot={activeLot} />}
           </div>
         </ErrorBoundary>
