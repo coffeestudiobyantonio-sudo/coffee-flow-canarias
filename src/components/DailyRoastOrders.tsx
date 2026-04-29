@@ -1130,7 +1130,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                         </p>
                      </div>
                      <div className="flex items-center space-x-4">
-                        {viewMode === 'PACKAGING' && pendingTasks.some(t => t.type === 'BLEND') && (
+                        {viewMode === 'PACKAGING' && (
                            <button
                               onClick={() => generatePackagingOrderReport(roastOrders)}
                               className="flex items-center space-x-2 bg-coffee-accent hover:bg-coffee-accent/90 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg active:scale-95"
