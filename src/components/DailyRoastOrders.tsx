@@ -1130,7 +1130,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                          </p>
                       </div>
                       <div className="flex items-center space-x-4">
-                         {roastOrders.length > 0 && roastOrders.every(o => o.status === 'COMPLETED') && (
+                         {roastOrders.length > 0 && (
                             <>
                                <button 
                                  onClick={() => generatePalletShippingReport(roastOrders, demands)}

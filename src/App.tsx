@@ -118,7 +118,7 @@ export interface RoastTask {
   origins: string[]; // Supports multiple origins for PRE_BLEND or single for POST_BLEND
   targetWeightKg: number;
   actualWeightKg?: number;
-  status: 'PENDING' | 'ROASTED' | 'RESTING' | 'LAB_REJECTED';
+  status: 'PENDING' | 'ROASTED' | 'RESTING' | 'LAB_REJECTED' | 'COMPLETED' | 'ARCHIVED';
   consumedLots?: ConsumedLot[]; // Multi-Lot tracking for FIFO Engine
   assignedSilos?: number[]; // Phase 11: Linked source silos
   batchIndex?: number;

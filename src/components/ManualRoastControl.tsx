@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Square, TrendingUp, AlertCircle, Flame, Timer as TimerIcon, Droplets, CheckCircle, QrCode, Wrench, History, ArchiveRestore, TestTube2, Info, Lock, Target } from 'lucide-react';
+import { Play, Square, TrendingUp, AlertCircle, Flame, Timer as TimerIcon, Droplets, CheckCircle, QrCode, Wrench, History, ArchiveRestore, TestTube2, Info, Lock, Target, FileText } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot, CartesianGrid } from 'recharts';
 import { ROASTING_MACHINES } from '../App';
 import { updateTaskStatus, updateOrderStatus } from '../lib/api';
+import { generateDailyProductionReport } from '../lib/reports';
 
 interface RoastDataPoint {
   time: number; // seconds
@@ -878,12 +879,21 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({
                     </div>
                  </div>
 
-                 <button 
-                   onClick={handleFinalizeBatch}
-                   className="w-full bg-white text-black hover:bg-coffee-accent hover:text-white h-24 rounded-3xl font-black text-2xl uppercase tracking-widest transition-all shadow-2xl active:scale-95"
-                 >
-                    Cerrar Lote y Generar QR
-                 </button>
+                 <div className="flex space-x-4">
+                    <button 
+                      onClick={() => generateDailyProductionReport(allOrders)}
+                      className="flex-1 bg-red-600/10 border-2 border-red-600/30 text-red-500 hover:bg-red-600 hover:text-white h-24 rounded-3xl font-black text-xl uppercase tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center space-x-3"
+                    >
+                       <FileText className="w-6 h-6" />
+                       <span>Informe Diario</span>
+                    </button>
+                    <button 
+                      onClick={handleFinalizeBatch}
+                      className="flex-[2] bg-white text-black hover:bg-coffee-accent hover:text-white h-24 rounded-3xl font-black text-2xl uppercase tracking-widest transition-all shadow-2xl active:scale-95"
+                    >
+                       Cerrar Lote y Generar QR
+                    </button>
+                 </div>
               </div>
            </div>
         </div>

@@ -43,7 +43,7 @@ export const generateDailyProductionReport = (orders: DailyRoastOrder[]) => {
    doc.setFontSize(12);
    doc.text(`INFORME DIARIO DE PRODUCCIÓN Y TRAZABILIDAD - ${today}`, 15, 30);
 
-   const roastTasks = orders.flatMap(o => o.tasks.filter(t => t.type === 'ROAST' && (t.status === 'ROASTED' || t.status === 'RESTING')));
+   const roastTasks = orders.flatMap(o => o.tasks.filter(t => t.type === 'ROAST' && (t.status === 'ROASTED' || t.status === 'RESTING' || t.status === 'COMPLETED')));
    const totalRoastedKg = roastTasks.reduce((acc, t) => acc + (t.actualWeightKg || 0), 0);
    const totalGreenKg = roastTasks.reduce((acc, t) => acc + (t.targetWeightKg || 0), 0);
    const avgShrinkage = totalGreenKg > 0 ? ((totalGreenKg - totalRoastedKg) / totalGreenKg * 100).toFixed(2) : '0.00';
@@ -64,7 +64,7 @@ export const generateDailyProductionReport = (orders: DailyRoastOrder[]) => {
       styles: { fontSize: 10, cellPadding: 1 }
    });
 
-   const allTasks = orders.flatMap(o => o.tasks.filter(t => t.status === 'ROASTED' || t.status === 'RESTING'));
+   const allTasks = orders.flatMap(o => o.tasks.filter(t => t.status === 'ROASTED' || t.status === 'RESTING' || t.status === 'COMPLETED'));
    let batchCounter = 0;
    const tableRows = allTasks.flatMap(t => {
       if (t.type === 'BLEND') return [];
@@ -75,11 +75,11 @@ export const generateDailyProductionReport = (orders: DailyRoastOrder[]) => {
          `${t.origins[0] || 'Origen'}\n(${t.masterProfile?.name || 'Gama'})`,
          `${t.targetWeightKg.toFixed(1)} / ${t.actualWeightKg?.toFixed(1) || '--'}`,
          t.actualWeightKg ? (((t.targetWeightKg - t.actualWeightKg) / t.targetWeightKg) * 100).toFixed(1) + '%' : '--',
-         rd.turnaroundTemp ? `${rd.turnaroundTemp}°C` : '--',
-         rd.yellowTemp ? `${rd.yellowTemp}°C` : '--',
-         rd.maillardTemp ? `${rd.maillardTemp}°C` : '--',
-         rd.firstCrackTemp ? `${rd.firstCrackTemp}°C` : '--',
-         rd.finalTemp ? `${rd.finalTemp}°C` : '--',
+         rd.turnaroundTemp ? `${rd.turnaroundTemp}°C\n(${rd.turnaroundTime || '0:00'})` : '--',
+         rd.yellowTemp ? `${rd.yellowTemp}°C\n(${rd.yellowTime || '0:00'})` : '--',
+         rd.maillardTemp ? `${rd.maillardTemp}°C\n(${rd.maillardTime || '0:00'})` : '--',
+         rd.firstCrackTemp ? `${rd.firstCrackTemp}°C\n(${rd.firstCrackTime || '0:00'})` : '--',
+         rd.finalTemp ? `${rd.finalTemp}°C\n(${rd.finalTime || '0:00'})` : '--',
          t.assignedSilos ? `Silo ${t.assignedSilos[0]}` : '--'
       ]];
    });
