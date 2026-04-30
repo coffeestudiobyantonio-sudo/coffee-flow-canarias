@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
 import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, Zap, Lock } from 'lucide-react';
-import { generateDailyProductionReport, generatePackagingOrderReport } from '../lib/reports';
+import { generateDailyProductionReport, generatePackagingOrderReport, generatePalletShippingReport } from '../lib/reports';
 import { ROASTING_MACHINES } from '../App';
 import { createDailyOrder, deleteDailyOrder, purgeAllProductionData, fetchPlannerDemands, createPlannerDemand, deletePlannerDemand, fetchPlannerDays, createPlannerDay, deletePlannerDay, purgePlannerDays, updatePlannerDemandStatus } from '../lib/api';
 import PackagingOverlay from './PackagingOverlay';
@@ -1126,38 +1126,46 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                            {viewMode === 'PACKAGING' ? 'Ejecución de Planta (Ensamblaje)' : 'Planta (Operario)'}
                         </h2>
                         <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">
-                           {viewMode === 'PACKAGING' ? 'Cola de Envasado & Reposo Operativa' : 'Cola de Tostado Activa'}
-                        </p>
-                     </div>
-                     <div className="flex items-center space-x-4">
-                        {roastOrders.length > 0 && roastOrders.every(o => o.status === 'COMPLETED') && (
-                           <button 
-                             onClick={() => generateDailyProductionReport(roastOrders)}
-                             className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center space-x-2"
-                           >
-                             <FileText className="w-4 h-4" />
-                             <span>Exportar Informe de Producción PDF</span>
-                           </button>
-                        )}
-                        {viewMode === 'PACKAGING' && (
-                           <button
-                              onClick={() => generatePackagingOrderReport(roastOrders)}
-                              className="flex items-center space-x-2 bg-coffee-accent hover:bg-coffee-accent/90 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg active:scale-95"
-                           >
-                              <FileText className="w-4 h-4" />
-                              <span>Imprimir Orden Envasado</span>
-                           </button>
-                        )}
-                        <div className="flex flex-col items-end">
-                           <span className="text-[10px] font-black text-gray-500 uppercase">Eficiencia Térmica</span>
-                           <span className="text-sm font-black text-green-500">OPTIMIZADA</span>
-                        </div>
-                        <div className="bg-green-500/10 p-3 rounded-xl border border-green-500/30">
-                           <Zap className="w-5 h-5 text-green-500 animate-pulse" />
-                        </div>
-                     </div>
-                  </div>
-
+                            {viewMode === 'PACKAGING' ? 'Cola de Envasado & Reposo Operativa' : 'Cola de Tostado Activa'}
+                         </p>
+                      </div>
+                      <div className="flex items-center space-x-4">
+                         {roastOrders.length > 0 && roastOrders.every(o => o.status === 'COMPLETED') && (
+                            <>
+                               <button 
+                                 onClick={() => generatePalletShippingReport(roastOrders, demands)}
+                                 className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center space-x-2"
+                               >
+                                 <Package className="w-4 h-4" />
+                                 <span>Imprimir Hoja Paletizado</span>
+                               </button>
+                               <button 
+                                 onClick={() => generateDailyProductionReport(roastOrders)}
+                                 className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center space-x-2"
+                               >
+                                 <FileText className="w-4 h-4" />
+                                 <span>Exportar Informe de Producción PDF</span>
+                               </button>
+                            </>
+                         )}
+                         {viewMode === 'PACKAGING' && (
+                            <button
+                               onClick={() => generatePackagingOrderReport(roastOrders, demands)}
+                               className="flex items-center space-x-2 bg-coffee-accent hover:bg-coffee-accent/90 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg active:scale-95"
+                            >
+                               <FileText className="w-4 h-4" />
+                               <span>Imprimir Orden Envasado</span>
+                            </button>
+                         )}
+                         <div className="flex flex-col items-end">
+                            <span className="text-[10px] font-black text-gray-500 uppercase">Eficiencia Térmica</span>
+                            <span className="text-sm font-black text-green-500">OPTIMIZADA</span>
+                         </div>
+                         <div className="bg-green-500/10 p-3 rounded-xl border border-green-500/30">
+                            <Zap className="w-5 h-5 text-green-500 animate-pulse" />
+                         </div>
+                      </div>
+                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                      {pendingTasks.map((task, idx) => {
                         const machine = ROASTING_MACHINES.find(m => m?.id === task.machineId);
