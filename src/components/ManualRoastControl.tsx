@@ -182,26 +182,34 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({
 
   const openMilestoneModal = (type: RoastDataPoint['type']) => {
     if (!isRunning) return;
-    // Capture time immediately (Artisan 2.0 Improvement A)
-    setPendingMilestone({ type, time: elapsedTime });
-    setCurrentTemp(""); // CRITICAL FIX: Ensure modal always starts at 0/blank
+    
+    const existingPoint = dataPoints.find((p: any) => p.type === type);
+    if (existingPoint) {
+      setPendingMilestone({ type, time: existingPoint.time, isEdit: true });
+      setCurrentTemp(existingPoint.temp.toString());
+    } else {
+      setPendingMilestone({ type, time: elapsedTime });
+      setCurrentTemp("");
+    }
     setShowMilestoneModal(true);
   };
 
   const handleConfirmMilestone = (temp: number) => {
     if (pendingMilestone) {
-      const type = pendingMilestone.type;
-      const time = pendingMilestone.time;
+      const { type, time, isEdit } = pendingMilestone;
       
-      const newPoint: RoastDataPoint = { time, temp, type };
-      setDataPoints(prev => [...prev, newPoint].sort((a, b) => a.time - b.time));
+      setDataPoints((prev: any[]) => {
+        if (isEdit) {
+          return prev.map(p => p.type === type ? { ...p, temp } : p);
+        }
+        return [...prev, { time, temp, type }].sort((a, b) => a.time - b.time);
+      });
       
       setPendingMilestone(null);
       setShowMilestoneModal(false);
       setCurrentTemp("");
 
-      // If it was the drop, proceed to final report
-      if (type === 'DROP') {
+      if (type === 'DROP' && !isEdit) {
          prepareFinalReport();
       }
     }
@@ -1041,10 +1049,12 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({
 const QuickStageButton = ({ label, icon, active, onClick, color }: { label: string, icon: React.ReactNode, active: boolean, onClick: () => void, color: string }) => (
   <button 
     onClick={onClick}
-    disabled={active}
-    className={`w-full p-3 rounded-xl border-2 transition-all active:scale-95 overflow-hidden ${active ? 'opacity-30 pointer-events-none' : 'hover:scale-[1.02]'} ${active ? color : 'bg-[#1e222b] border-white/5 text-gray-400 font-bold'}`}
+    className={`w-full p-3 rounded-xl border-2 transition-all active:scale-95 overflow-hidden hover:scale-[1.02] ${active ? color : 'bg-[#1e222b] border-white/5 text-gray-400 font-bold'}`}
   >
-     <div className="flex flex-col items-center space-y-2">
+     <div className="flex flex-col items-center space-y-2 relative">
+        {active && (
+          <div className="absolute top-[-5px] right-[-5px] bg-white text-black text-[7px] px-1 rounded font-black uppercase">Edit</div>
+        )}
         <div className={`p-1.5 rounded-lg ${active ? 'bg-current/10' : 'bg-black/20'}`}>
            {icon}
         </div>
