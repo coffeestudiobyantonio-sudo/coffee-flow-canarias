@@ -135,6 +135,14 @@ export const generatePackagingOrderReport = (orders: DailyRoastOrder[], demands:
          if (demand) delegation = demand.delegation;
       }
 
+      // Dynamically calculate which silos actually contain this gama's origins
+      const parentOrder = orders.find(o => o.id === t.parentOrderId);
+      const profileSilos = parentOrder ? Array.from(new Set(
+         parentOrder.tasks
+            .filter(rt => rt.type === 'ROAST' && rt.masterProfile?.name === t.masterProfile?.name)
+            .flatMap(rt => rt.assignedSilos || [])
+      )).sort((a,b) => a-b) : (t.assignedSilos || []);
+
       return [
          (idx + 1).toString(),
          delegation,
@@ -144,7 +152,7 @@ export const generatePackagingOrderReport = (orders: DailyRoastOrder[], demands:
          packages.toLocaleString(),
          boxes.toFixed(1),
          pallets.toFixed(2),
-         t.assignedSilos?.join(', ') || '--'
+         profileSilos.length > 0 ? profileSilos.join(', ') : '--'
       ];
    });
 

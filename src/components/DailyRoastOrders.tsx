@@ -108,9 +108,27 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    
    // Lógica D: Energy Efficiency Thermic Routing (MDD Specialized)
    const thermalSortEnabled = false;
-
    const pendingTasks = roastOrders
-      .flatMap(o => o.tasks.map(t => ({ ...t, parentOrderPriority: o.priority, parentProfile: t.masterProfile?.name || o.profileName, parentBusinessUnit: (t.masterProfile as any)?.businessUnit || (o.tasks[0]?.masterProfile as any)?.businessUnit })))
+      .flatMap(o => o.tasks.map(t => {
+         // Fix: For BLEND tasks, only show silos that actually contain its origins
+         let displaySilos = t.assignedSilos;
+         if (t.type === 'BLEND') {
+            const profileSilos = Array.from(new Set(
+               o.tasks
+                  .filter(rt => rt.type === 'ROAST' && rt.masterProfile?.name === t.masterProfile?.name)
+                  .flatMap(rt => rt.assignedSilos || [])
+            )).sort((a,b) => a-b);
+            if (profileSilos.length > 0) displaySilos = profileSilos;
+         }
+
+         return { 
+            ...t, 
+            assignedSilos: displaySilos,
+            parentOrderPriority: o.priority, 
+            parentProfile: t.masterProfile?.name || o.profileName, 
+            parentBusinessUnit: (t.masterProfile as any)?.businessUnit || (o.tasks[0]?.masterProfile as any)?.businessUnit 
+         };
+      }))
       .filter(t => t.status === 'PENDING')
       .sort((a, b) => {
          if (thermalSortEnabled) {
@@ -534,6 +552,11 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
            const profile = masterProfiles.find(p => p?.name === block.profileName);
            if (!profile) return;
 
+           // Dynamically detect which silos actually contain this profile's origins
+           const actualSilos = sortedAssignments
+              .filter(s => s.batches.some(b => b.profileName === block.profileName))
+              .map(s => s.siloId);
+
            newTasks.push({
               id: `${parentOrderId}-BLEND-${blIdx + 1}`,
               parentOrderId,
@@ -545,7 +568,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
               category: 'MARCA_PROPIA',
               batchIndex: globalTaskCounter++,
               totalBatches: totalTasksInSession,
-              assignedSilos: day.targetSilos,
+              assignedSilos: actualSilos,
               fulfilledDemandIds: day.fulfilledDemandIds || []
            });
         });
