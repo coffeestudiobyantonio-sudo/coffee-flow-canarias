@@ -1325,7 +1325,14 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                      if (o.id === activePackagingTask.parentOrderId) {
                         return { 
                            ...o, 
-                           tasks: o.tasks.map(t => ({...t, status: 'ROASTED'})) 
+                           tasks: o.tasks.map(t => {
+                              // Only update current task and its specific origin components
+                              if (t.id === activePackagingTask.id) return { ...t, status: 'ROASTED' };
+                              if (t.type === 'ROAST' && (t.masterProfile?.name === activePackagingTask.masterProfile?.name)) {
+                                 return { ...t, status: 'ROASTED' };
+                              }
+                              return t;
+                           })
                         };
                      }
                      return o;

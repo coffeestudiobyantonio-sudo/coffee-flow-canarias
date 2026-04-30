@@ -227,7 +227,7 @@ export const generatePalletShippingReport = (orders: DailyRoastOrder[], demands:
 
       const palletRows = pallets.map((p, idx) => [
          `PALLET #${idx + 1}`,
-         p.items.map(i => `${i.name} (${i.kg.toFixed(1)}kg)`).join('\n'),
+         p.items.map(i => `${i.name}: ${Math.ceil(i.kg / 12)} cj (${i.kg.toFixed(1)}kg)`).join('\n'),
          `${p.kg.toFixed(1)} kg`,
          Math.ceil(p.kg / 12).toString() + ' Cajas'
       ]);
