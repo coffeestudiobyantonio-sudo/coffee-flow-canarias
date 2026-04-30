@@ -1130,6 +1130,15 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                         </p>
                      </div>
                      <div className="flex items-center space-x-4">
+                        {roastOrders.length > 0 && roastOrders.every(o => o.status === 'COMPLETED') && (
+                           <button 
+                             onClick={() => generateDailyProductionReport(roastOrders)}
+                             className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center space-x-2"
+                           >
+                             <FileText className="w-4 h-4" />
+                             <span>Exportar Informe de Producción PDF</span>
+                           </button>
+                        )}
                         {viewMode === 'PACKAGING' && (
                            <button
                               onClick={() => generatePackagingOrderReport(roastOrders)}
