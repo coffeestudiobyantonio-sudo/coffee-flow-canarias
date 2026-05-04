@@ -47,6 +47,7 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({
     currentTemp: typeof val === 'function' ? val((prev.currentTemp || "").toString()) : val 
   }));
   const [showMaintenance, setShowMaintenance] = useState(false);
+  const [editTime, setEditTime] = useState(0);
   
   const consistencyScore = session.consistencyScore;
   const setConsistencyScore = (val: number) => setSession((prev: any) => ({ ...prev, consistencyScore: val }));
@@ -188,22 +189,24 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({
     if (existingPoint) {
       setPendingMilestone({ type, time: existingPoint.time, isEdit: true });
       setCurrentTemp(existingPoint.temp.toString());
+      setEditTime(existingPoint.time);
     } else {
       setPendingMilestone({ type, time: elapsedTime });
       setCurrentTemp("");
+      setEditTime(elapsedTime);
     }
     setShowMilestoneModal(true);
   };
 
   const handleConfirmMilestone = (temp: number) => {
     if (pendingMilestone) {
-      const { type, time, isEdit } = pendingMilestone;
+      const { type, isEdit } = pendingMilestone;
       
       setDataPoints((prev: any[]) => {
         if (isEdit) {
-          return prev.map(p => p.type === type ? { ...p, temp } : p);
+          return prev.map(p => p.type === type ? { ...p, temp, time: editTime } : p).sort((a, b) => a.time - b.time);
         }
-        return [...prev, { time, temp, type }].sort((a, b) => a.time - b.time);
+        return [...prev, { time: editTime, temp, type }].sort((a, b) => a.time - b.time);
       });
       
       setPendingMilestone(null);
@@ -238,6 +241,8 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({
   const handleStop = () => {
     // Capture DROP milestone data before finishing
     setPendingMilestone({ type: 'DROP', time: elapsedTime });
+    setCurrentTemp("");
+    setEditTime(elapsedTime);
     setShowMilestoneModal(true);
     setIsRunning(false);
   };
@@ -750,7 +755,24 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({
               <div className="text-center mb-8">
                 <p className="text-[10px] text-coffee-accent font-black uppercase tracking-[0.3em] mb-4">Capturando Hito Industrial</p>
                 <h2 className="text-4xl font-black text-white uppercase mb-2">{pendingMilestone?.type === 'TP' ? 'Turning Point' : pendingMilestone?.type === 'YELLOW' ? 'Etapa Amarilla' : pendingMilestone?.type === 'MAILLARD' ? 'Reacción Maillard' : pendingMilestone?.type === 'FC_START' ? 'Primer Crack' : 'DROP / DESCARGA'}</h2>
-                <p className="text-2xl font-mono text-gray-500 font-bold">T+: {formatTimeMinutes(pendingMilestone?.time || 0)}</p>
+                <div className="flex flex-col items-center space-y-2">
+                   <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Tiempo Transcurrido (Segundos)</p>
+                   <div className="flex items-center space-x-4 bg-black/40 rounded-2xl p-2 border border-white/5">
+                      <button onClick={() => setEditTime(prev => Math.max(0, prev - 5))} className="p-2 hover:bg-white/10 rounded-lg text-gray-400">
+                         <TrendingUp className="w-4 h-4 rotate-180" />
+                      </button>
+                      <input 
+                        type="number"
+                        value={editTime}
+                        onChange={(e) => setEditTime(Number(e.target.value))}
+                        className="bg-transparent text-2xl font-mono font-black text-coffee-accent w-24 text-center outline-none"
+                      />
+                      <button onClick={() => setEditTime(prev => prev + 5)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400">
+                         <TrendingUp className="w-4 h-4" />
+                      </button>
+                   </div>
+                   <p className="text-sm font-mono text-gray-500 font-bold">{formatTimeMinutes(editTime)}</p>
+                </div>
               </div>
               
               <div className="bg-black/40 rounded-3xl p-6 border border-white/5 mb-8">
