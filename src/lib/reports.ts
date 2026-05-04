@@ -48,6 +48,12 @@ export const generateDailyProductionReport = (orders: DailyRoastOrder[]) => {
    const totalGreenKg = roastTasks.reduce((acc, t) => acc + (t.targetWeightKg || 0), 0);
    const avgShrinkage = totalGreenKg > 0 ? ((totalGreenKg - totalRoastedKg) / totalGreenKg * 100).toFixed(2) : '0.00';
    
+   const originsKg: { [origin: string]: number } = {};
+   roastTasks.forEach(t => {
+      const origin = t.origins[0] || 'Origen Desconocido';
+      originsKg[origin] = (originsKg[origin] || 0) + (t.targetWeightKg || 0);
+   });
+   
    doc.setTextColor(40, 40, 40);
    doc.text('RESUMEN DE JORNADA:', 15, 52);
    
@@ -57,6 +63,7 @@ export const generateDailyProductionReport = (orders: DailyRoastOrder[]) => {
       tableWidth: 100,
       body: [
          ['Total Café Verde Procesado', `${totalGreenKg.toFixed(1)} kg`],
+         ...Object.entries(originsKg).map(([origin, kg]) => [`  - ${origin}`, `${kg.toFixed(1)} kg`]),
          ['Total Café Tostado Producido', `${totalRoastedKg.toFixed(1)} kg`],
          ['Merma Promedio del Día', `${avgShrinkage} %`]
       ],
