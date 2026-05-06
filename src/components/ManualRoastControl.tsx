@@ -756,22 +756,40 @@ const ManualRoastControl: React.FC<ManualRoastControlProps> = ({
                 <p className="text-[10px] text-coffee-accent font-black uppercase tracking-[0.3em] mb-4">Capturando Hito Industrial</p>
                 <h2 className="text-4xl font-black text-white uppercase mb-2">{pendingMilestone?.type === 'TP' ? 'Turning Point' : pendingMilestone?.type === 'YELLOW' ? 'Etapa Amarilla' : pendingMilestone?.type === 'MAILLARD' ? 'Reacción Maillard' : pendingMilestone?.type === 'FC_START' ? 'Primer Crack' : 'DROP / DESCARGA'}</h2>
                 <div className="flex flex-col items-center space-y-2">
-                   <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Tiempo Transcurrido (Segundos)</p>
-                   <div className="flex items-center space-x-4 bg-black/40 rounded-2xl p-2 border border-white/5">
-                      <button onClick={() => setEditTime(prev => Math.max(0, prev - 5))} className="p-2 hover:bg-white/10 rounded-lg text-gray-400">
-                         <TrendingUp className="w-4 h-4 rotate-180" />
-                      </button>
-                      <input 
-                        type="number"
-                        value={editTime}
-                        onChange={(e) => setEditTime(Number(e.target.value))}
-                        className="bg-transparent text-2xl font-mono font-black text-coffee-accent w-24 text-center outline-none"
-                      />
-                      <button onClick={() => setEditTime(prev => prev + 5)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400">
-                         <TrendingUp className="w-4 h-4" />
-                      </button>
+                   <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Ajuste de Tiempo (MM:SS)</p>
+                   <div className="flex items-center space-x-6 bg-black/40 rounded-3xl p-6 border border-white/5">
+                      <div className="flex flex-col items-center">
+                        <input 
+                          type="number"
+                          value={Math.floor(editTime / 60)}
+                          onChange={(e) => setEditTime(Number(e.target.value) * 60 + (editTime % 60))}
+                          className="bg-transparent text-5xl font-mono font-black text-white w-24 text-center outline-none focus:text-coffee-accent transition-colors"
+                        />
+                        <span className="text-[9px] text-gray-600 font-black uppercase tracking-tighter mt-1">Minutos</span>
+                      </div>
+                      
+                      <div className="text-4xl font-black text-gray-800 self-center mb-4">:</div>
+                      
+                      <div className="flex flex-col items-center">
+                        <input 
+                          type="number"
+                          value={editTime % 60}
+                          onChange={(e) => {
+                            const val = Math.min(59, Math.max(0, Number(e.target.value)));
+                            setEditTime(Math.floor(editTime / 60) * 60 + val);
+                          }}
+                          className="bg-transparent text-5xl font-mono font-black text-coffee-accent w-24 text-center outline-none"
+                        />
+                        <span className="text-[9px] text-gray-600 font-black uppercase tracking-tighter mt-1">Segundos</span>
+                      </div>
                    </div>
-                   <p className="text-sm font-mono text-gray-500 font-bold">{formatTimeMinutes(editTime)}</p>
+                   
+                   <div className="flex space-x-2 mt-2">
+                      <button onClick={() => setEditTime(prev => Math.max(0, prev - 10))} className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-[10px] font-bold text-gray-400">-10s</button>
+                      <button onClick={() => setEditTime(prev => Math.max(0, prev - 1))} className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-[10px] font-bold text-gray-400">-1s</button>
+                      <button onClick={() => setEditTime(prev => prev + 1)} className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-[10px] font-bold text-gray-400">+1s</button>
+                      <button onClick={() => setEditTime(prev => prev + 10)} className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-[10px] font-bold text-gray-400">+10s</button>
+                   </div>
                 </div>
               </div>
               
