@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
 import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, Zap, Lock } from 'lucide-react';
-import { generateDailyProductionReport, generatePackagingOrderReport, generatePalletShippingReport } from '../lib/reports';
+import { generateDailyProductionReport, generatePackagingOrderReport, generatePalletShippingReport, generateRoastingPlanReport } from '../lib/reports';
 import { ROASTING_MACHINES } from '../App';
 import { createDailyOrder, deleteDailyOrder, purgeAllProductionData, fetchPlannerDemands, createPlannerDemand, deletePlannerDemand, fetchPlannerDays, createPlannerDay, deletePlannerDay, purgePlannerDays, updatePlannerDemandStatus } from '../lib/api';
 import PackagingOverlay from './PackagingOverlay';
@@ -26,7 +26,7 @@ interface DelegationDemand {
    status?: 'PENDING' | 'PRODUCING' | 'COMPLETED' | 'REVIEWED';
 }
 
-interface DailyPlan {
+export interface DailyPlan {
    dayIndex: number;
    targetSilos: number[]; // e.g [1,2,3,4] or [5,6,7,8]
    siloAssignments: { siloId: number, origin: string, batches: { profileName: string, format: string }[] }[];
@@ -472,8 +472,22 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                   targetSim.count++;
                }
             }
+
+            // Check if adding all these batches would exceed the 1800 kg limit if it becomes a multi-gama day
+            const currentWeight = currentDayBlocks.reduce((acc, b) => acc + b.targetKg, 0);
+            const totalItemWeight = itemBatches.reduce((acc, b) => acc + b.batchSizeRoasted, 0);
+            const uniqueGamasSim = new Set(currentDayBlocks.map(b => b.profileName));
+            uniqueGamasSim.add(item.profileName);
+            if (uniqueGamasSim.size >= 2 && currentWeight + totalItemWeight > 1800) {
+               willFit = false;
+            }
+
             if (!willFit) {
-               flushDay(); 
+               // Only flush early if the day is already reasonably full (e.g. >= 1400 kg),
+               // otherwise do NOT flush early to optimize roasting days and avoid leaving days half-empty.
+               if (currentWeight >= 1400) {
+                  flushDay();
+               }
             }
          }
 
@@ -482,12 +496,26 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
             // Find existing silo for this origin on current day that has space
             let silo = currentDaySiloAssignments.find(s => s.origin === batchDef.origin && s.batches.length < 4);
             
-            if (!silo) {
-               if (currentDaySiloAssignments.length >= 4) flushDay();
-               const nextIdx = currentDaySiloAssignments.length;
-               const siloSet = dayIdx % 2 === 1 ? [1, 2, 3, 4] : [5, 6, 7, 8];
-               silo = { siloId: siloSet[nextIdx], origin: batchDef.origin, batches: [] };
-               currentDaySiloAssignments.push(silo);
+            // Check weight limit if adding this batch
+            const currentWeight = currentDayBlocks.reduce((acc, b) => acc + b.targetKg, 0);
+            const uniqueGamas = new Set(currentDayBlocks.map(b => b.profileName));
+            uniqueGamas.add(item.profileName);
+            
+            const wouldExceedCap = uniqueGamas.size >= 2 && (currentWeight + batchDef.batchSizeRoasted > 1800);
+
+            if (!silo || wouldExceedCap) {
+               if (currentDaySiloAssignments.length >= 4 || wouldExceedCap) {
+                  flushDay();
+                  // Re-evaluate silo on the new day (which is empty)
+                  silo = undefined;
+               }
+               
+               if (!silo) {
+                  const nextIdx = currentDaySiloAssignments.length;
+                  const siloSet = dayIdx % 2 === 1 ? [1, 2, 3, 4] : [5, 6, 7, 8];
+                  silo = { siloId: siloSet[nextIdx], origin: batchDef.origin, batches: [] };
+                  currentDaySiloAssignments.push(silo);
+               }
             }
 
             silo.batches.push({ profileName: item.profileName, format: item.format });
@@ -824,9 +852,17 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                   {/* Planned Days Output Grid */}
                   {plannedDays.length > 0 && (
                      <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-8 shadow-2xl mt-8">
-                        <h3 className="text-xl font-black text-white mb-6 uppercase tracking-wider flex items-center border-b border-dashboard-border pb-4">
-                           <ClipboardList className="w-5 h-5 mr-3 text-blue-400" /> Planificación Generada
-                        </h3>
+                        <div className="flex justify-between items-center border-b border-dashboard-border pb-4 mb-6">
+                           <h3 className="text-xl font-black text-white uppercase tracking-wider flex items-center">
+                              <ClipboardList className="w-5 h-5 mr-3 text-blue-400" /> Planificación Generada
+                           </h3>
+                           <button 
+                              onClick={() => generateRoastingPlanReport(plannedDays, masterProfiles)}
+                              className="bg-blue-600/10 border border-blue-500/30 text-blue-400 px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-widest flex items-center hover:bg-blue-600 hover:text-white transition-all shadow-md group"
+                           >
+                              <FileText className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" /> Exportar Plan Completo PDF
+                           </button>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                            {plannedDays.map(day => (
                               <div key={day.dayIndex} className="bg-[#14161a] border border-dashboard-border rounded-2xl overflow-hidden flex flex-col group hover:border-blue-500/50 transition-colors">
