@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
-import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, Zap, Lock, Boxes, Calendar, ArrowUp, ArrowDown } from 'lucide-react';
+import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, Zap, Lock, Boxes, Calendar, ArrowUp, ArrowDown, History, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { generateDailyProductionReport, generatePackagingOrderReport, generatePalletShippingReport, generateRoastingPlanReport, generateSingleDayPlanReport } from '../lib/reports';
 import { ROASTING_MACHINES } from '../App';
-import { createDailyOrder, deleteDailyOrder, purgeAllProductionData, fetchPlannerDemands, createPlannerDemand, deletePlannerDemand, fetchPlannerDays, createPlannerDay, deletePlannerDay, purgePlannerDays, updatePlannerDemandStatus, fetchMonthlySurplus, createMonthlySurplus, deleteMonthlySurplus } from '../lib/api';
+import { createDailyOrder, deleteDailyOrder, purgeAllProductionData, fetchPlannerDemands, createPlannerDemand, deletePlannerDemand, fetchPlannerDays, createPlannerDay, deletePlannerDay, purgePlannerDays, updatePlannerDemandStatus, fetchMonthlySurplus, createMonthlySurplus, deleteMonthlySurplus, fetchMonthlyHistory, saveMonthlyHistory, deleteMonthlyHistory } from '../lib/api';
+import type { MonthlyPlanHistory } from '../lib/api';
 import type { MonthlySurplus } from '../lib/api';
 import PackagingOverlay from './PackagingOverlay';
 
@@ -69,19 +70,83 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       packages: 0
    });
 
+   // Histórico Mensual y Validación
+   const [plannerTab, setPlannerTab] = useState<'ACTIVE' | 'HISTORY'>('ACTIVE');
+   const [historyList, setHistoryList] = useState<MonthlyPlanHistory[]>([]);
+   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+   const [showValidateModal, setShowValidateModal] = useState<boolean>(false);
+
    React.useEffect(() => {
       const loadPlannerData = async () => {
-         const [dbDemands, dbDays, dbSurplus] = await Promise.all([
+         const [dbDemands, dbDays, dbSurplus, dbHistory] = await Promise.all([
             fetchPlannerDemands(),
             fetchPlannerDays(),
-            fetchMonthlySurplus(selectedMonth)
+            fetchMonthlySurplus(selectedMonth),
+            fetchMonthlyHistory()
          ]);
          setDemands(dbDemands as any[]);
          setPlannedDays(dbDays as any[]);
          setSurplusList(dbSurplus || []);
+         setHistoryList(dbHistory || []);
       };
       loadPlannerData();
    }, [selectedMonth]);
+
+   const handleConfirmValidation = async () => {
+      if (plannedDays.length === 0) return;
+
+      let totalGreenKg = 0;
+      plannedDays.forEach(day => {
+         day.siloAssignments.forEach(silo => {
+            silo.batches.forEach(batch => {
+               const profile = masterProfiles.find(p => p.name === batch.profileName);
+               if (!profile) return;
+               const blendComponent = profile.blend.find(b => b.origin === silo.origin);
+               const sackWeight = Number(blendComponent?.sackWeight || 60);
+               totalGreenKg += sackWeight * 2;
+            });
+         });
+      });
+
+      const totalRoasted = Number(plannedDays.reduce((acc, d) => acc + d.totalKg, 0).toFixed(1));
+      const totalSacks = Math.round(totalGreenKg / 60);
+
+      const record: MonthlyPlanHistory = {
+         id: `HIST-${Date.now()}`,
+         month: selectedMonth,
+         validatedAt: new Date().toISOString(),
+         totalDays: plannedDays.length,
+         totalKg: totalRoasted,
+         totalGreenKg: Number(totalGreenKg.toFixed(1)),
+         totalSacks,
+         days: JSON.parse(JSON.stringify(plannedDays)),
+         demands: JSON.parse(JSON.stringify(demands.filter(d => d.status !== 'COMPLETED' && d.status !== 'REVIEWED'))),
+         surplus: JSON.parse(JSON.stringify(surplusList))
+      };
+
+      await saveMonthlyHistory(record);
+      setHistoryList(prev => [record, ...prev.filter(h => h.id !== record.id)]);
+
+      // Mark demands as COMPLETED
+      demands.forEach(d => {
+         if (d.status !== 'COMPLETED') {
+            updatePlannerDemandStatus(d.id, 'COMPLETED');
+         }
+      });
+
+      // Clear active planned days
+      await purgePlannerDays();
+      setPlannedDays([]);
+
+      setShowValidateModal(false);
+      setPlannerTab('HISTORY');
+   };
+
+   const handleDeleteHistory = async (id: string) => {
+      if (!confirm("¿Seguro que deseas eliminar esta planificación validada del histórico?")) return;
+      await deleteMonthlyHistory(id);
+      setHistoryList(prev => prev.filter(h => h.id !== id));
+   };
 
    const getUnitsPerBox = (format: string): number => {
       switch (format) {
@@ -828,6 +893,161 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          <div className="flex-1 overflow-y-auto p-8 relative">
             {viewMode === 'PLAN_MENSUAL' ? (
                <div className="max-w-7xl mx-auto space-y-8">
+                  {/* Pestañas Superiores: Planificador Activo vs Histórico Mensual */}
+                  <div className="flex items-center justify-between border-b border-dashboard-border pb-4">
+                     <div className="flex items-center space-x-3">
+                        <button
+                           onClick={() => setPlannerTab('ACTIVE')}
+                           className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center ${plannerTab === 'ACTIVE' ? 'bg-coffee-accent text-white shadow-lg' : 'bg-[#14161a] text-gray-400 hover:text-white border border-dashboard-border'}`}
+                        >
+                           <Package className="w-4 h-4 mr-2" /> Planificador Activo
+                        </button>
+                        <button
+                           onClick={() => setPlannerTab('HISTORY')}
+                           className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center ${plannerTab === 'HISTORY' ? 'bg-coffee-accent text-white shadow-lg' : 'bg-[#14161a] text-gray-400 hover:text-white border border-dashboard-border'}`}
+                        >
+                           <History className="w-4 h-4 mr-2" /> Histórico Mensual
+                           <span className="ml-2 bg-[#1e222b] px-2 py-0.5 rounded text-[10px] font-mono text-gray-300 border border-dashboard-border">
+                              {historyList.length}
+                           </span>
+                        </button>
+                     </div>
+                  </div>
+
+                  {plannerTab === 'HISTORY' ? (
+                     /* VISTA: HISTÓRICO MENSUAL DE PEDIDOS / PLANES VALIDADOS */
+                     <div className="space-y-6">
+                        <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-8 shadow-2xl">
+                           <div className="flex justify-between items-center border-b border-dashboard-border pb-4 mb-6">
+                              <div>
+                                 <h2 className="text-xl font-black text-white uppercase tracking-wider flex items-center">
+                                    <History className="w-6 h-6 mr-3 text-coffee-light" /> Histórico de Planificaciones Validadas
+                                 </h2>
+                                 <p className="text-gray-400 text-xs mt-1">
+                                    Consulta los meses anteriores validados y vuelve a descargar sus hojas de trabajo en PDF en cualquier momento.
+                                 </p>
+                              </div>
+                           </div>
+
+                           {historyList.length === 0 ? (
+                              <div className="text-center py-16 text-gray-500 text-sm">
+                                 <History className="w-12 h-12 mx-auto mb-3 opacity-30 text-gray-400" />
+                                 No hay planificaciones validadas en el histórico todavía.
+                                 <p className="text-xs text-gray-600 mt-1">Cuando valides una planificación mensual generada, aparecerá registrada aquí.</p>
+                              </div>
+                           ) : (
+                              <div className="space-y-6">
+                                 {historyList.map(record => {
+                                    const isExpanded = expandedHistoryId === record.id;
+                                    const formattedDate = new Date(record.validatedAt).toLocaleDateString('es-ES', {
+                                       day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                                    });
+
+                                    return (
+                                       <div key={record.id} className="bg-[#14161a] border border-dashboard-border rounded-2xl p-6 shadow-xl space-y-4 hover:border-dashboard-border/80 transition-all">
+                                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-dashboard-border/50 pb-4">
+                                             <div>
+                                                <div className="flex items-center space-x-3">
+                                                   <h3 className="text-lg font-black text-white uppercase tracking-wider">{record.month}</h3>
+                                                   <span className="bg-green-500/10 border border-green-500/30 text-green-400 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full flex items-center">
+                                                      <CheckCircle2 className="w-3 h-3 mr-1" /> Validado
+                                                   </span>
+                                                </div>
+                                                <span className="text-[11px] text-gray-400 font-mono mt-0.5 block">
+                                                   Validado el {formattedDate}
+                                                </span>
+                                             </div>
+
+                                             <div className="flex items-center space-x-2 flex-wrap gap-2">
+                                                <button
+                                                   onClick={() => generateRoastingPlanReport(record.days, masterProfiles, record.month)}
+                                                   className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase px-4 py-2 rounded-xl flex items-center shadow transition-all active:scale-95"
+                                                   title="Descargar Plan Completo PDF"
+                                                >
+                                                   <FileText className="w-4 h-4 mr-1.5" /> Exportar PDF
+                                                </button>
+                                                <button
+                                                   onClick={() => setExpandedHistoryId(isExpanded ? null : record.id)}
+                                                   className="bg-[#1e222b] hover:bg-gray-800 text-gray-300 text-xs font-bold px-3 py-2 rounded-xl flex items-center border border-dashboard-border transition-colors"
+                                                >
+                                                   {isExpanded ? <EyeOff className="w-4 h-4 mr-1" /> : <Eye className="w-4 h-4 mr-1" />}
+                                                   {isExpanded ? 'Ocultar Jornadas' : 'Ver Jornadas'}
+                                                </button>
+                                                <button
+                                                   onClick={() => handleDeleteHistory(record.id)}
+                                                   className="p-2 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
+                                                   title="Eliminar del histórico"
+                                                >
+                                                   <Trash2 className="w-4 h-4" />
+                                                </button>
+                                             </div>
+                                          </div>
+
+                                          {/* Resumen de Métricas */}
+                                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-[#1e222b] p-4 rounded-xl border border-dashboard-border">
+                                             <div>
+                                                <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest block">Jornadas</span>
+                                                <span className="text-base font-black text-white font-mono">{record.totalDays} días</span>
+                                             </div>
+                                             <div>
+                                                <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest block">Tostado Neto</span>
+                                                <span className="text-base font-black text-coffee-light font-mono">{record.totalKg.toLocaleString()} kg</span>
+                                             </div>
+                                             <div>
+                                                <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest block">Café Verde</span>
+                                                <span className="text-base font-black text-yellow-500 font-mono">{record.totalGreenKg.toLocaleString()} kg</span>
+                                             </div>
+                                             <div>
+                                                <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest block">Sacos (60kg)</span>
+                                                <span className="text-base font-black text-green-400 font-mono">{record.totalSacks} sacos</span>
+                                             </div>
+                                          </div>
+
+                                          {/* Desplegable con detalle de jornadas del mes */}
+                                          {isExpanded && (
+                                             <div className="pt-2 space-y-3 border-t border-dashboard-border/40">
+                                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Detalle de las {record.days.length} Jornadas de {record.month}:</h4>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                   {record.days.map((day: any) => (
+                                                      <div key={day.dayIndex} className="bg-[#121417] border border-dashboard-border rounded-xl p-3.5 space-y-2">
+                                                         <div className="flex justify-between items-center border-b border-dashboard-border pb-2">
+                                                            <span className="font-black text-white text-xs">Jornada #{day.dayIndex}</span>
+                                                            <span className="text-[10px] bg-blue-500/10 text-blue-300 font-bold px-2 py-0.5 rounded">
+                                                               Silos: {day.targetSilos.join(', ')}
+                                                            </span>
+                                                         </div>
+                                                         <div className="text-xs text-gray-400 space-y-1 py-1">
+                                                            {day.blocks.map((b: any, idx: number) => (
+                                                               <div key={idx} className="flex justify-between text-[11px]">
+                                                                  <span className="text-coffee-light truncate max-w-[130px]">{b.profileName} ({b.format})</span>
+                                                                  <span className="font-mono text-white font-bold">{b.targetKg} kg</span>
+                                                               </div>
+                                                            ))}
+                                                         </div>
+                                                         <div className="flex justify-between items-center pt-2 border-t border-dashboard-border">
+                                                            <span className="text-xs font-mono font-bold text-white">Total: {day.totalKg} kg</span>
+                                                            <button
+                                                               onClick={() => generateSingleDayPlanReport(day, masterProfiles)}
+                                                               className="text-[10px] bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white px-2.5 py-1 rounded font-bold uppercase transition-all flex items-center"
+                                                            >
+                                                               <FileText className="w-3 h-3 mr-1" /> Ficha PDF
+                                                            </button>
+                                                         </div>
+                                                      </div>
+                                                   ))}
+                                                </div>
+                                             </div>
+                                          )}
+                                       </div>
+                                    );
+                                 })}
+                              </div>
+                           )}
+                        </div>
+                     </div>
+                  ) : (
+                     /* VISTA: PLANIFICADOR ACTIVO */
+                     <>
                   {/* KPI Summary Banner */}
                   {(() => {
                      const totalGross = demands.filter(d => d.status !== 'COMPLETED' && d.status !== 'REVIEWED').reduce((acc, d) => acc + d.kgRequested, 0);
@@ -1238,12 +1458,21 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                        Descarga las hojas de trabajo en PDF para operar directamente en fábrica a mano.
                                     </p>
                                  </div>
-                                 <button 
-                                    onClick={() => generateRoastingPlanReport(plannedDays, masterProfiles, selectedMonth)}
-                                    className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center shadow-lg transition-all active:scale-95"
-                                 >
-                                    <FileText className="w-4 h-4 mr-2" /> Exportar Plan Completo PDF
-                                 </button>
+                                 <div className="flex items-center space-x-3">
+                                    <button 
+                                       onClick={() => setShowValidateModal(true)}
+                                       className="bg-green-600 hover:bg-green-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center shadow-lg transition-all active:scale-95 border border-green-400/30"
+                                       title="Validar y archivar en el histórico mensual"
+                                    >
+                                       <CheckCircle2 className="w-4 h-4 mr-2" /> Validar Planificación
+                                    </button>
+                                    <button 
+                                       onClick={() => generateRoastingPlanReport(plannedDays, masterProfiles, selectedMonth)}
+                                       className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center shadow-lg transition-all active:scale-95"
+                                    >
+                                       <FileText className="w-4 h-4 mr-2" /> Exportar Plan Completo PDF
+                                    </button>
+                                 </div>
                               </div>
 
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -1356,6 +1585,79 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                        </div>
                                     );
                                  })}
+                              </div>
+                           </div>
+                        </div>
+                     );
+                  })()}
+                     </>
+                  )}
+
+                  {/* MODAL DE CONFIRMACIÓN PARA VALIDAR PLANIFICACIÓN */}
+                  {showValidateModal && (() => {
+                     const totalRoastedKg = Number(plannedDays.reduce((acc, d) => acc + d.totalKg, 0).toFixed(1));
+                     let totalGreenKg = 0;
+                     plannedDays.forEach(day => {
+                        day.siloAssignments.forEach(silo => {
+                           silo.batches.forEach(b => {
+                              const prof = masterProfiles.find(p => p.name === b.profileName);
+                              const comp = prof?.blend.find(c => c.origin === silo.origin);
+                              const sw = Number(comp?.sackWeight || 60);
+                              totalGreenKg += sw * 2;
+                           });
+                        });
+                     });
+                     const totalSacks = Math.round(totalGreenKg / 60);
+
+                     return (
+                        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                           <div className="bg-[#14161a] border border-dashboard-border rounded-3xl p-8 max-w-lg w-full shadow-2xl space-y-6 animate-fadeIn">
+                              <div className="flex items-center space-x-3 text-green-400">
+                                 <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-2xl">
+                                    <CheckCircle2 className="w-8 h-8" />
+                                 </div>
+                                 <div>
+                                    <h3 className="text-lg font-black text-white uppercase tracking-wider">¿Validar Planificación Mensual?</h3>
+                                    <span className="text-xs text-gray-400 font-mono">{selectedMonth}</span>
+                                 </div>
+                              </div>
+
+                              <p className="text-xs text-gray-300 leading-relaxed">
+                                 ¿Estás seguro de que deseas validar la planificación generada de <strong>{selectedMonth}</strong>?
+                              </p>
+
+                              <div className="bg-[#1e222b] border border-dashboard-border p-4 rounded-xl space-y-2 text-xs">
+                                 <div className="flex justify-between text-gray-300">
+                                    <span>Jornadas a Registrar:</span>
+                                    <span className="font-bold text-white font-mono">{plannedDays.length} jornadas</span>
+                                 </div>
+                                 <div className="flex justify-between text-gray-300">
+                                    <span>Café Tostado Neto:</span>
+                                    <span className="font-bold text-coffee-light font-mono">{totalRoastedKg} kg</span>
+                                 </div>
+                                 <div className="flex justify-between text-gray-300">
+                                    <span>Café Verde Requerido:</span>
+                                    <span className="font-bold text-yellow-500 font-mono">{totalGreenKg} kg ({totalSacks} sacos)</span>
+                                 </div>
+                              </div>
+
+                              <p className="text-[11px] text-gray-500 italic">
+                                 Al confirmar, esta planificación pasará automáticamente al <strong>Histórico Mensual</strong> y los pedidos se marcarán como validados.
+                              </p>
+
+                              <div className="flex items-center justify-end space-x-3 pt-2">
+                                 <button
+                                    onClick={() => setShowValidateModal(false)}
+                                    className="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl text-xs font-bold uppercase transition-colors"
+                                 >
+                                    Cancelar
+                                 </button>
+                                 <button
+                                    onClick={handleConfirmValidation}
+                                    className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg transition-all active:scale-95"
+                                 >
+                                    Sí, Validar y Archivar
+                                 </button>
                               </div>
                            </div>
                         </div>

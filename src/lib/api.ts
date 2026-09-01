@@ -503,3 +503,124 @@ export const deleteMonthlySurplus = async (id: string): Promise<boolean> => {
   }
 };
 
+// ==========================================
+// HISTÓRICO DE PLANIFICACIONES MENSUALES
+// ==========================================
+
+export interface MonthlyPlanHistory {
+  id: string;
+  month: string;
+  validatedAt: string;
+  totalDays: number;
+  totalKg: number;
+  totalGreenKg: number;
+  totalSacks: number;
+  days: any[];
+  demands?: any[];
+  surplus?: any[];
+  notes?: string;
+  createdAt?: string;
+}
+
+const LOCAL_STORAGE_HISTORY_KEY = 'coffee_flow_monthly_history';
+
+const getLocalHistory = (): MonthlyPlanHistory[] => {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_HISTORY_KEY) : null;
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+};
+
+const setLocalHistory = (list: MonthlyPlanHistory[]) => {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_HISTORY_KEY, JSON.stringify(list));
+    }
+  } catch (e) {
+    console.error('Error saving local history:', e);
+  }
+};
+
+export const fetchMonthlyHistory = async (): Promise<MonthlyPlanHistory[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('planner_monthly_history')
+      .select('*')
+      .order('validated_at', { ascending: false });
+
+    if (error || !data) {
+      console.warn('Supabase planner_monthly_history no disponible, usando almacenamiento local:', error?.message);
+      return getLocalHistory();
+    }
+
+    const mapped: MonthlyPlanHistory[] = data.map(d => ({
+      id: d.id,
+      month: d.month,
+      validatedAt: d.validated_at,
+      totalDays: Number(d.total_days || 0),
+      totalKg: Number(d.total_kg || 0),
+      totalGreenKg: Number(d.total_green_kg || 0),
+      totalSacks: Number(d.total_sacks || 0),
+      days: d.days || [],
+      demands: d.demands || [],
+      surplus: d.surplus || [],
+      notes: d.notes || '',
+      createdAt: d.created_at
+    }));
+
+    setLocalHistory(mapped);
+    return mapped;
+  } catch (err) {
+    console.error('Error in fetchMonthlyHistory:', err);
+    return getLocalHistory();
+  }
+};
+
+export const saveMonthlyHistory = async (record: MonthlyPlanHistory): Promise<boolean> => {
+  try {
+    const current = getLocalHistory().filter(h => h.id !== record.id);
+    current.unshift(record);
+    setLocalHistory(current);
+
+    const { error } = await supabase.from('planner_monthly_history').insert([{
+      id: record.id,
+      month: record.month,
+      validated_at: record.validatedAt,
+      total_days: record.totalDays,
+      total_kg: record.totalKg,
+      total_green_kg: record.totalGreenKg,
+      total_sacks: record.totalSacks,
+      days: record.days,
+      demands: record.demands,
+      surplus: record.surplus,
+      notes: record.notes
+    }]);
+
+    if (error) {
+      console.warn('Error guardando histórico en Supabase (persistido en local):', error.message);
+    }
+    return true;
+  } catch (err) {
+    console.error('Error in saveMonthlyHistory:', err);
+    return true;
+  }
+};
+
+export const deleteMonthlyHistory = async (id: string): Promise<boolean> => {
+  try {
+    const current = getLocalHistory().filter(h => h.id !== id);
+    setLocalHistory(current);
+
+    const { error } = await supabase.from('planner_monthly_history').delete().eq('id', id);
+    if (error) {
+      console.warn('Error borrando histórico en Supabase:', error.message);
+    }
+    return true;
+  } catch (err) {
+    console.error('Error in deleteMonthlyHistory:', err);
+    return true;
+  }
+};
+
