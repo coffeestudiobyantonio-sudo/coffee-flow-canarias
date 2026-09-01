@@ -624,3 +624,32 @@ export const deleteMonthlyHistory = async (id: string): Promise<boolean> => {
   }
 };
 
+export const getOriginSackWeight = (originName: string, profileName?: string, masterProfiles: MasterProfile[] = []): number => {
+  const cleanOrigin = (originName || '').trim().toLowerCase();
+  
+  // 1. Try finding in specific profile if provided
+  if (profileName) {
+    const prof = masterProfiles.find(p => p?.name?.trim().toLowerCase() === profileName.trim().toLowerCase());
+    if (prof?.blend) {
+      const comp = prof.blend.find(b => (b?.origin || '').trim().toLowerCase() === cleanOrigin);
+      const sw = Number(comp?.sackWeight || (comp as any)?.sack_weight);
+      if (sw && sw > 0) return sw;
+    }
+  }
+
+  // 2. Search across all masterProfiles for this origin's configured sackWeight
+  for (const p of masterProfiles) {
+    if (!p?.blend) continue;
+    const comp = p.blend.find(b => (b?.origin || '').trim().toLowerCase() === cleanOrigin);
+    const sw = Number(comp?.sackWeight || (comp as any)?.sack_weight);
+    if (sw && sw > 0) return sw;
+  }
+
+  // 3. Central American / Colombian standard if not set in blend
+  if (cleanOrigin.includes('honduras') || cleanOrigin.includes('nicaragua') || cleanOrigin.includes('colombia') || cleanOrigin.includes('guatemala') || cleanOrigin.includes('costa rica')) {
+    return 69;
+  }
+
+  return 60;
+};
+

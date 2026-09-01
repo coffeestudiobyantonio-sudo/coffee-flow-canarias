@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { DailyRoastOrder, MasterProfile } from '../App';
 import type { DailyPlan } from '../components/DailyRoastOrders';
+import { getOriginSackWeight } from './api';
 
 /**
  * Utility to get format weight in KG
@@ -294,21 +295,20 @@ const renderDayWorksheet = (
 
    // Calculate green coffee usage for this day
    let dayTotalGreen = 0;
-   const greenByOrigin: { [origin: string]: { kg: number, sacks: number } } = {};
+   const greenByOrigin: { [origin: string]: { kg: number, sacks: number, sackWeight: number } } = {};
 
    day.siloAssignments.forEach(silo => {
       silo.batches.forEach(batch => {
-         const profile = masterProfiles.find(p => p.name === batch.profileName);
-         if (!profile) return;
-         const blendComponent = profile.blend.find(b => b.origin === silo.origin);
-         const sackWeight = Number(blendComponent?.sackWeight || (blendComponent as any)?.sack_weight || 60);
+         const sackWeight = getOriginSackWeight(silo.origin, batch.profileName, masterProfiles);
          const batchGreen = sackWeight * 2;
          dayTotalGreen += batchGreen;
-         if (!greenByOrigin[silo.origin]) {
-            greenByOrigin[silo.origin] = { kg: 0, sacks: 0 };
+         const originKey = silo.origin.trim();
+         if (!greenByOrigin[originKey]) {
+            greenByOrigin[originKey] = { kg: 0, sacks: 0, sackWeight };
          }
-         greenByOrigin[silo.origin].kg += batchGreen;
-         greenByOrigin[silo.origin].sacks += 2;
+         greenByOrigin[originKey].kg += batchGreen;
+         greenByOrigin[originKey].sacks += 2;
+         greenByOrigin[originKey].sackWeight = sackWeight;
       });
    });
 
@@ -316,7 +316,7 @@ const renderDayWorksheet = (
    const summaryRows = [
       ['Café Tostado Objetivo:', `${day.totalKg.toFixed(1)} kg`, 'Café Verde Requerido:', `${dayTotalGreen.toFixed(1)} kg`],
       ['Silos de Tostado:', `Silos ${day.targetSilos.join(', ')}`, 'Total Sacos Verde:', `${Object.values(greenByOrigin).reduce((acc, v) => acc + v.sacks, 0)} sacos`],
-      ['Desglose de Café Verde:', Object.entries(greenByOrigin).map(([orig, v]) => `${orig}: ${v.kg} kg (${v.sacks} sc)`).join(' | '), 'Estado:', '[  ] PENDIENTE DE TUESTE']
+      ['Desglose de Café Verde:', Object.entries(greenByOrigin).map(([orig, v]: any) => `${orig}: ${v.kg} kg (${v.sacks} sc de ${v.sackWeight}kg)`).join(' | '), 'Estado:', '[  ] PENDIENTE DE TUESTE']
    ];
 
    autoTable(doc, {
@@ -341,17 +341,15 @@ const renderDayWorksheet = (
 
    day.siloAssignments.forEach(silo => {
       silo.batches.forEach((batch) => {
-         const profile = masterProfiles.find(p => p.name === batch.profileName);
-         const blendComponent = profile?.blend.find(b => b.origin === silo.origin);
-         const sackWeight = Number(blendComponent?.sackWeight || (blendComponent as any)?.sack_weight || 60);
+         const sackWeight = getOriginSackWeight(silo.origin, batch.profileName, masterProfiles);
          const greenKg = sackWeight * 2;
          
          batchRows.push([
             '[  ]',
             `#${batchCounter++}`,
             `Silo ${silo.siloId}`,
-            silo.origin,
-            `2 sacos (${greenKg} kg)`,
+            silo.origin.trim(),
+            `2 sacos (${sackWeight}kg/sc = ${greenKg}kg)`,
             batch.profileName,
             batch.format,
             '____________'
@@ -463,7 +461,7 @@ export const generateRoastingPlanReport = (days: DailyPlan[], masterProfiles: Ma
    // Calculate global totals
    let globalTotalRoasted = 0;
    let globalTotalGreen = 0;
-   const globalGreenByOrigin: { [origin: string]: { kg: number, sacks: number } } = {};
+   const globalGreenByOrigin: { [origin: string]: { kg: number, sacks: number, sackWeight: number } } = {};
    const globalBlocks: { [key: string]: { profileName: string, format: string, totalKg: number, days: number[] } } = {};
 
    days.forEach(day => {
@@ -471,17 +469,16 @@ export const generateRoastingPlanReport = (days: DailyPlan[], masterProfiles: Ma
       
       day.siloAssignments.forEach(silo => {
          silo.batches.forEach(batch => {
-            const profile = masterProfiles.find(p => p.name === batch.profileName);
-            if (!profile) return;
-            const blendComponent = profile.blend.find(b => b.origin === silo.origin);
-            const sackWeight = Number(blendComponent?.sackWeight || (blendComponent as any)?.sack_weight || 60);
+            const sackWeight = getOriginSackWeight(silo.origin, batch.profileName, masterProfiles);
             const batchGreen = sackWeight * 2;
             globalTotalGreen += batchGreen;
-            if (!globalGreenByOrigin[silo.origin]) {
-               globalGreenByOrigin[silo.origin] = { kg: 0, sacks: 0 };
+            const originKey = silo.origin.trim();
+            if (!globalGreenByOrigin[originKey]) {
+               globalGreenByOrigin[originKey] = { kg: 0, sacks: 0, sackWeight };
             }
-            globalGreenByOrigin[silo.origin].kg += batchGreen;
-            globalGreenByOrigin[silo.origin].sacks += 2;
+            globalGreenByOrigin[originKey].kg += batchGreen;
+            globalGreenByOrigin[originKey].sacks += 2;
+            globalGreenByOrigin[originKey].sackWeight = sackWeight;
          });
       });
 
@@ -500,7 +497,7 @@ export const generateRoastingPlanReport = (days: DailyPlan[], masterProfiles: Ma
    // Resumen Ejecutivo
    const kpiRows = [
       ['Jornadas de Producción:', `${days.length} Días de Tueste`, 'Total Café Tostado Neto:', `${globalTotalRoasted.toFixed(1)} kg`],
-      ['Total Café Verde Necesario:', `${globalTotalGreen.toFixed(1)} kg`, 'Total Sacos Verde (60kg):', `${Object.values(globalGreenByOrigin).reduce((acc, v) => acc + v.sacks, 0)} sacos`]
+      ['Total Café Verde Necesario:', `${globalTotalGreen.toFixed(1)} kg`, 'Total Sacos Verde:', `${Object.values(globalGreenByOrigin).reduce((acc: number, v: any) => acc + v.sacks, 0)} sacos`]
    ];
 
    autoTable(doc, {
@@ -526,10 +523,11 @@ export const generateRoastingPlanReport = (days: DailyPlan[], masterProfiles: Ma
    doc.text('1. APROVISIONAMIENTO DE CAFÉ VERDE (Necesidades de Almacén / Compras):', 15, yOffset);
    yOffset += 3;
 
-   const greenRows = Object.entries(globalGreenByOrigin).map(([origin, val]) => {
+   const greenRows = Object.entries(globalGreenByOrigin).map(([origin, val]: any) => {
       const pct = globalTotalGreen > 0 ? ((val.kg / globalTotalGreen) * 100).toFixed(1) : '0';
       return [
          origin,
+         `${val.sackWeight} kg / saco`,
          `${val.kg.toFixed(1)} kg`,
          `${val.sacks} sacos`,
          `${pct} %`
@@ -539,7 +537,7 @@ export const generateRoastingPlanReport = (days: DailyPlan[], masterProfiles: Ma
    autoTable(doc, {
       startY: yOffset,
       margin: { left: 15, right: 15 },
-      head: [['Origen / Variedad', 'Kg Verde Requerido', 'Sacos Estimados (60kg)', '% del Consumo Verde']],
+      head: [['Origen / Variedad', 'Peso por Saco', 'Kg Verde Requerido', 'Total Sacos Necesarios', '% del Consumo']],
       body: greenRows,
       theme: 'striped',
       headStyles: { fillColor: [40, 40, 40], fontSize: 8 },

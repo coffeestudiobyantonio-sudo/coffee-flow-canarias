@@ -3,7 +3,7 @@ import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '.
 import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, Zap, Lock, Boxes, Calendar, ArrowUp, ArrowDown, History, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { generateDailyProductionReport, generatePackagingOrderReport, generatePalletShippingReport, generateRoastingPlanReport, generateSingleDayPlanReport } from '../lib/reports';
 import { ROASTING_MACHINES } from '../App';
-import { createDailyOrder, deleteDailyOrder, purgeAllProductionData, fetchPlannerDemands, createPlannerDemand, deletePlannerDemand, fetchPlannerDays, createPlannerDay, deletePlannerDay, purgePlannerDays, updatePlannerDemandStatus, fetchMonthlySurplus, createMonthlySurplus, deleteMonthlySurplus, fetchMonthlyHistory, saveMonthlyHistory, deleteMonthlyHistory } from '../lib/api';
+import { createDailyOrder, deleteDailyOrder, purgeAllProductionData, fetchPlannerDemands, createPlannerDemand, deletePlannerDemand, fetchPlannerDays, createPlannerDay, deletePlannerDay, purgePlannerDays, updatePlannerDemandStatus, fetchMonthlySurplus, createMonthlySurplus, deleteMonthlySurplus, fetchMonthlyHistory, saveMonthlyHistory, deleteMonthlyHistory, getOriginSackWeight } from '../lib/api';
 import type { MonthlyPlanHistory } from '../lib/api';
 import type { MonthlySurplus } from '../lib/api';
 import PackagingOverlay from './PackagingOverlay';
@@ -96,20 +96,18 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       if (plannedDays.length === 0) return;
 
       let totalGreenKg = 0;
+      let totalSacks = 0;
       plannedDays.forEach(day => {
          day.siloAssignments.forEach(silo => {
             silo.batches.forEach(batch => {
-               const profile = masterProfiles.find(p => p.name === batch.profileName);
-               if (!profile) return;
-               const blendComponent = profile.blend.find(b => b.origin === silo.origin);
-               const sackWeight = Number(blendComponent?.sackWeight || 60);
+               const sackWeight = getOriginSackWeight(silo.origin, batch.profileName, masterProfiles);
                totalGreenKg += sackWeight * 2;
+               totalSacks += 2;
             });
          });
       });
 
       const totalRoasted = Number(plannedDays.reduce((acc, d) => acc + d.totalKg, 0).toFixed(1));
-      const totalSacks = Math.round(totalGreenKg / 60);
 
       const record: MonthlyPlanHistory = {
          id: `HIST-${Date.now()}`,
@@ -624,7 +622,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
          profile.blend.forEach(component => {
             const targetRoastedForThisOrigin = item.totalKg * (component.percentage / 100);
-            const sackWeight = Number(component.sackWeight || (component as any).sack_weight || 60);
+            const sackWeight = Number(component.sackWeight || (component as any).sack_weight) || getOriginSackWeight(component.origin, profile.name, masterProfiles);
             const batchSizeGreen = sackWeight * 2;
             const batchSizeRoasted = batchSizeGreen * (1 - shrinkage);
             
@@ -1391,22 +1389,23 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
                   {/* Planned Days Output Grid */}
                   {plannedDays.length > 0 && (() => {
-                     // Compute Green Coffee Procurement Summary
+                     // Compute Green Coffee Procurement Summary directly from masterProfiles
                      let totalGreenKg = 0;
-                     const greenByOrigin: { [origin: string]: { kg: number, sacks: number } } = {};
+                     const greenByOrigin: { [origin: string]: { kg: number, sacks: number, sackWeight: number } } = {};
 
                      plannedDays.forEach(day => {
                         day.siloAssignments.forEach(silo => {
                            silo.batches.forEach(batch => {
-                              const profile = masterProfiles.find(p => p.name === batch.profileName);
-                              if (!profile) return;
-                              const blendComponent = profile.blend.find(b => b.origin === silo.origin);
-                              const sackWeight = Number(blendComponent?.sackWeight || (blendComponent as any)?.sack_weight || 60);
+                              const sackWeight = getOriginSackWeight(silo.origin, batch.profileName, masterProfiles);
                               const batchGreen = sackWeight * 2;
                               totalGreenKg += batchGreen;
-                              if (!greenByOrigin[silo.origin]) greenByOrigin[silo.origin] = { kg: 0, sacks: 0 };
-                              greenByOrigin[silo.origin].kg += batchGreen;
-                              greenByOrigin[silo.origin].sacks += 2;
+                              const originClean = silo.origin.trim();
+                              if (!greenByOrigin[originClean]) {
+                                 greenByOrigin[originClean] = { kg: 0, sacks: 0, sackWeight };
+                              }
+                              greenByOrigin[originClean].kg += batchGreen;
+                              greenByOrigin[originClean].sacks += 2;
+                              greenByOrigin[originClean].sackWeight = sackWeight;
                            });
                         });
                      });
@@ -1439,7 +1438,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                     <div key={origin} className="bg-[#14161a] border border-dashboard-border p-3 rounded-xl flex justify-between items-center">
                                        <div>
                                           <span className="text-xs font-black text-white block truncate">{origin}</span>
-                                          <span className="text-[10px] text-gray-400 font-mono">{val.sacks} sacos de 60kg</span>
+                                          <span className="text-[11px] text-gray-400 font-mono">{val.sacks} sacos <span className="text-yellow-400/90 font-bold">({val.sackWeight} kg/saco)</span></span>
                                        </div>
                                        <span className="text-sm font-black text-coffee-light font-mono">{val.kg.toLocaleString()} kg</span>
                                     </div>
@@ -1477,14 +1476,12 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                  {plannedDays.map(day => {
-                                    // Day green total
+                                    // Day green total directly from masterProfiles
                                     let dayGreenKg = 0;
                                     let daySacks = 0;
                                     day.siloAssignments.forEach(silo => {
                                        silo.batches.forEach(b => {
-                                          const prof = masterProfiles.find(p => p.name === b.profileName);
-                                          const comp = prof?.blend.find(c => c.origin === silo.origin);
-                                          const sw = Number(comp?.sackWeight || 60);
+                                          const sw = getOriginSackWeight(silo.origin, b.profileName, masterProfiles);
                                           dayGreenKg += sw * 2;
                                           daySacks += 2;
                                        });
@@ -1597,17 +1594,16 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                   {showValidateModal && (() => {
                      const totalRoastedKg = Number(plannedDays.reduce((acc, d) => acc + d.totalKg, 0).toFixed(1));
                      let totalGreenKg = 0;
+                     let totalSacks = 0;
                      plannedDays.forEach(day => {
                         day.siloAssignments.forEach(silo => {
                            silo.batches.forEach(b => {
-                              const prof = masterProfiles.find(p => p.name === b.profileName);
-                              const comp = prof?.blend.find(c => c.origin === silo.origin);
-                              const sw = Number(comp?.sackWeight || 60);
+                              const sw = getOriginSackWeight(silo.origin, b.profileName, masterProfiles);
                               totalGreenKg += sw * 2;
+                              totalSacks += 2;
                            });
                         });
                      });
-                     const totalSacks = Math.round(totalGreenKg / 60);
 
                      return (
                         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
