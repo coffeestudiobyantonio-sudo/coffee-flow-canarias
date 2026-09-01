@@ -270,312 +270,387 @@ export const generatePalletShippingReport = (orders: DailyRoastOrder[], demands:
 };
 
 /**
- * Genera un informe en PDF de toda la planificación de tueste generada.
+ * Genera la ficha oficial de 2 páginas de Arbitrade Canarias para cada día de tueste,
+ * pre-llenando automáticamente los datos de las tandas calculadas, silos, variedad,
+ * cantidades de café verde, totales de Arábica / Robusta y empaquetados por gama.
  */
-// Helper to render a single day worksheet into a jsPDF document for factory floor
-const renderDayWorksheet = (
+export const renderArbitradeDaySheet = (
    doc: any,
    day: DailyPlan,
-   masterProfiles: MasterProfile[],
-   today: string
+   masterProfiles: MasterProfile[]
 ) => {
-   // Header Banner
-   doc.setFillColor(30, 34, 43);
-   doc.rect(0, 0, 210, 28, 'F');
-   doc.setTextColor(217, 119, 6);
-   doc.setFontSize(16);
-   doc.setFont('helvetica', 'bold');
-   doc.text('HOJA DE TRABAJO DE TUESTE - PLANTA', 15, 12);
-   doc.setTextColor(255, 255, 255);
-   doc.setFontSize(9);
-   const dateStr = day.scheduledDate ? ` | Fecha Prevista: ${day.scheduledDate}` : ` | Emitido: ${today}`;
-   doc.text(`JORNADA #${day.dayIndex}${dateStr} | Silos Asignados: Silos ${day.targetSilos.join(', ')}`, 15, 20);
-
-   let yOffset = 33;
-
-   // Calculate green coffee usage for this day
-   let dayTotalGreen = 0;
-   const greenByOrigin: { [origin: string]: { kg: number, sacks: number, sackWeight: number } } = {};
-
+   // Flatten all scheduled batches for the day
+   const allBatches: { origin: string; greenKg: number; profileName: string; format: string; siloId: number }[] = [];
    day.siloAssignments.forEach(silo => {
-      silo.batches.forEach(batch => {
-         const sackWeight = getOriginSackWeight(silo.origin, batch.profileName, masterProfiles);
-         const batchGreen = sackWeight * 2;
-         dayTotalGreen += batchGreen;
-         const originKey = silo.origin.trim();
-         if (!greenByOrigin[originKey]) {
-            greenByOrigin[originKey] = { kg: 0, sacks: 0, sackWeight };
-         }
-         greenByOrigin[originKey].kg += batchGreen;
-         greenByOrigin[originKey].sacks += 2;
-         greenByOrigin[originKey].sackWeight = sackWeight;
+      silo.batches.forEach(b => {
+         const sw = getOriginSackWeight(silo.origin, b.profileName, masterProfiles);
+         allBatches.push({
+            origin: silo.origin.trim(),
+            greenKg: sw * 2,
+            profileName: b.profileName,
+            format: b.format,
+            siloId: silo.siloId
+         });
       });
    });
 
-   // Resumen de la Jornada
-   const summaryRows = [
-      ['Café Tostado Objetivo:', `${day.totalKg.toFixed(1)} kg`, 'Café Verde Requerido:', `${dayTotalGreen.toFixed(1)} kg`],
-      ['Silos de Tostado:', `Silos ${day.targetSilos.join(', ')}`, 'Total Sacos Verde:', `${Object.values(greenByOrigin).reduce((acc, v) => acc + v.sacks, 0)} sacos`],
-      ['Desglose de Café Verde:', Object.entries(greenByOrigin).map(([orig, v]: any) => `${orig}: ${v.kg} kg (${v.sacks} sc de ${v.sackWeight}kg)`).join(' | '), 'Estado:', '[  ] PENDIENTE DE TUESTE']
-   ];
+   const pageWidth = 297;
+   const margin = 10;
+   const contentWidth = 277;
+
+   // =========================================================================
+   // PÁGINA 1: CONTROL DE TANDAS DE TUESTE (Ficha Técnica de Planta)
+   // =========================================================================
+   doc.setFillColor(253, 232, 228);
+   doc.setDrawColor(0, 0, 0);
+   doc.setLineWidth(0.4);
+   doc.rect(margin, 9, contentWidth, 11, 'FD');
+
+   doc.setTextColor(0, 0, 0);
+   doc.setFontSize(13);
+   doc.setFont('helvetica', 'bold');
+   doc.text('DIA DE TUESTE ARBITRADE CANARIAS', pageWidth / 2, 16.5, { align: 'center' });
+
+   if (day.scheduledDate) {
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`FECHA: ${day.scheduledDate} (DÍA #${day.dayIndex})`, contentWidth + margin - 4, 16.5, { align: 'right' });
+   }
+
+   // Tabla de 12 filas
+   const tableBody: any[] = [];
+   for (let i = 1; i <= 12; i++) {
+      const batch = allBatches[i - 1];
+      if (batch) {
+         tableBody.push([
+            `${i}`,
+            batch.origin,
+            `${batch.greenKg}`,
+            '', // Lote (en blanco para fábrica)
+            '', '', // Inicio: Tº, Tiempo
+            '', '', // Punto Inflección: Tº, Tiempo
+            '', '', // Etapa Amarilla: Tº, Tiempo
+            '', '', // Etapa Marrón: Tº, Tiempo
+            '', '', // Primer Crack: Tº, Tiempo
+            '', '', // Final Tueste: Tº, Tiempo
+            `${batch.siloId}` // SILO Nº
+         ]);
+      } else {
+         tableBody.push([
+            `${i}`,
+            '', '', '',
+            '', '',
+            '', '',
+            '', '',
+            '', '',
+            '', '',
+            '', '',
+            ''
+         ]);
+      }
+   }
 
    autoTable(doc, {
-      startY: yOffset,
-      margin: { left: 15, right: 15 },
-      body: summaryRows,
+      startY: 22,
+      margin: { left: margin, right: margin },
+      tableWidth: contentWidth,
+      head: [
+         [
+            { content: '', colSpan: 1, styles: { fillColor: [255, 238, 0] } },
+            { content: 'TUESTE DE CAFÉ', colSpan: 3, styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'INICIO', colSpan: 2, styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'PUNTO INFLECCIÓN', colSpan: 2, styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'ETAPA AMARILLA', colSpan: 2, styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'ETAPA MARRÓN', colSpan: 2, styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'PRIMER CRACK', colSpan: 2, styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'FINAL TUESTE', colSpan: 2, styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'SILO', colSpan: 1, styles: { halign: 'center', fillColor: [255, 238, 0] } }
+         ],
+         [
+            { content: '', styles: { fillColor: [255, 238, 0] } },
+            { content: 'Variedad', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Cantidad (Kg)', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Lote', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Tº', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Tiempo', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Tº', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Tiempo', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Tº', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Tiempo', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Tº', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Tiempo', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Tº', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Tiempo', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Tº', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Tiempo', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Nº', styles: { halign: 'center', fillColor: [255, 238, 0] } }
+         ]
+      ],
+      body: tableBody as any,
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 1.5, textColor: [30, 30, 30] },
+      headStyles: {
+         textColor: [0, 0, 0],
+         fontStyle: 'bold',
+         fontSize: 7.5,
+         lineColor: [0, 0, 0],
+         lineWidth: 0.35,
+         cellPadding: 2
+      },
+      styles: {
+         textColor: [0, 0, 0],
+         lineColor: [0, 0, 0],
+         lineWidth: 0.35,
+         fontSize: 8,
+         minCellHeight: 11,
+         valign: 'middle'
+      },
       columnStyles: {
-         0: { fontStyle: 'bold', fillColor: [245, 245, 245], cellWidth: 42 },
-         1: { cellWidth: 48 },
-         2: { fontStyle: 'bold', fillColor: [245, 245, 245], cellWidth: 42 },
-         3: { cellWidth: 48 }
+         0: { cellWidth: 8, halign: 'center', fontStyle: 'bold' },
+         1: { cellWidth: 36, halign: 'left', fontStyle: 'bold' },
+         2: { cellWidth: 21, halign: 'center', fontStyle: 'bold' },
+         3: { cellWidth: 18, halign: 'center' },
+         4: { cellWidth: 13, halign: 'center' },
+         5: { cellWidth: 17, halign: 'center' },
+         6: { cellWidth: 13, halign: 'center' },
+         7: { cellWidth: 17, halign: 'center' },
+         8: { cellWidth: 13, halign: 'center' },
+         9: { cellWidth: 17, halign: 'center' },
+         10: { cellWidth: 13, halign: 'center' },
+         11: { cellWidth: 17, halign: 'center' },
+         12: { cellWidth: 13, halign: 'center' },
+         13: { cellWidth: 17, halign: 'center' },
+         14: { cellWidth: 13, halign: 'center' },
+         15: { cellWidth: 17, halign: 'center' },
+         16: { cellWidth: 14, halign: 'center', fontStyle: 'bold' }
       }
    });
 
-   yOffset = (doc as any).lastAutoTable.finalY + 4;
+   // =========================================================================
+   // PÁGINA 2: RESUMEN DE CAFÉ VERDE, TOSTADO Y EMPAQUETADO
+   // =========================================================================
+   doc.addPage('a4', 'landscape');
 
-   // Table of Roasting Batches/Silo allocations with Checkbox and Real Weight
-   const batchRows: any[] = [];
-   let batchCounter = 1;
+   // Encabezado Melocotón
+   doc.setFillColor(253, 232, 228);
+   doc.setDrawColor(0, 0, 0);
+   doc.setLineWidth(0.4);
+   doc.rect(margin, 9, contentWidth, 11, 'FD');
 
-   day.siloAssignments.forEach(silo => {
-      silo.batches.forEach((batch) => {
-         const sackWeight = getOriginSackWeight(silo.origin, batch.profileName, masterProfiles);
-         const greenKg = sackWeight * 2;
-         
-         batchRows.push([
-            '[  ]',
-            `#${batchCounter++}`,
-            `Silo ${silo.siloId}`,
-            silo.origin.trim(),
-            `2 sacos (${sackWeight}kg/sc = ${greenKg}kg)`,
-            batch.profileName,
-            batch.format,
-            '____________'
-         ]);
-      });
+   doc.setTextColor(0, 0, 0);
+   doc.setFontSize(13);
+   doc.setFont('helvetica', 'bold');
+   doc.text('DIA DE TUESTE ARBITRADE CANARIAS', pageWidth / 2, 16.5, { align: 'center' });
+
+   if (day.scheduledDate) {
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`FECHA: ${day.scheduledDate} (DÍA #${day.dayIndex})`, contentWidth + margin - 4, 16.5, { align: 'right' });
+   }
+
+   let arabicaGreen = 0;
+   let robustaGreen = 0;
+   allBatches.forEach(b => {
+      if (b.origin.toLowerCase().includes('robusta')) {
+         robustaGreen += b.greenKg;
+      } else {
+         arabicaGreen += b.greenKg;
+      }
    });
 
-   doc.setFontSize(8.5);
-   doc.setFont('helvetica', 'bold');
-   doc.setTextColor(40, 40, 40);
-   doc.text('CONTROL Y REGISTRO DE TANDAS EN PLANTA (Marcar con bolígrafo al tostar):', 15, yOffset);
-   yOffset += 2.5;
+   const arabicaRoasted = Number((arabicaGreen * 0.83).toFixed(1));
+   const robustaRoasted = Number((robustaGreen * 0.83).toFixed(1));
+
+   const blocks = day.blocks || [];
+   const prod1 = blocks[0] ? `${blocks[0].profileName.toUpperCase()}` : 'MAURICE TIMANFAYA';
+   const prod1Kg = blocks[0] ? `${blocks[0].targetKg} kg` : '';
+
+   const prod2 = blocks[1] ? `${blocks[1].profileName.toUpperCase()}` : 'MAURICE LAURSILVA';
+   const prod2Kg = blocks[1] ? `${blocks[1].targetKg} kg` : '';
+
+   const prod3 = blocks[2] ? `${blocks[2].profileName.toUpperCase()}` : 'MAURICE PINZÓN AZUL';
+   const prod3Kg = blocks[2] ? `${blocks[2].targetKg} kg` : '';
+
+   const topTableHead = [
+      [
+         { content: 'TOTAL KG CAFÉ VERDE', colSpan: 1, styles: { fillColor: [255, 238, 0], halign: 'center' } },
+         { content: 'TOTAL KG CAFÉ TOSTADO', colSpan: 1, styles: { fillColor: [255, 238, 0], halign: 'center' } },
+         { content: prod1, colSpan: 3, styles: { fillColor: [255, 238, 0], halign: 'center' } }
+      ]
+   ];
+
+   const topTableBody = [
+      [
+         `Arábica: ${arabicaGreen > 0 ? arabicaGreen + ' kg' : ''}`,
+         `Arábica: ${arabicaRoasted > 0 ? arabicaRoasted + ' kg' : ''}`,
+         { content: `TOTAL KG. EMPAQUETADOS: ${prod1Kg}`, styles: { halign: 'left' } },
+         { content: 'Nº LOTE:', styles: { halign: 'left' } },
+         { content: 'FECHA DE CADUCIDAD:', styles: { halign: 'left' } }
+      ],
+      [
+         { content: '', colSpan: 2, styles: { fillColor: [255, 255, 255] } },
+         { content: prod2, colSpan: 3, styles: { fillColor: [255, 238, 0], halign: 'center', fontStyle: 'bold' } }
+      ],
+      [
+         `Robusta: ${robustaGreen > 0 ? robustaGreen + ' kg' : ''}`,
+         `Robusta: ${robustaRoasted > 0 ? robustaRoasted + ' kg' : ''}`,
+         { content: `TOTAL KG. EMPAQUETADOS: ${prod2Kg}`, styles: { halign: 'left' } },
+         { content: 'Nº LOTE:', styles: { halign: 'left' } },
+         { content: 'FECHA DE CADUCIDAD:', styles: { halign: 'left' } }
+      ],
+      [
+         { content: '', colSpan: 2, styles: { fillColor: [255, 255, 255] } },
+         { content: prod3, colSpan: 3, styles: { fillColor: [255, 238, 0], halign: 'center', fontStyle: 'bold' } }
+      ],
+      [
+         { content: '', colSpan: 2, styles: { fillColor: [255, 255, 255] } },
+         { content: `TOTAL KG. EMPAQUETADOS: ${prod3Kg}`, styles: { halign: 'left' } },
+         { content: 'Nº LOTE:', styles: { halign: 'left' } },
+         { content: 'FECHA DE CADUCIDAD:', styles: { halign: 'left' } }
+      ]
+   ];
 
    autoTable(doc, {
-      startY: yOffset,
-      margin: { left: 15, right: 15 },
-      head: [['OK', 'Nº', 'Silo', 'Origen Verde', 'Carga Verde', 'Gama / Perfil', 'Formato', 'Tostado Real']],
-      body: batchRows,
+      startY: 22,
+      margin: { left: margin, right: margin },
+      tableWidth: contentWidth,
+      head: topTableHead as any,
+      body: topTableBody as any,
       theme: 'grid',
-      headStyles: { fillColor: [40, 40, 40], fontSize: 8, halign: 'center' },
-      styles: { fontSize: 7.5, cellPadding: 1.8, halign: 'left' },
+      headStyles: {
+         textColor: [0, 0, 0],
+         fontStyle: 'bold',
+         fontSize: 8.5,
+         lineColor: [0, 0, 0],
+         lineWidth: 0.35,
+         cellPadding: 2
+      },
+      styles: {
+         textColor: [0, 0, 0],
+         lineColor: [0, 0, 0],
+         lineWidth: 0.35,
+         fontSize: 8,
+         minCellHeight: 9,
+         valign: 'middle'
+      },
       columnStyles: {
-         0: { halign: 'center', cellWidth: 12, fontStyle: 'bold' },
-         1: { halign: 'center', cellWidth: 10 },
-         2: { halign: 'center', fontStyle: 'bold', cellWidth: 16 },
-         3: { cellWidth: 26 },
-         4: { cellWidth: 26 },
-         5: { fontStyle: 'bold', cellWidth: 44 },
-         6: { cellWidth: 18 },
-         7: { halign: 'center', cellWidth: 28 }
+         0: { cellWidth: 46 },
+         1: { cellWidth: 46 },
+         2: { cellWidth: 65 },
+         3: { cellWidth: 55 },
+         4: { cellWidth: 65 }
+      }
+   });
+
+   let yOffset = (doc as any).lastAutoTable.finalY + 5;
+
+   // SECCIÓN 2: CAFÉ DE ESPECIALIDAD
+   autoTable(doc, {
+      startY: yOffset,
+      margin: { left: margin, right: margin },
+      tableWidth: contentWidth,
+      head: [
+         [{ content: 'CAFÉ DE ESPECIALIDAD', colSpan: 6, styles: { fillColor: [255, 238, 0], halign: 'center', fontSize: 11, fontStyle: 'bold' } }]
+      ],
+      body: [
+         // Fila 1
+         [
+            { content: 'TOTAL KG CAFÉ VERDE', styles: { fillColor: [255, 238, 0], halign: 'center', fontStyle: 'bold' } },
+            { content: 'TOTAL KG CAFÉ TOSTADO', styles: { fillColor: [255, 238, 0], halign: 'center', fontStyle: 'bold' } },
+            { content: 'ORIGEN:', colSpan: 2, styles: { halign: 'left', fontStyle: 'bold' } },
+            { content: 'ORIGEN:', colSpan: 2, styles: { halign: 'left', fontStyle: 'bold' } }
+         ],
+         [
+            '', '',
+            { content: 'TOTAL KG. EMPAQUETADOS', styles: { halign: 'center', fontSize: 7.5 } },
+            { content: 'Nº LOTE Y CADUCIDAD', styles: { halign: 'center', fontSize: 7.5 } },
+            { content: 'TOTAL KG. EMPAQUETADOS', styles: { halign: 'center', fontSize: 7.5 } },
+            { content: 'Nº LOTE Y CADUCIDAD', styles: { halign: 'center', fontSize: 7.5 } }
+         ],
+         // Fila 2
+         [
+            { content: 'TOTAL KG CAFÉ VERDE', styles: { fillColor: [255, 238, 0], halign: 'center', fontStyle: 'bold' } },
+            { content: 'TOTAL KG CAFÉ TOSTADO', styles: { fillColor: [255, 238, 0], halign: 'center', fontStyle: 'bold' } },
+            { content: 'ORIGEN:', colSpan: 2, styles: { halign: 'left', fontStyle: 'bold' } },
+            { content: 'ORIGEN:', colSpan: 2, styles: { halign: 'left', fontStyle: 'bold' } }
+         ],
+         [
+            '', '',
+            { content: 'TOTAL KG. EMPAQUETADOS', styles: { halign: 'center', fontSize: 7.5 } },
+            { content: 'Nº LOTE Y CADUCIDAD', styles: { halign: 'center', fontSize: 7.5 } },
+            { content: 'TOTAL KG. EMPAQUETADOS', styles: { halign: 'center', fontSize: 7.5 } },
+            { content: 'Nº LOTE Y CADUCIDAD', styles: { halign: 'center', fontSize: 7.5 } }
+         ]
+      ],
+      theme: 'grid',
+      styles: {
+         textColor: [0, 0, 0],
+         lineColor: [0, 0, 0],
+         lineWidth: 0.35,
+         fontSize: 8,
+         minCellHeight: 8.5,
+         valign: 'middle'
+      },
+      columnStyles: {
+         0: { cellWidth: 46 },
+         1: { cellWidth: 46 },
+         2: { cellWidth: 46 },
+         3: { cellWidth: 47 },
+         4: { cellWidth: 46 },
+         5: { cellWidth: 46 }
       }
    });
 
    yOffset = (doc as any).lastAutoTable.finalY + 6;
 
-   // Cuadro de Observaciones y Firmas
-   if (yOffset > 240) {
-      doc.addPage();
-      yOffset = 20;
-   }
-
-   doc.setDrawColor(180, 180, 180);
-   doc.setLineDashPattern([1, 1], 0);
-   doc.roundedRect(15, yOffset, 180, 26, 2, 2, 'S');
-
-   doc.setFontSize(7.5);
+   // SECCIÓN 3: ENTREGA EN ALMACÉN Y FIRMAS DE CONTROL
+   doc.setDrawColor(0, 0, 0);
+   doc.setLineWidth(0.4);
+   doc.rect(margin, yOffset, 95, 24);
+   doc.setFontSize(8);
    doc.setFont('helvetica', 'bold');
-   doc.setTextColor(80, 80, 80);
-   doc.text('INCIDENCIAS / OBSERVACIONES DEL TOSTADOR:', 18, yOffset + 5);
-
+   doc.text('Día que se entrega la mercancía en el almacén:', margin + 3, yOffset + 7);
+   doc.text('¿Se entregó el total de la mercancía?:', margin + 3, yOffset + 17);
    doc.setFont('helvetica', 'normal');
-   doc.text('Merma observada / Temperaturas / Silos: ________________________________________________________________________', 18, yOffset + 12);
-   doc.text('__________________________________________________________________________________________________________________', 18, yOffset + 19);
+   doc.text('SI       NO', margin + 65, yOffset + 17);
 
-   yOffset += 32;
-
-   doc.setFontSize(7.5);
+   doc.rect(margin + 99, yOffset, 75, 24);
    doc.setFont('helvetica', 'bold');
-   doc.text('Operario Tostador: ___________________________', 15, yOffset);
-   doc.text('Firma Operario: ___________________________', 80, yOffset);
-   doc.text('VºBº Calidad / Planta: ___________________________', 145, yOffset);
+   doc.text('Si la respuesta es NO, kg entregados:', margin + 102, yOffset + 7);
+
+   doc.rect(margin + 178, yOffset, 99, 24);
+   doc.setFont('helvetica', 'bold');
+   doc.text('Revisado por:', margin + 181, yOffset + 6);
+   doc.text('Responsable de Compras y Almacén:', margin + 181, yOffset + 12);
+   doc.text('Firma:', margin + 181, yOffset + 19);
 };
 
 export const generateSingleDayPlanReport = (day: DailyPlan, masterProfiles: MasterProfile[]) => {
    const doc = new jsPDF({
-      orientation: 'portrait',
+      orientation: 'landscape',
       unit: 'mm',
       format: 'a4'
    });
 
-   const today = new Date().toLocaleDateString('es-ES', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric' 
-   });
-
-   renderDayWorksheet(doc, day, masterProfiles, today);
+   renderArbitradeDaySheet(doc, day, masterProfiles);
 
    const dayLabel = day.scheduledDate ? day.scheduledDate.replace(/\//g, '-') : `DIA_${day.dayIndex}`;
-   doc.save(`FICHA_TUESTE_DIA_${day.dayIndex}_${dayLabel}.pdf`);
+   doc.save(`DIA_TUESTE_ARBITRADE_CANARIAS_DIA_${day.dayIndex}_${dayLabel}.pdf`);
 };
 
 export const generateRoastingPlanReport = (days: DailyPlan[], masterProfiles: MasterProfile[], monthStr?: string) => {
    const doc = new jsPDF({
-      orientation: 'portrait',
+      orientation: 'landscape',
       unit: 'mm',
       format: 'a4'
    });
 
-   const today = new Date().toLocaleDateString('es-ES', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric' 
-   });
-
-   // PAGE 1: COVER & MONTHLY PROCUREMENT SUMMARY
-   doc.setFillColor(30, 34, 43);
-   doc.rect(0, 0, 210, 30, 'F');
-   doc.setTextColor(217, 119, 6);
-   doc.setFontSize(17);
-   doc.setFont('helvetica', 'bold');
-   doc.text('COFFEE FLOW - PLAN GENERAL DE TUESTE', 15, 13);
-   doc.setTextColor(255, 255, 255);
-   doc.setFontSize(9);
-   doc.text(`PLANIFICACIÓN MENSUAL Y APROVISIONAMIENTO DE CAFÉ VERDE | ${monthStr || 'MES COMPLETO'}`, 15, 22);
-
-   let yOffset = 38;
-
-   // Calculate global totals
-   let globalTotalRoasted = 0;
-   let globalTotalGreen = 0;
-   const globalGreenByOrigin: { [origin: string]: { kg: number, sacks: number, sackWeight: number } } = {};
-   const globalBlocks: { [key: string]: { profileName: string, format: string, totalKg: number, days: number[] } } = {};
-
-   days.forEach(day => {
-      globalTotalRoasted += day.totalKg;
-      
-      day.siloAssignments.forEach(silo => {
-         silo.batches.forEach(batch => {
-            const sackWeight = getOriginSackWeight(silo.origin, batch.profileName, masterProfiles);
-            const batchGreen = sackWeight * 2;
-            globalTotalGreen += batchGreen;
-            const originKey = silo.origin.trim();
-            if (!globalGreenByOrigin[originKey]) {
-               globalGreenByOrigin[originKey] = { kg: 0, sacks: 0, sackWeight };
-            }
-            globalGreenByOrigin[originKey].kg += batchGreen;
-            globalGreenByOrigin[originKey].sacks += 2;
-            globalGreenByOrigin[originKey].sackWeight = sackWeight;
-         });
-      });
-
-      day.blocks.forEach(b => {
-         const key = `${b.profileName}__${b.format}`;
-         if (!globalBlocks[key]) {
-            globalBlocks[key] = { profileName: b.profileName, format: b.format, totalKg: 0, days: [] };
-         }
-         globalBlocks[key].totalKg += b.targetKg;
-         if (!globalBlocks[key].days.includes(day.dayIndex)) {
-            globalBlocks[key].days.push(day.dayIndex);
-         }
-      });
-   });
-
-   // Resumen Ejecutivo
-   const kpiRows = [
-      ['Jornadas de Producción:', `${days.length} Días de Tueste`, 'Total Café Tostado Neto:', `${globalTotalRoasted.toFixed(1)} kg`],
-      ['Total Café Verde Necesario:', `${globalTotalGreen.toFixed(1)} kg`, 'Total Sacos Verde:', `${Object.values(globalGreenByOrigin).reduce((acc: number, v: any) => acc + v.sacks, 0)} sacos`]
-   ];
-
-   autoTable(doc, {
-      startY: yOffset,
-      margin: { left: 15, right: 15 },
-      body: kpiRows,
-      theme: 'grid',
-      styles: { fontSize: 8.5, cellPadding: 2 },
-      columnStyles: {
-         0: { fontStyle: 'bold', fillColor: [240, 240, 240], cellWidth: 48 },
-         1: { fontStyle: 'bold', textColor: [217, 119, 6], cellWidth: 42 },
-         2: { fontStyle: 'bold', fillColor: [240, 240, 240], cellWidth: 48 },
-         3: { fontStyle: 'bold', textColor: [30, 120, 30], cellWidth: 42 }
+   days.forEach((day, idx) => {
+      if (idx > 0) {
+         doc.addPage('a4', 'landscape');
       }
+      renderArbitradeDaySheet(doc, day, masterProfiles);
    });
 
-   yOffset = (doc as any).lastAutoTable.finalY + 8;
-
-   // Tabla 1: Aprovisionamiento de Café Verde por Origen
-   doc.setFontSize(10);
-   doc.setFont('helvetica', 'bold');
-   doc.setTextColor(40, 40, 40);
-   doc.text('1. APROVISIONAMIENTO DE CAFÉ VERDE (Necesidades de Almacén / Compras):', 15, yOffset);
-   yOffset += 3;
-
-   const greenRows = Object.entries(globalGreenByOrigin).map(([origin, val]: any) => {
-      const pct = globalTotalGreen > 0 ? ((val.kg / globalTotalGreen) * 100).toFixed(1) : '0';
-      return [
-         origin,
-         `${val.sackWeight} kg / saco`,
-         `${val.kg.toFixed(1)} kg`,
-         `${val.sacks} sacos`,
-         `${pct} %`
-      ];
-   });
-
-   autoTable(doc, {
-      startY: yOffset,
-      margin: { left: 15, right: 15 },
-      head: [['Origen / Variedad', 'Peso por Saco', 'Kg Verde Requerido', 'Total Sacos Necesarios', '% del Consumo']],
-      body: greenRows,
-      theme: 'striped',
-      headStyles: { fillColor: [40, 40, 40], fontSize: 8 },
-      styles: { fontSize: 8, cellPadding: 1.8 }
-   });
-
-   yOffset = (doc as any).lastAutoTable.finalY + 8;
-
-   // Tabla 2: Gamas y Formatos Mensuales
-   doc.setFontSize(10);
-   doc.setFont('helvetica', 'bold');
-   doc.setTextColor(40, 40, 40);
-   doc.text('2. DESGLOSE MENSUAL POR GAMA Y FORMATO:', 15, yOffset);
-   yOffset += 3;
-
-   const productRows = Object.values(globalBlocks).map(p => [
-      p.profileName,
-      p.format,
-      `${p.totalKg.toFixed(1)} kg`,
-      p.days.map(d => `Día ${d}`).join(', ')
-   ]);
-
-   autoTable(doc, {
-      startY: yOffset,
-      margin: { left: 15, right: 15 },
-      head: [['Gama / Perfil', 'Formato', 'Total Tostado Previsto', 'Jornadas de Fabricación']],
-      body: productRows,
-      theme: 'striped',
-      headStyles: { fillColor: [80, 80, 80], fontSize: 8 },
-      styles: { fontSize: 8, cellPadding: 1.8 }
-   });
-
-   // SUBSEQUENT PAGES: EACH DAY WORKSHEET
-   days.forEach(day => {
-      doc.addPage();
-      renderDayWorksheet(doc, day, masterProfiles, today);
-   });
-
-   const safeMonth = (monthStr || 'GENERAL').replace(/\s+/g, '_');
-   doc.save(`PLAN_MENSUAL_TUESTE_${safeMonth}_${today.replace(/\//g, '_')}.pdf`);
+   const safeMonth = (monthStr || 'MES').replace(/\s+/g, '_');
+   doc.save(`PLAN_TUESTE_ARBITRADE_CANARIAS_${safeMonth}.pdf`);
 };
