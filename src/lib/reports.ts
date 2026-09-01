@@ -271,48 +271,204 @@ export const generatePalletShippingReport = (orders: DailyRoastOrder[], demands:
 /**
  * Genera un informe en PDF de toda la planificación de tueste generada.
  */
-export const generateRoastingPlanReport = (days: DailyPlan[], masterProfiles: MasterProfile[]) => {
+// Helper to render a single day worksheet into a jsPDF document for factory floor
+const renderDayWorksheet = (
+   doc: any,
+   day: DailyPlan,
+   masterProfiles: MasterProfile[],
+   today: string
+) => {
+   // Header Banner
+   doc.setFillColor(30, 34, 43);
+   doc.rect(0, 0, 210, 28, 'F');
+   doc.setTextColor(217, 119, 6);
+   doc.setFontSize(16);
+   doc.setFont('helvetica', 'bold');
+   doc.text('HOJA DE TRABAJO DE TUESTE - PLANTA', 15, 12);
+   doc.setTextColor(255, 255, 255);
+   doc.setFontSize(9);
+   const dateStr = day.scheduledDate ? ` | Fecha Prevista: ${day.scheduledDate}` : ` | Emitido: ${today}`;
+   doc.text(`JORNADA #${day.dayIndex}${dateStr} | Silos Asignados: Silos ${day.targetSilos.join(', ')}`, 15, 20);
+
+   let yOffset = 33;
+
+   // Calculate green coffee usage for this day
+   let dayTotalGreen = 0;
+   const greenByOrigin: { [origin: string]: { kg: number, sacks: number } } = {};
+
+   day.siloAssignments.forEach(silo => {
+      silo.batches.forEach(batch => {
+         const profile = masterProfiles.find(p => p.name === batch.profileName);
+         if (!profile) return;
+         const blendComponent = profile.blend.find(b => b.origin === silo.origin);
+         const sackWeight = Number(blendComponent?.sackWeight || (blendComponent as any)?.sack_weight || 60);
+         const batchGreen = sackWeight * 2;
+         dayTotalGreen += batchGreen;
+         if (!greenByOrigin[silo.origin]) {
+            greenByOrigin[silo.origin] = { kg: 0, sacks: 0 };
+         }
+         greenByOrigin[silo.origin].kg += batchGreen;
+         greenByOrigin[silo.origin].sacks += 2;
+      });
+   });
+
+   // Resumen de la Jornada
+   const summaryRows = [
+      ['Café Tostado Objetivo:', `${day.totalKg.toFixed(1)} kg`, 'Café Verde Requerido:', `${dayTotalGreen.toFixed(1)} kg`],
+      ['Silos de Tostado:', `Silos ${day.targetSilos.join(', ')}`, 'Total Sacos Verde:', `${Object.values(greenByOrigin).reduce((acc, v) => acc + v.sacks, 0)} sacos`],
+      ['Desglose de Café Verde:', Object.entries(greenByOrigin).map(([orig, v]) => `${orig}: ${v.kg} kg (${v.sacks} sc)`).join(' | '), 'Estado:', '[  ] PENDIENTE DE TUESTE']
+   ];
+
+   autoTable(doc, {
+      startY: yOffset,
+      margin: { left: 15, right: 15 },
+      body: summaryRows,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 1.5, textColor: [30, 30, 30] },
+      columnStyles: {
+         0: { fontStyle: 'bold', fillColor: [245, 245, 245], cellWidth: 42 },
+         1: { cellWidth: 48 },
+         2: { fontStyle: 'bold', fillColor: [245, 245, 245], cellWidth: 42 },
+         3: { cellWidth: 48 }
+      }
+   });
+
+   yOffset = (doc as any).lastAutoTable.finalY + 4;
+
+   // Table of Roasting Batches/Silo allocations with Checkbox and Real Weight
+   const batchRows: any[] = [];
+   let batchCounter = 1;
+
+   day.siloAssignments.forEach(silo => {
+      silo.batches.forEach((batch) => {
+         const profile = masterProfiles.find(p => p.name === batch.profileName);
+         const blendComponent = profile?.blend.find(b => b.origin === silo.origin);
+         const sackWeight = Number(blendComponent?.sackWeight || (blendComponent as any)?.sack_weight || 60);
+         const greenKg = sackWeight * 2;
+         
+         batchRows.push([
+            '[  ]',
+            `#${batchCounter++}`,
+            `Silo ${silo.siloId}`,
+            silo.origin,
+            `2 sacos (${greenKg} kg)`,
+            batch.profileName,
+            batch.format,
+            '____________'
+         ]);
+      });
+   });
+
+   doc.setFontSize(8.5);
+   doc.setFont('helvetica', 'bold');
+   doc.setTextColor(40, 40, 40);
+   doc.text('CONTROL Y REGISTRO DE TANDAS EN PLANTA (Marcar con bolígrafo al tostar):', 15, yOffset);
+   yOffset += 2.5;
+
+   autoTable(doc, {
+      startY: yOffset,
+      margin: { left: 15, right: 15 },
+      head: [['OK', 'Nº', 'Silo', 'Origen Verde', 'Carga Verde', 'Gama / Perfil', 'Formato', 'Tostado Real']],
+      body: batchRows,
+      theme: 'grid',
+      headStyles: { fillColor: [40, 40, 40], fontSize: 8, halign: 'center' },
+      styles: { fontSize: 7.5, cellPadding: 1.8, halign: 'left' },
+      columnStyles: {
+         0: { halign: 'center', cellWidth: 12, fontStyle: 'bold' },
+         1: { halign: 'center', cellWidth: 10 },
+         2: { halign: 'center', fontStyle: 'bold', cellWidth: 16 },
+         3: { cellWidth: 26 },
+         4: { cellWidth: 26 },
+         5: { fontStyle: 'bold', cellWidth: 44 },
+         6: { cellWidth: 18 },
+         7: { halign: 'center', cellWidth: 28 }
+      }
+   });
+
+   yOffset = (doc as any).lastAutoTable.finalY + 6;
+
+   // Cuadro de Observaciones y Firmas
+   if (yOffset > 240) {
+      doc.addPage();
+      yOffset = 20;
+   }
+
+   doc.setDrawColor(180, 180, 180);
+   doc.setLineDashPattern([1, 1], 0);
+   doc.roundedRect(15, yOffset, 180, 26, 2, 2, 'S');
+
+   doc.setFontSize(7.5);
+   doc.setFont('helvetica', 'bold');
+   doc.setTextColor(80, 80, 80);
+   doc.text('INCIDENCIAS / OBSERVACIONES DEL TOSTADOR:', 18, yOffset + 5);
+
+   doc.setFont('helvetica', 'normal');
+   doc.text('Merma observada / Temperaturas / Silos: ________________________________________________________________________', 18, yOffset + 12);
+   doc.text('__________________________________________________________________________________________________________________', 18, yOffset + 19);
+
+   yOffset += 32;
+
+   doc.setFontSize(7.5);
+   doc.setFont('helvetica', 'bold');
+   doc.text('Operario Tostador: ___________________________', 15, yOffset);
+   doc.text('Firma Operario: ___________________________', 80, yOffset);
+   doc.text('VºBº Calidad / Planta: ___________________________', 145, yOffset);
+};
+
+export const generateSingleDayPlanReport = (day: DailyPlan, masterProfiles: MasterProfile[]) => {
    const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: 'a4'
    });
-   
+
    const today = new Date().toLocaleDateString('es-ES', { 
       day: '2-digit', 
       month: '2-digit', 
-      year: 'numeric'
+      year: 'numeric' 
    });
 
-   days.forEach((day, index) => {
-      if (index > 0) {
-         doc.addPage();
-      }
+   renderDayWorksheet(doc, day, masterProfiles, today);
 
-      // Header Banner
-      doc.setFillColor(30, 34, 43);
-      doc.rect(0, 0, 210, 30, 'F');
-      doc.setTextColor(217, 119, 6);
-      doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.text('COFFEE FLOW - PLAN DE TUESTE', 15, 12);
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(9);
-      doc.text(`PLANIFICACIÓN MENSUAL GENERADA - EXPORTADO EL ${today}`, 15, 20);
+   const dayLabel = day.scheduledDate ? day.scheduledDate.replace(/\//g, '-') : `DIA_${day.dayIndex}`;
+   doc.save(`FICHA_TUESTE_DIA_${day.dayIndex}_${dayLabel}.pdf`);
+};
 
-      let yOffset = 40;
+export const generateRoastingPlanReport = (days: DailyPlan[], masterProfiles: MasterProfile[], monthStr?: string) => {
+   const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+   });
 
-      doc.setTextColor(40, 40, 40);
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      const dateStr = day.scheduledDate ? ` - Fecha: ${day.scheduledDate}` : '';
-      doc.text(`DÍA PLANIFICADO #${day.dayIndex}${dateStr}`, 15, yOffset);
-      yOffset += 5;
+   const today = new Date().toLocaleDateString('es-ES', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric' 
+   });
 
-      // Calculate green coffee usage
-      let dayTotalGreen = 0;
-      const greenByOrigin: { [origin: string]: number } = {};
+   // PAGE 1: COVER & MONTHLY PROCUREMENT SUMMARY
+   doc.setFillColor(30, 34, 43);
+   doc.rect(0, 0, 210, 30, 'F');
+   doc.setTextColor(217, 119, 6);
+   doc.setFontSize(17);
+   doc.setFont('helvetica', 'bold');
+   doc.text('COFFEE FLOW - PLAN GENERAL DE TUESTE', 15, 13);
+   doc.setTextColor(255, 255, 255);
+   doc.setFontSize(9);
+   doc.text(`PLANIFICACIÓN MENSUAL Y APROVISIONAMIENTO DE CAFÉ VERDE | ${monthStr || 'MES COMPLETO'}`, 15, 22);
 
+   let yOffset = 38;
+
+   // Calculate global totals
+   let globalTotalRoasted = 0;
+   let globalTotalGreen = 0;
+   const globalGreenByOrigin: { [origin: string]: { kg: number, sacks: number } } = {};
+   const globalBlocks: { [key: string]: { profileName: string, format: string, totalKg: number, days: number[] } } = {};
+
+   days.forEach(day => {
+      globalTotalRoasted += day.totalKg;
+      
       day.siloAssignments.forEach(silo => {
          silo.batches.forEach(batch => {
             const profile = masterProfiles.find(p => p.name === batch.profileName);
@@ -320,87 +476,108 @@ export const generateRoastingPlanReport = (days: DailyPlan[], masterProfiles: Ma
             const blendComponent = profile.blend.find(b => b.origin === silo.origin);
             const sackWeight = Number(blendComponent?.sackWeight || (blendComponent as any)?.sack_weight || 60);
             const batchGreen = sackWeight * 2;
-            dayTotalGreen += batchGreen;
-            greenByOrigin[silo.origin] = (greenByOrigin[silo.origin] || 0) + batchGreen;
+            globalTotalGreen += batchGreen;
+            if (!globalGreenByOrigin[silo.origin]) {
+               globalGreenByOrigin[silo.origin] = { kg: 0, sacks: 0 };
+            }
+            globalGreenByOrigin[silo.origin].kg += batchGreen;
+            globalGreenByOrigin[silo.origin].sacks += 2;
          });
       });
 
-      // Daily details table
-      const summaryRows = [
-         ['Total Café Tostado Estimado', `${day.totalKg.toFixed(1)} kg`],
-         ['Total Café Verde Necesario', `${dayTotalGreen.toFixed(1)} kg`],
-         ...Object.entries(greenByOrigin).map(([origin, kg]) => [`  - Verde (${origin})`, `${kg.toFixed(1)} kg (aprox. ${(kg/60).toFixed(1)} sacos)`]),
-         ['Silos de Destino Asignados', `Silos ${day.targetSilos.join(', ')}`]
-      ];
-
-      autoTable(doc, {
-         startY: yOffset,
-         margin: { left: 15, right: 15 },
-         body: summaryRows,
-         theme: 'plain',
-         styles: { fontSize: 9, cellPadding: 1 },
-         columnStyles: { 0: { fontStyle: 'bold', cellWidth: 80 } }
-      });
-
-      yOffset = (doc as any).lastAutoTable.finalY + 6;
-
-      // Table of Profiles/Formats scheduled
-      const blockRows = day.blocks.map(b => [
-         b.profileName,
-         b.format,
-         `${b.targetKg.toFixed(1)} kg`
-      ]);
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Gamas y Formatos Planificados:', 15, yOffset);
-      yOffset += 3;
-
-      autoTable(doc, {
-         startY: yOffset,
-         margin: { left: 15, right: 15 },
-         head: [['Perfil / Gama', 'Formato', 'Peso Tostado Objetivo']],
-         body: blockRows,
-         theme: 'grid',
-         headStyles: { fillColor: [40, 40, 40], fontSize: 8 },
-         styles: { fontSize: 8 }
-      });
-
-      yOffset = (doc as any).lastAutoTable.finalY + 6;
-
-      // Table of Roasting Batches/Silo allocations
-      const batchRows: string[][] = [];
-      day.siloAssignments.forEach(silo => {
-         silo.batches.forEach((batch) => {
-            const profile = masterProfiles.find(p => p.name === batch.profileName);
-            const blendComponent = profile?.blend.find(b => b.origin === silo.origin);
-            const sackWeight = Number(blendComponent?.sackWeight || (blendComponent as any)?.sack_weight || 60);
-            const greenKg = sackWeight * 2;
-            batchRows.push([
-               `Silo ${silo.siloId}`,
-               silo.origin,
-               batch.profileName,
-               batch.format,
-               `${greenKg} kg`
-            ]);
-         });
-      });
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Distribución de Tandas y Carga de Silos:', 15, yOffset);
-      yOffset += 3;
-
-      autoTable(doc, {
-         startY: yOffset,
-         margin: { left: 15, right: 15 },
-         head: [['Silo', 'Origen del Café', 'Gama / Perfil', 'Formato', 'Café Verde Necesario']],
-         body: batchRows,
-         theme: 'striped',
-         headStyles: { fillColor: [80, 80, 80], fontSize: 8 },
-         styles: { fontSize: 8 }
+      day.blocks.forEach(b => {
+         const key = `${b.profileName}__${b.format}`;
+         if (!globalBlocks[key]) {
+            globalBlocks[key] = { profileName: b.profileName, format: b.format, totalKg: 0, days: [] };
+         }
+         globalBlocks[key].totalKg += b.targetKg;
+         if (!globalBlocks[key].days.includes(day.dayIndex)) {
+            globalBlocks[key].days.push(day.dayIndex);
+         }
       });
    });
 
-   doc.save(`PLAN_DE_TUESTE_${today.replace(/\//g, '_')}.pdf`);
+   // Resumen Ejecutivo
+   const kpiRows = [
+      ['Jornadas de Producción:', `${days.length} Días de Tueste`, 'Total Café Tostado Neto:', `${globalTotalRoasted.toFixed(1)} kg`],
+      ['Total Café Verde Necesario:', `${globalTotalGreen.toFixed(1)} kg`, 'Total Sacos Verde (60kg):', `${Object.values(globalGreenByOrigin).reduce((acc, v) => acc + v.sacks, 0)} sacos`]
+   ];
+
+   autoTable(doc, {
+      startY: yOffset,
+      margin: { left: 15, right: 15 },
+      body: kpiRows,
+      theme: 'grid',
+      styles: { fontSize: 8.5, cellPadding: 2 },
+      columnStyles: {
+         0: { fontStyle: 'bold', fillColor: [240, 240, 240], cellWidth: 48 },
+         1: { fontStyle: 'bold', textColor: [217, 119, 6], cellWidth: 42 },
+         2: { fontStyle: 'bold', fillColor: [240, 240, 240], cellWidth: 48 },
+         3: { fontStyle: 'bold', textColor: [30, 120, 30], cellWidth: 42 }
+      }
+   });
+
+   yOffset = (doc as any).lastAutoTable.finalY + 8;
+
+   // Tabla 1: Aprovisionamiento de Café Verde por Origen
+   doc.setFontSize(10);
+   doc.setFont('helvetica', 'bold');
+   doc.setTextColor(40, 40, 40);
+   doc.text('1. APROVISIONAMIENTO DE CAFÉ VERDE (Necesidades de Almacén / Compras):', 15, yOffset);
+   yOffset += 3;
+
+   const greenRows = Object.entries(globalGreenByOrigin).map(([origin, val]) => {
+      const pct = globalTotalGreen > 0 ? ((val.kg / globalTotalGreen) * 100).toFixed(1) : '0';
+      return [
+         origin,
+         `${val.kg.toFixed(1)} kg`,
+         `${val.sacks} sacos`,
+         `${pct} %`
+      ];
+   });
+
+   autoTable(doc, {
+      startY: yOffset,
+      margin: { left: 15, right: 15 },
+      head: [['Origen / Variedad', 'Kg Verde Requerido', 'Sacos Estimados (60kg)', '% del Consumo Verde']],
+      body: greenRows,
+      theme: 'striped',
+      headStyles: { fillColor: [40, 40, 40], fontSize: 8 },
+      styles: { fontSize: 8, cellPadding: 1.8 }
+   });
+
+   yOffset = (doc as any).lastAutoTable.finalY + 8;
+
+   // Tabla 2: Gamas y Formatos Mensuales
+   doc.setFontSize(10);
+   doc.setFont('helvetica', 'bold');
+   doc.setTextColor(40, 40, 40);
+   doc.text('2. DESGLOSE MENSUAL POR GAMA Y FORMATO:', 15, yOffset);
+   yOffset += 3;
+
+   const productRows = Object.values(globalBlocks).map(p => [
+      p.profileName,
+      p.format,
+      `${p.totalKg.toFixed(1)} kg`,
+      p.days.map(d => `Día ${d}`).join(', ')
+   ]);
+
+   autoTable(doc, {
+      startY: yOffset,
+      margin: { left: 15, right: 15 },
+      head: [['Gama / Perfil', 'Formato', 'Total Tostado Previsto', 'Jornadas de Fabricación']],
+      body: productRows,
+      theme: 'striped',
+      headStyles: { fillColor: [80, 80, 80], fontSize: 8 },
+      styles: { fontSize: 8, cellPadding: 1.8 }
+   });
+
+   // SUBSEQUENT PAGES: EACH DAY WORKSHEET
+   days.forEach(day => {
+      doc.addPage();
+      renderDayWorksheet(doc, day, masterProfiles, today);
+   });
+
+   const safeMonth = (monthStr || 'GENERAL').replace(/\s+/g, '_');
+   doc.save(`PLAN_MENSUAL_TUESTE_${safeMonth}_${today.replace(/\//g, '_')}.pdf`);
 };

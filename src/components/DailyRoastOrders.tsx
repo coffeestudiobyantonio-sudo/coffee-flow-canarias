@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
-import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, Zap, Lock, Boxes, Calendar } from 'lucide-react';
-import { generateDailyProductionReport, generatePackagingOrderReport, generatePalletShippingReport, generateRoastingPlanReport } from '../lib/reports';
+import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, Zap, Lock, Boxes, Calendar, ArrowUp, ArrowDown } from 'lucide-react';
+import { generateDailyProductionReport, generatePackagingOrderReport, generatePalletShippingReport, generateRoastingPlanReport, generateSingleDayPlanReport } from '../lib/reports';
 import { ROASTING_MACHINES } from '../App';
 import { createDailyOrder, deleteDailyOrder, purgeAllProductionData, fetchPlannerDemands, createPlannerDemand, deletePlannerDemand, fetchPlannerDays, createPlannerDay, deletePlannerDay, purgePlannerDays, updatePlannerDemandStatus, fetchMonthlySurplus, createMonthlySurplus, deleteMonthlySurplus } from '../lib/api';
 import type { MonthlySurplus } from '../lib/api';
@@ -135,6 +135,43 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       if (success) {
          setSurplusList(prev => prev.filter(s => s.id !== id));
       }
+   };
+
+   const handleMoveDay = (dayIndex: number, direction: 'UP' | 'DOWN') => {
+      const idx = plannedDays.findIndex(d => d.dayIndex === dayIndex);
+      if (idx === -1) return;
+      const targetIdx = direction === 'UP' ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= plannedDays.length) return;
+
+      const newDays = [...plannedDays];
+      const temp = newDays[idx];
+      newDays[idx] = newDays[targetIdx];
+      newDays[targetIdx] = temp;
+
+      const reIndexed = newDays.map((d, i) => ({
+         ...d,
+         dayIndex: i + 1,
+         targetSilos: (i + 1) % 2 === 1 ? [1, 2, 3, 4] : [5, 6, 7, 8]
+      }));
+
+      setPlannedDays(reIndexed);
+      purgePlannerDays().then(() => {
+         reIndexed.forEach(d => createPlannerDay(d));
+      });
+   };
+
+   const handleDeleteDay = (dayIndex: number) => {
+      if (!confirm(`¿Eliminar la jornada planificada #${dayIndex}?`)) return;
+      const filtered = plannedDays.filter(d => d.dayIndex !== dayIndex);
+      const reIndexed = filtered.map((d, i) => ({
+         ...d,
+         dayIndex: i + 1,
+         targetSilos: (i + 1) % 2 === 1 ? [1, 2, 3, 4] : [5, 6, 7, 8]
+      }));
+      setPlannedDays(reIndexed);
+      purgePlannerDays().then(() => {
+         reIndexed.forEach(d => createPlannerDay(d));
+      });
    };
 
    // Utility for format weight mapping
@@ -1133,61 +1170,197 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                   </div>
 
                   {/* Planned Days Output Grid */}
-                  {plannedDays.length > 0 && (
-                     <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-8 shadow-2xl mt-8">
-                        <div className="flex justify-between items-center border-b border-dashboard-border pb-4 mb-6">
-                           <h3 className="text-xl font-black text-white uppercase tracking-wider flex items-center">
-                              <ClipboardList className="w-5 h-5 mr-3 text-blue-400" /> Planificación Generada
-                           </h3>
-                           <button 
-                              onClick={() => generateRoastingPlanReport(plannedDays, masterProfiles)}
-                              className="bg-blue-600/10 border border-blue-500/30 text-blue-400 px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-widest flex items-center hover:bg-blue-600 hover:text-white transition-all shadow-md group"
-                           >
-                              <FileText className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" /> Exportar Plan Completo PDF
-                           </button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                           {plannedDays.map(day => (
-                              <div key={day.dayIndex} className="bg-[#14161a] border border-dashboard-border rounded-2xl overflow-hidden flex flex-col group hover:border-blue-500/50 transition-colors">
-                                 <div className="bg-gradient-to-r from-blue-900/30 to-[#14161a] p-4 border-b border-dashboard-border flex justify-between items-center">
-                                    <div className="flex items-center space-x-2">
-                                       <span className="font-black text-white tracking-widest uppercase">Plan M/</span>
-                                       <input type="date" 
-                                              value={day.scheduledDate || ''}
-                                              onChange={(e) => {
-                                                 const ns = [...plannedDays];
-                                                 const tgt = ns.find(x => x.dayIndex === day.dayIndex);
-                                                 if (tgt) tgt.scheduledDate = e.target.value;
-                                                 setPlannedDays(ns);
-                                              }}
-                                              className="bg-[#1e222b] border border-dashboard-border text-white px-2 py-1 rounded text-xs focus:border-blue-500 outline-none" />
-                                    </div>
-                                    <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-1 rounded font-bold border border-blue-500/30">
-                                       Silos {day.targetSilos.join(', ')}
+                  {plannedDays.length > 0 && (() => {
+                     // Compute Green Coffee Procurement Summary
+                     let totalGreenKg = 0;
+                     const greenByOrigin: { [origin: string]: { kg: number, sacks: number } } = {};
+
+                     plannedDays.forEach(day => {
+                        day.siloAssignments.forEach(silo => {
+                           silo.batches.forEach(batch => {
+                              const profile = masterProfiles.find(p => p.name === batch.profileName);
+                              if (!profile) return;
+                              const blendComponent = profile.blend.find(b => b.origin === silo.origin);
+                              const sackWeight = Number(blendComponent?.sackWeight || (blendComponent as any)?.sack_weight || 60);
+                              const batchGreen = sackWeight * 2;
+                              totalGreenKg += batchGreen;
+                              if (!greenByOrigin[silo.origin]) greenByOrigin[silo.origin] = { kg: 0, sacks: 0 };
+                              greenByOrigin[silo.origin].kg += batchGreen;
+                              greenByOrigin[silo.origin].sacks += 2;
+                           });
+                        });
+                     });
+
+                     const totalSacks = Object.values(greenByOrigin).reduce((acc, v) => acc + v.sacks, 0);
+
+                     return (
+                        <div className="space-y-6 mt-8">
+                           {/* Tarjeta de Aprovisionamiento Global de Café Verde */}
+                           <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-6 shadow-2xl space-y-4">
+                              <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-dashboard-border pb-4 gap-3">
+                                 <div>
+                                    <h3 className="text-lg font-black text-white uppercase tracking-wider flex items-center">
+                                       <Boxes className="w-5 h-5 mr-2 text-yellow-500" /> Aprovisionamiento de Café Verde (Necesidades del Mes)
+                                    </h3>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                       Cálculo global de sacos y kg que se deben retirar de almacén o comprar para cumplir la planificación de {selectedMonth}.
+                                    </p>
+                                 </div>
+                                 <div className="text-right">
+                                    <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest block">Total Verde</span>
+                                    <span className="text-xl font-black text-yellow-500 font-mono">
+                                       {totalGreenKg.toLocaleString()} kg <span className="text-xs text-gray-400 font-normal">({totalSacks} sacos)</span>
                                     </span>
                                  </div>
-                                 <div className="p-4 space-y-3 flex-1 max-h-64 overflow-y-auto">
-                                    {day.blocks.map((b, i) => (
-                                       <div key={i} className="flex justify-between items-center bg-[#1e222b] p-2 rounded-lg border border-dashboard-border">
-                                          <div>
-                                             <div className="text-xs font-bold text-coffee-light">{b.profileName}</div>
-                                             <div className="text-[9px] text-gray-500 font-mono">FMT: {b.format}</div>
-                                          </div>
-                                          <div className="text-xs font-black text-white">{b.targetKg}kg</div>
-                                       </div>
-                                    ))}
-                                 </div>
-                                 <div className="p-4 bg-dashboard-bg border-t border-dashboard-border flex justify-between items-center">
-                                    <div className="text-[11px] font-bold text-gray-400">TOTAL: <span className="text-white">{day.totalKg}</span> kg</div>
-                                    <button onClick={() => handleLaunchDay(day)} className="bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-lg transition-colors">
-                                       Lanzar a Planta
-                                    </button>
-                                 </div>
                               </div>
-                           ))}
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                 {Object.entries(greenByOrigin).map(([origin, val]) => (
+                                    <div key={origin} className="bg-[#14161a] border border-dashboard-border p-3 rounded-xl flex justify-between items-center">
+                                       <div>
+                                          <span className="text-xs font-black text-white block truncate">{origin}</span>
+                                          <span className="text-[10px] text-gray-400 font-mono">{val.sacks} sacos de 60kg</span>
+                                       </div>
+                                       <span className="text-sm font-black text-coffee-light font-mono">{val.kg.toLocaleString()} kg</span>
+                                    </div>
+                                 ))}
+                              </div>
+                           </div>
+
+                           {/* Fichas de Jornadas Planificadas */}
+                           <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-8 shadow-2xl">
+                              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-dashboard-border pb-4 mb-6 gap-4">
+                                 <div>
+                                    <h3 className="text-xl font-black text-white uppercase tracking-wider flex items-center">
+                                       <ClipboardList className="w-5 h-5 mr-3 text-blue-400" /> Planificación Generada ({plannedDays.length} Jornadas)
+                                    </h3>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                       Descarga las hojas de trabajo en PDF para operar directamente en fábrica a mano.
+                                    </p>
+                                 </div>
+                                 <button 
+                                    onClick={() => generateRoastingPlanReport(plannedDays, masterProfiles, selectedMonth)}
+                                    className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center shadow-lg transition-all active:scale-95"
+                                 >
+                                    <FileText className="w-4 h-4 mr-2" /> Exportar Plan Completo PDF
+                                 </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                 {plannedDays.map(day => {
+                                    // Day green total
+                                    let dayGreenKg = 0;
+                                    let daySacks = 0;
+                                    day.siloAssignments.forEach(silo => {
+                                       silo.batches.forEach(b => {
+                                          const prof = masterProfiles.find(p => p.name === b.profileName);
+                                          const comp = prof?.blend.find(c => c.origin === silo.origin);
+                                          const sw = Number(comp?.sackWeight || 60);
+                                          dayGreenKg += sw * 2;
+                                          daySacks += 2;
+                                       });
+                                    });
+
+                                    return (
+                                       <div key={day.dayIndex} className="bg-[#14161a] border border-dashboard-border rounded-2xl overflow-hidden flex flex-col group hover:border-blue-500/50 transition-colors shadow-lg">
+                                          {/* Card Header */}
+                                          <div className="bg-gradient-to-r from-blue-900/30 to-[#14161a] p-3.5 border-b border-dashboard-border flex justify-between items-center">
+                                             <div className="flex items-center space-x-1.5">
+                                                <span className="font-black text-white text-xs tracking-widest uppercase">Día #{day.dayIndex}</span>
+                                                <input type="date" 
+                                                       value={day.scheduledDate || ''}
+                                                       onChange={(e) => {
+                                                          const ns = [...plannedDays];
+                                                          const tgt = ns.find(x => x.dayIndex === day.dayIndex);
+                                                          if (tgt) tgt.scheduledDate = e.target.value;
+                                                          setPlannedDays(ns);
+                                                       }}
+                                                       className="bg-[#1e222b] border border-dashboard-border text-white px-1.5 py-0.5 rounded text-[11px] focus:border-blue-500 outline-none w-28" />
+                                             </div>
+                                             
+                                             <div className="flex items-center space-x-1">
+                                                {/* Day controls */}
+                                                <button 
+                                                   onClick={() => handleMoveDay(day.dayIndex, 'UP')} 
+                                                   disabled={day.dayIndex === 1}
+                                                   title="Mover día hacia arriba"
+                                                   className="p-1 text-gray-500 hover:text-white disabled:opacity-20 disabled:hover:text-gray-500 rounded"
+                                                >
+                                                   <ArrowUp className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button 
+                                                   onClick={() => handleMoveDay(day.dayIndex, 'DOWN')} 
+                                                   disabled={day.dayIndex === plannedDays.length}
+                                                   title="Mover día hacia abajo"
+                                                   className="p-1 text-gray-500 hover:text-white disabled:opacity-20 disabled:hover:text-gray-500 rounded"
+                                                >
+                                                   <ArrowDown className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button 
+                                                   onClick={() => handleDeleteDay(day.dayIndex)} 
+                                                   title="Eliminar día"
+                                                   className="p-1 text-gray-500 hover:text-red-400 rounded"
+                                                >
+                                                   <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                             </div>
+                                          </div>
+
+                                          {/* Sub-header badge */}
+                                          <div className="px-4 py-2 bg-[#171a20] border-b border-dashboard-border/40 flex justify-between items-center text-[10px]">
+                                             <span className="bg-blue-500/10 text-blue-300 font-bold px-2 py-0.5 rounded border border-blue-500/20">
+                                                Silos: {day.targetSilos.join(', ')}
+                                             </span>
+                                             <span className="text-gray-400 font-mono">
+                                                Verde: <span className="text-white font-bold">{dayGreenKg} kg</span> ({daySacks} sc)
+                                             </span>
+                                          </div>
+
+                                          {/* Blocks */}
+                                          <div className="p-4 space-y-2 flex-1 max-h-56 overflow-y-auto">
+                                             {day.blocks.map((b, i) => (
+                                                <div key={i} className="flex justify-between items-center bg-[#1e222b] p-2 rounded-lg border border-dashboard-border">
+                                                   <div>
+                                                      <div className="text-xs font-bold text-coffee-light truncate max-w-[130px]">{b.profileName}</div>
+                                                      <div className="text-[9px] text-gray-500 font-mono">FMT: {b.format}</div>
+                                                   </div>
+                                                   <div className="text-xs font-black text-white">{b.targetKg}kg</div>
+                                                </div>
+                                             ))}
+                                          </div>
+
+                                          {/* Card Footer */}
+                                          <div className="p-3.5 bg-dashboard-bg border-t border-dashboard-border flex flex-col space-y-2">
+                                             <div className="flex justify-between items-center text-xs">
+                                                <span className="text-gray-400 font-mono text-[11px]">Tostado Objetivo:</span>
+                                                <span className="text-white font-black">{day.totalKg} kg</span>
+                                             </div>
+                                             
+                                             <div className="flex space-x-2 pt-1">
+                                                <button 
+                                                   onClick={() => generateSingleDayPlanReport(day, masterProfiles)}
+                                                   title="Descargar Ficha de Planta (PDF)"
+                                                   className="flex-1 py-2 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg text-[10px] font-black uppercase tracking-wider border border-blue-500/20 flex items-center justify-center transition-all"
+                                                >
+                                                   <FileText className="w-3 h-3 mr-1" /> Ficha PDF
+                                                </button>
+                                                <button 
+                                                   onClick={() => handleLaunchDay(day)} 
+                                                   className="py-2 px-3 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[10px] font-black uppercase tracking-wider rounded-lg transition-colors border border-gray-700"
+                                                   title="Enviar a agenda digital"
+                                                >
+                                                   Lanzar
+                                                </button>
+                                             </div>
+                                          </div>
+                                       </div>
+                                    );
+                                 })}
+                              </div>
+                           </div>
                         </div>
-                     </div>
-                  )}
+                     );
+                  })()}
                </div>
             ) : viewMode === 'MANAGER' ? (
                <div className="max-w-7xl mx-auto space-y-10">

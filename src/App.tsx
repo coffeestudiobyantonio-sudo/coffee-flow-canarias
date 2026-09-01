@@ -7,7 +7,7 @@ import TraceabilityDetective from './components/TraceabilityDetective';
 import DailyRoastOrders from './components/DailyRoastOrders';
 import ManualRoastControl from './components/ManualRoastControl';
 import SiloManager from './components/SiloManager';
-import { Database, Activity, LayoutDashboard, Target, TestTube2, Flame, CheckCircle, Lock, FileSearch, Timer, Package, Cpu } from 'lucide-react';
+import { Database, LayoutDashboard, Target, TestTube2, Flame, CheckCircle, Lock, FileSearch, Timer, Package, Cpu, ChevronDown } from 'lucide-react';
 import { fetchSilos, fetchMasterProfiles, fetchDailyOrders, updateTaskStatus, updateSilo, updateTaskId } from './lib/api';
 
 export interface MachineSpecificProfile {
@@ -163,7 +163,8 @@ export const ROASTING_MACHINES: RoastingMachine[] = [
 ];
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'orders' | 'profiles' | 'mgmt' | 'roast' | 'manual_roast' | 'lab' | 'traceability' | 'silos' | 'planning' | 'packaging'>('profiles');
+  const [activeTab, setActiveTab] = useState<'orders' | 'profiles' | 'mgmt' | 'roast' | 'manual_roast' | 'lab' | 'traceability' | 'silos' | 'planning' | 'packaging'>('planning');
+  const [showSecondaryModules, setShowSecondaryModules] = useState(false);
   const [activeLot, setActiveLot] = useState<ActiveLot | null>(null);
 
   const [masterProfiles, setMasterProfiles] = useState<MasterProfile[]>([]);
@@ -557,33 +558,37 @@ function App() {
         {/* Navigation */}
         <nav className="flex-1 w-full space-y-1 mt-4 px-3 flex flex-col items-center lg:items-start overflow-y-auto custom-scrollbar pb-6">
           
-          {/* MÓDULO 1: DISEÑO Y RECETAS */}
+          {/* MÓDULO PRINCIPAL DE OPERACIÓN */}
           <div className="hidden lg:block w-full px-4 mb-2 mt-2">
-            <span className="text-[10px] font-black justify-start text-coffee-accent uppercase tracking-widest">Módulo 1: Diseño y Recetas</span>
+            <span className="text-[10px] font-black justify-start text-coffee-accent uppercase tracking-widest">Operación Activa</span>
           </div>
-          <NavItem icon={<Target />} label="1. Gamas & Perfiles" active={activeTab === 'profiles'} onClick={() => handleNavClick('profiles')} />
-          
-          {/* MÓDULO 2: PLANTA Y PRODUCCIÓN */}
-          <div className="hidden lg:block w-full px-4 mb-2 mt-6">
-            <span className="text-[10px] font-black justify-start text-coffee-accent uppercase tracking-widest">Módulo 2: Planta y Producción</span>
-          </div>
-          <NavItem icon={<Package />} label="2. Plan Mensual" active={activeTab === 'planning'} onClick={() => handleNavClick('planning')} />
-          <NavItem icon={<Cpu />} label="3. Agenda de Tueste" active={activeTab === 'orders'} onClick={() => handleNavClick('orders')} highlight={true} />
-          <NavItem icon={<Timer />} label="4. Control de Tueste" active={activeTab === 'manual_roast'} onClick={() => handleNavClick('manual_roast')} pulse={activeLot?.status === 'tueste'} />
-          <NavItem icon={<Database />} label="5. Gestión de Silos" active={activeTab === 'silos'} onClick={() => handleNavClick('silos')} />
-          <NavItem icon={<CheckCircle />} label="6. Ejecución de Planta" active={activeTab === 'packaging'} onClick={() => handleNavClick('packaging')} highlight={true} />
+          <NavItem icon={<Package />} label="Planificador de Tueste" active={activeTab === 'planning'} onClick={() => handleNavClick('planning')} highlight={true} />
+          <NavItem icon={<Target />} label="Gamas & Recetas" active={activeTab === 'profiles'} onClick={() => handleNavClick('profiles')} />
 
-          {/* MÓDULO 3: CALIDAD Y DIRECCIÓN */}
-          <div className="hidden lg:block w-full px-4 mb-2 mt-6">
-            <span className="text-[10px] font-black justify-start text-coffee-accent uppercase tracking-widest">Módulo 3: Calidad y Dirección</span>
-          </div>
-          <NavItem icon={<TestTube2 />} label="6. Lab de Calidad" active={activeTab === 'lab'} onClick={() => handleNavClick('lab')} locked={activeLot?.status === 'tueste'} pulse={activeLot?.status === 'laboratorio'} />
-          <NavItem icon={<FileSearch />} label="7. Trazabilidad Forense" active={activeTab === 'traceability'} onClick={() => handleNavClick('traceability')} highlight={true} />
-          <NavItem icon={<LayoutDashboard />} label="8. Panel Ejecutivo" active={activeTab === 'mgmt'} onClick={() => handleNavClick('mgmt')} />
-          
-          {/* Legacy/Automated Control (Hidden) */}
-          <div className="mt-8 pt-4 w-full border-t border-dashboard-border opacity-30 hover:opacity-100 transition-opacity">
-            <NavItem icon={<Activity />} label="IoT Auto-Control" active={activeTab === 'roast'} onClick={() => handleNavClick('roast')} />
+          {/* MÓDULOS EN PAUSA / OPERACIÓN MANUAL */}
+          <div className="w-full mt-6 pt-4 border-t border-dashboard-border/50">
+            <button 
+              onClick={() => setShowSecondaryModules(!showSecondaryModules)}
+              className="w-full flex items-center justify-between px-3 py-2 text-[10px] font-black text-gray-500 hover:text-gray-300 uppercase tracking-widest transition-colors rounded-lg hover:bg-white/5"
+            >
+              <span className="flex items-center">
+                <ChevronDown className={`w-3.5 h-3.5 mr-2 transition-transform ${showSecondaryModules ? '' : '-rotate-90'}`} />
+                Módulos en Pausa / Manual
+              </span>
+              <span className="text-[9px] bg-[#1e222b] px-1.5 py-0.5 rounded text-gray-400 font-mono">7</span>
+            </button>
+
+            {showSecondaryModules && (
+              <div className="space-y-1 mt-2 pl-1 animate-fadeIn">
+                <NavItem icon={<Cpu />} label="Agenda de Tueste" active={activeTab === 'orders'} onClick={() => handleNavClick('orders')} />
+                <NavItem icon={<Timer />} label="Control de Tueste" active={activeTab === 'manual_roast'} onClick={() => handleNavClick('manual_roast')} pulse={activeLot?.status === 'tueste'} />
+                <NavItem icon={<Database />} label="Gestión de Silos" active={activeTab === 'silos'} onClick={() => handleNavClick('silos')} />
+                <NavItem icon={<CheckCircle />} label="Ejecución de Planta" active={activeTab === 'packaging'} onClick={() => handleNavClick('packaging')} />
+                <NavItem icon={<TestTube2 />} label="Lab de Calidad" active={activeTab === 'lab'} onClick={() => handleNavClick('lab')} locked={activeLot?.status === 'tueste'} pulse={activeLot?.status === 'laboratorio'} />
+                <NavItem icon={<FileSearch />} label="Trazabilidad Forense" active={activeTab === 'traceability'} onClick={() => handleNavClick('traceability')} />
+                <NavItem icon={<LayoutDashboard />} label="Panel Ejecutivo" active={activeTab === 'mgmt'} onClick={() => handleNavClick('mgmt')} />
+              </div>
+            )}
           </div>
         </nav>
 
