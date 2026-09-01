@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
-import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, Zap, Lock } from 'lucide-react';
+import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, Zap, Lock, Boxes, Calendar } from 'lucide-react';
 import { generateDailyProductionReport, generatePackagingOrderReport, generatePalletShippingReport, generateRoastingPlanReport } from '../lib/reports';
 import { ROASTING_MACHINES } from '../App';
-import { createDailyOrder, deleteDailyOrder, purgeAllProductionData, fetchPlannerDemands, createPlannerDemand, deletePlannerDemand, fetchPlannerDays, createPlannerDay, deletePlannerDay, purgePlannerDays, updatePlannerDemandStatus } from '../lib/api';
+import { createDailyOrder, deleteDailyOrder, purgeAllProductionData, fetchPlannerDemands, createPlannerDemand, deletePlannerDemand, fetchPlannerDays, createPlannerDay, deletePlannerDay, purgePlannerDays, updatePlannerDemandStatus, fetchMonthlySurplus, createMonthlySurplus, deleteMonthlySurplus } from '../lib/api';
+import type { MonthlySurplus } from '../lib/api';
 import PackagingOverlay from './PackagingOverlay';
 
 interface DailyRoastOrdersProps {
@@ -56,17 +57,85 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       totalPackages: 1890
    });
 
+   // Control Mensual de Sobrantes (Cajas y Paquetes ya Fabricados)
+   const currentMonthName = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(new Date());
+   const defaultMonthStr = currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1);
+   const [selectedMonth, setSelectedMonth] = useState<string>(defaultMonthStr);
+   const [surplusList, setSurplusList] = useState<MonthlySurplus[]>([]);
+   const [newSurplus, setNewSurplus] = useState({
+      profileName: '',
+      format: '1000g',
+      boxes: 0,
+      packages: 0
+   });
+
    React.useEffect(() => {
       const loadPlannerData = async () => {
-         const [dbDemands, dbDays] = await Promise.all([
+         const [dbDemands, dbDays, dbSurplus] = await Promise.all([
             fetchPlannerDemands(),
-            fetchPlannerDays()
+            fetchPlannerDays(),
+            fetchMonthlySurplus(selectedMonth)
          ]);
          setDemands(dbDemands as any[]);
          setPlannedDays(dbDays as any[]);
+         setSurplusList(dbSurplus || []);
       };
       loadPlannerData();
-   }, []);
+   }, [selectedMonth]);
+
+   const getUnitsPerBox = (format: string): number => {
+      switch (format) {
+         case '250g': return 40;
+         case '450g': return 20;
+         case '500g': return 20;
+         case '1000g': return 10;
+         case '2KG': return 5;
+         default: return 10;
+      }
+   };
+
+   const calculateSurplusKg = (format: string, boxes: number, packages: number): number => {
+      const weight = getFormatWeight(format);
+      const unitsPerBox = getUnitsPerBox(format);
+      const totalUnits = (Number(boxes || 0) * unitsPerBox) + Number(packages || 0);
+      return Number((totalUnits * weight).toFixed(2));
+   };
+
+   const handleAddSurplus = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newSurplus.profileName) {
+         alert("Por favor selecciona una gama / perfil.");
+         return;
+      }
+      const totalKg = calculateSurplusKg(newSurplus.format, newSurplus.boxes, newSurplus.packages);
+      if (totalKg <= 0) {
+         alert("Introduce una cantidad de cajas o paquetes mayor que cero.");
+         return;
+      }
+
+      const surplusItem: MonthlySurplus = {
+         id: `SURPLUS-${Date.now()}`,
+         month: selectedMonth,
+         profileName: newSurplus.profileName,
+         format: newSurplus.format,
+         boxes: Number(newSurplus.boxes || 0),
+         packages: Number(newSurplus.packages || 0),
+         totalKg
+      };
+
+      const success = await createMonthlySurplus(surplusItem);
+      if (success) {
+         setSurplusList(prev => [...prev.filter(s => !(s.profileName === surplusItem.profileName && s.format === surplusItem.format && s.month === selectedMonth)), surplusItem]);
+         setNewSurplus(prev => ({ ...prev, boxes: 0, packages: 0 }));
+      }
+   };
+
+   const handleRemoveSurplus = async (id: string) => {
+      const success = await deleteMonthlySurplus(id);
+      if (success) {
+         setSurplusList(prev => prev.filter(s => s.id !== id));
+      }
+   };
 
    // Utility for format weight mapping
    const getFormatWeight = (format: string): number => {
@@ -335,16 +404,38 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       }
 
       // 1. Group demands by Profile + Format (Independent Lines)
-      let queue: { profileName: string, format: string, totalKg: number, demandIds: string[] }[] = [];
+      let queue: { profileName: string, format: string, totalKg: number, grossKg: number, surplusKg: number, demandIds: string[] }[] = [];
       demands.filter(d => d.status !== 'COMPLETED' && d.status !== 'REVIEWED').forEach(d => {
          const existing = queue.find(g => g.profileName === d.profileName && g.format === d.format);
          if (existing) {
             existing.totalKg += d.kgRequested;
             existing.demandIds.push(d.id);
          } else {
-            queue.push({ profileName: d.profileName, format: d.format, totalKg: d.kgRequested, demandIds: [d.id] });
+            queue.push({ profileName: d.profileName, format: d.format, totalKg: d.kgRequested, grossKg: d.kgRequested, surplusKg: 0, demandIds: [d.id] });
          }
       });
+
+      // 1.1 Descontar stock sobrante ya fabricado (cajas y paquetes)
+      let totalDeductedKg = 0;
+      queue.forEach(item => {
+         item.grossKg = item.totalKg;
+         const matchedSurplus = surplusList.filter(s => s.profileName === item.profileName && s.format === item.format);
+         const availableSurplusKg = matchedSurplus.reduce((acc, s) => acc + s.totalKg, 0);
+         item.surplusKg = availableSurplusKg;
+         if (availableSurplusKg > 0) {
+            const deduction = Math.min(item.totalKg, availableSurplusKg);
+            totalDeductedKg += deduction;
+            item.totalKg = Math.max(0, Number((item.totalKg - deduction).toFixed(1)));
+         }
+      });
+
+      // Filtrar items con totalKg = 0 (100% cubiertos por stock sobrante existente)
+      const itemsToRoast = queue.filter(item => item.totalKg > 0);
+      if (itemsToRoast.length === 0 && queue.length > 0) {
+         alert(`¡Toda la demanda mensual (${totalDeductedKg} kg) está cubierta al 100% con los sobrantes y cajas ya fabricadas! No es necesario tostar más café.`);
+         return;
+      }
+      queue = itemsToRoast;
 
       // Pick highest volume -> then all same format -> then next highest...
       const sortedQueue: { profileName: string, format: string, totalKg: number, demandIds: string[] }[] = [];
@@ -700,6 +791,198 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
          <div className="flex-1 overflow-y-auto p-8 relative">
             {viewMode === 'PLAN_MENSUAL' ? (
                <div className="max-w-7xl mx-auto space-y-8">
+                  {/* KPI Summary Banner */}
+                  {(() => {
+                     const totalGross = demands.filter(d => d.status !== 'COMPLETED' && d.status !== 'REVIEWED').reduce((acc, d) => acc + d.kgRequested, 0);
+                     const totalSurplus = surplusList.reduce((acc, s) => acc + s.totalKg, 0);
+                     const totalNet = Math.max(0, Number((totalGross - totalSurplus).toFixed(1)));
+
+                     return (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                           <div className="bg-dashboard-panel border border-dashboard-border rounded-2xl p-5 shadow-lg flex items-center justify-between">
+                              <div>
+                                 <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest block mb-1">Demanda Bruta Total</span>
+                                 <span className="text-2xl font-black text-white font-mono">{totalGross.toLocaleString()} <span className="text-xs text-gray-500 font-medium">kg</span></span>
+                              </div>
+                              <div className="p-3 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl">
+                                 <Package className="w-6 h-6" />
+                              </div>
+                           </div>
+
+                           <div className="bg-dashboard-panel border border-dashboard-border rounded-2xl p-5 shadow-lg flex items-center justify-between">
+                              <div>
+                                 <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest block mb-1">Stock Ya Fabricado (Sobrante)</span>
+                                 <span className="text-2xl font-black text-green-400 font-mono">-{totalSurplus.toLocaleString()} <span className="text-xs text-gray-500 font-medium">kg</span></span>
+                              </div>
+                              <div className="p-3 bg-green-500/10 border border-green-500/20 text-green-400 rounded-xl">
+                                 <Boxes className="w-6 h-6" />
+                              </div>
+                           </div>
+
+                           <div className="bg-dashboard-panel border border-coffee-accent/40 rounded-2xl p-5 shadow-lg flex items-center justify-between bg-gradient-to-r from-[#1e222b] to-[#25201a]">
+                              <div>
+                                 <span className="text-[10px] text-coffee-light font-black uppercase tracking-widest block mb-1">Demanda Neta a Tostar</span>
+                                 <span className="text-2xl font-black text-coffee-light font-mono">{totalNet.toLocaleString()} <span className="text-xs text-coffee-light/60 font-medium">kg</span></span>
+                              </div>
+                              <div className="p-3 bg-coffee-accent/20 border border-coffee-accent/30 text-coffee-light rounded-xl">
+                                 <Flame className="w-6 h-6" />
+                              </div>
+                           </div>
+                        </div>
+                     );
+                  })()}
+
+                  {/* NUEVA SECCIÓN: SOBRANTES DE STOCK / YA FABRICADO */}
+                  <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-8 shadow-2xl space-y-6">
+                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-dashboard-border pb-4 gap-4">
+                        <div>
+                           <h2 className="text-xl font-black text-white uppercase tracking-wider flex items-center">
+                              <Boxes className="w-6 h-6 mr-3 text-green-400" /> Sobrantes de Stock / Ya Fabricado (Control Mensual)
+                           </h2>
+                           <p className="text-gray-400 text-xs mt-1">
+                              Registra las cajas y paquetes ya fabricados al inicio de mes para que el motor de tueste los descuente de la orden de producción.
+                           </p>
+                        </div>
+                        <div className="flex items-center space-x-2 bg-[#14161a] border border-dashboard-border px-3 py-1.5 rounded-xl">
+                           <Calendar className="w-4 h-4 text-coffee-light" />
+                           <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Mes:</span>
+                           <input 
+                              type="text" 
+                              value={selectedMonth} 
+                              onChange={e => setSelectedMonth(e.target.value)}
+                              className="bg-transparent text-xs font-black text-white focus:outline-none w-36 border-b border-transparent focus:border-coffee-light"
+                              placeholder="Ej: Septiembre 2026"
+                           />
+                        </div>
+                     </div>
+
+                     {/* Tabla de sobrantes guardados */}
+                     <div className="overflow-x-auto w-full border border-dashboard-border rounded-xl">
+                        <table className="w-full text-left text-sm text-gray-400">
+                           <thead className="bg-[#14161a] text-xs uppercase text-gray-500 font-black tracking-widest border-b border-dashboard-border">
+                              <tr>
+                                 <th className="px-6 py-3 text-left text-[10px] font-black text-green-400 uppercase tracking-widest">Gama/Perfil</th>
+                                 <th className="px-6 py-3 text-left text-[10px] font-black text-green-400 uppercase tracking-widest">Formato</th>
+                                 <th className="px-6 py-3 text-center text-[10px] font-black text-green-400 uppercase tracking-widest">Cajas</th>
+                                 <th className="px-6 py-3 text-center text-[10px] font-black text-green-400 uppercase tracking-widest">Paquetes Sueltos</th>
+                                 <th className="px-6 py-3 text-left text-[10px] font-black text-green-400 uppercase tracking-widest">Total Ya Fabricado</th>
+                                 <th className="px-6 py-3 text-center text-[10px] font-black text-green-400 uppercase tracking-widest">Acción</th>
+                              </tr>
+                           </thead>
+                           <tbody className="divide-y divide-dashboard-border/50">
+                              {surplusList.length === 0 ? (
+                                 <tr>
+                                    <td colSpan={6} className="px-6 py-6 text-center text-xs text-gray-500">
+                                       No hay sobrantes registrados para {selectedMonth}. Toda la previsión se tostará desde cero.
+                                    </td>
+                                 </tr>
+                              ) : (
+                                 surplusList.map((s) => (
+                                    <tr key={s.id} className="hover:bg-white/5 transition-colors">
+                                       <td className="px-6 py-4 font-black text-white">{s.profileName}</td>
+                                       <td className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">{s.format}</td>
+                                       <td className="px-6 py-4 text-center font-mono font-bold text-white">{s.boxes} cjs <span className="text-[9px] text-gray-500">({getUnitsPerBox(s.format)} ud/cj)</span></td>
+                                       <td className="px-6 py-4 text-center font-mono font-bold text-gray-300">{s.packages} uds</td>
+                                       <td className="px-6 py-4 font-mono font-bold text-green-400">{s.totalKg} kg</td>
+                                       <td className="px-6 py-4 text-center">
+                                          <button 
+                                             onClick={() => handleRemoveSurplus(s.id)}
+                                             className="p-2 text-gray-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                                             title="Eliminar sobrante"
+                                          >
+                                             <Trash2 className="w-4 h-4" />
+                                          </button>
+                                       </td>
+                                    </tr>
+                                 ))
+                              )}
+                           </tbody>
+                        </table>
+                     </div>
+
+                     {/* Formulario para añadir sobrante */}
+                     <form onSubmit={handleAddSurplus} className="bg-[#14161a] p-5 rounded-xl border border-dashboard-border flex flex-col lg:flex-row items-end gap-4 shadow-inner">
+                        <div className="flex-1 w-full">
+                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Perfil / Gama</label>
+                           <select 
+                              required 
+                              value={newSurplus.profileName} 
+                              onChange={e => {
+                                 const pName = e.target.value;
+                                 let detectedFmt = newSurplus.format;
+                                 const lower = pName.toLowerCase();
+                                 if (lower.includes('250')) detectedFmt = '250g';
+                                 else if (lower.includes('500')) detectedFmt = '500g';
+                                 else if (lower.includes('450')) detectedFmt = '450g';
+                                 else if (lower.includes('1 kg') || lower.includes('1000')) detectedFmt = '1000g';
+                                 setNewSurplus(prev => ({ ...prev, profileName: pName, format: detectedFmt }));
+                              }}
+                              className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-green-400 font-bold text-xs"
+                           >
+                              <option value="" disabled>-- Selecciona Perfil --</option>
+                              {masterProfiles.map(p => <option key={p?.name} value={p?.name}>{p?.name}</option>)}
+                           </select>
+                        </div>
+
+                        <div className="w-full lg:w-36">
+                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Formato</label>
+                           <select 
+                              value={newSurplus.format} 
+                              onChange={e => setNewSurplus(prev => ({ ...prev, format: e.target.value }))}
+                              className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-3 py-3 text-white focus:outline-none focus:border-green-400 font-bold text-xs"
+                           >
+                              <option value="1000g">1 kg (1000g)</option>
+                              <option value="500g">500 g</option>
+                              <option value="450g">450 g</option>
+                              <option value="250g">250 g</option>
+                              <option value="2KG">2 kg</option>
+                           </select>
+                        </div>
+
+                        <div className="w-full lg:w-28">
+                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">
+                              Cajas <span className="text-[8px] text-gray-400">({getUnitsPerBox(newSurplus.format)} ud)</span>
+                           </label>
+                           <input 
+                              type="number" 
+                              min="0" 
+                              step="1"
+                              value={newSurplus.boxes || ''}
+                              placeholder="0"
+                              onChange={e => setNewSurplus(prev => ({ ...prev, boxes: Math.max(0, parseInt(e.target.value) || 0) }))}
+                              className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-3 py-3 text-white font-mono text-center focus:outline-none focus:border-green-400 text-xs font-bold"
+                           />
+                        </div>
+
+                        <div className="w-full lg:w-28">
+                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Pqs Sueltos</label>
+                           <input 
+                              type="number" 
+                              min="0" 
+                              step="1"
+                              value={newSurplus.packages || ''}
+                              placeholder="0"
+                              onChange={e => setNewSurplus(prev => ({ ...prev, packages: Math.max(0, parseInt(e.target.value) || 0) }))}
+                              className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-3 py-3 text-white font-mono text-center focus:outline-none focus:border-green-400 text-xs font-bold"
+                           />
+                        </div>
+
+                        <div className="w-full lg:w-36 px-2 py-3 bg-[#1e222b] border border-dashboard-border rounded-lg text-center">
+                           <span className="text-[9px] text-gray-500 uppercase font-black tracking-widest block">Total Kg</span>
+                           <span className="text-sm font-black text-green-400 font-mono">
+                              {calculateSurplusKg(newSurplus.format, newSurplus.boxes, newSurplus.packages)} kg
+                           </span>
+                        </div>
+
+                        <button 
+                           type="submit" 
+                           className="w-full lg:w-auto px-5 py-3 bg-green-600 hover:bg-green-500 text-white font-black tracking-widest uppercase rounded-lg shadow-md transition-all text-xs flex items-center justify-center shrink-0"
+                        >
+                           <Plus className="w-4 h-4 mr-1" /> Guardar Sobrante
+                        </button>
+                     </form>
+                  </div>
+
                   <div className="bg-dashboard-panel border border-dashboard-border rounded-3xl p-8 shadow-2xl">
                      <h2 className="text-2xl font-black text-white mb-2 uppercase tracking-wider flex items-center">
                         <Package className="w-6 h-6 mr-3 text-coffee-light" /> Previsión de Demanda: Delegaciones

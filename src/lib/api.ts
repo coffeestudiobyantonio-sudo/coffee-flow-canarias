@@ -363,3 +363,143 @@ export const deletePlannerDay = async (dayIndex: number) => {
   return !error;
 };
 
+// ==========================================
+// SOBRANTES MENSUALES DE STOCK (YA FABRICADO)
+// ==========================================
+
+export interface MonthlySurplus {
+  id: string;
+  month: string; // Ej: '2026-09' o 'Septiembre 2026'
+  profileName: string;
+  format: string; // '1000g' | '500g' | '250g' | '450g' | '2KG'
+  boxes: number;
+  packages: number;
+  totalKg: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+const LOCAL_STORAGE_SURPLUS_KEY = 'coffee_flow_monthly_surplus';
+
+const getLocalSurplus = (): MonthlySurplus[] => {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_SURPLUS_KEY) : null;
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+};
+
+const setLocalSurplus = (list: MonthlySurplus[]) => {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_SURPLUS_KEY, JSON.stringify(list));
+    }
+  } catch (e) {
+    console.error('Error saving local surplus:', e);
+  }
+};
+
+export const fetchMonthlySurplus = async (month?: string): Promise<MonthlySurplus[]> => {
+  try {
+    let query = supabase.from('planner_monthly_surplus').select('*');
+    if (month) {
+      query = query.eq('month', month);
+    }
+    const { data, error } = await query.order('created_at', { ascending: true });
+
+    if (error || !data) {
+      console.warn('Supabase planner_monthly_surplus no disponible, usando almacenamiento local:', error?.message);
+      const local = getLocalSurplus();
+      return month ? local.filter(s => s.month === month) : local;
+    }
+
+    const mapped: MonthlySurplus[] = data.map(d => ({
+      id: d.id,
+      month: d.month,
+      profileName: d.profile_name,
+      format: d.format,
+      boxes: Number(d.boxes || 0),
+      packages: Number(d.packages || 0),
+      totalKg: Number(d.total_kg || 0),
+      createdAt: d.created_at,
+      updatedAt: d.updated_at
+    }));
+
+    // Update local cache
+    setLocalSurplus(mapped);
+    return mapped;
+  } catch (err) {
+    console.error('Error in fetchMonthlySurplus:', err);
+    const local = getLocalSurplus();
+    return month ? local.filter(s => s.month === month) : local;
+  }
+};
+
+export const createMonthlySurplus = async (surplus: MonthlySurplus): Promise<boolean> => {
+  try {
+    // Also save to local storage immediately
+    const current = getLocalSurplus().filter(s => s.id !== surplus.id);
+    current.push(surplus);
+    setLocalSurplus(current);
+
+    const { error } = await supabase.from('planner_monthly_surplus').insert([{
+      id: surplus.id,
+      month: surplus.month,
+      profile_name: surplus.profileName,
+      format: surplus.format,
+      boxes: surplus.boxes,
+      packages: surplus.packages,
+      total_kg: surplus.totalKg
+    }]);
+
+    if (error) {
+      console.warn('Error saving surplus to Supabase (persistido en local):', error.message);
+    }
+    return true;
+  } catch (err) {
+    console.error('Error in createMonthlySurplus:', err);
+    return true;
+  }
+};
+
+export const updateMonthlySurplus = async (id: string, updates: Partial<MonthlySurplus>): Promise<boolean> => {
+  try {
+    const current = getLocalSurplus().map(s => s.id === id ? { ...s, ...updates } : s);
+    setLocalSurplus(current);
+
+    const dbPayload: any = { updated_at: new Date().toISOString() };
+    if (updates.month !== undefined) dbPayload.month = updates.month;
+    if (updates.profileName !== undefined) dbPayload.profile_name = updates.profileName;
+    if (updates.format !== undefined) dbPayload.format = updates.format;
+    if (updates.boxes !== undefined) dbPayload.boxes = updates.boxes;
+    if (updates.packages !== undefined) dbPayload.packages = updates.packages;
+    if (updates.totalKg !== undefined) dbPayload.total_kg = updates.totalKg;
+
+    const { error } = await supabase.from('planner_monthly_surplus').update(dbPayload).eq('id', id);
+    if (error) {
+      console.warn('Error updating surplus in Supabase:', error.message);
+    }
+    return true;
+  } catch (err) {
+    console.error('Error in updateMonthlySurplus:', err);
+    return true;
+  }
+};
+
+export const deleteMonthlySurplus = async (id: string): Promise<boolean> => {
+  try {
+    const current = getLocalSurplus().filter(s => s.id !== id);
+    setLocalSurplus(current);
+
+    const { error } = await supabase.from('planner_monthly_surplus').delete().eq('id', id);
+    if (error) {
+      console.warn('Error deleting surplus in Supabase:', error.message);
+    }
+    return true;
+  } catch (err) {
+    console.error('Error in deleteMonthlySurplus:', err);
+    return true;
+  }
+};
+
