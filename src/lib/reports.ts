@@ -330,8 +330,7 @@ export const renderArbitradeDaySheet = (
             `${i}`,
             batch.origin,
             `${batch.greenKg}`,
-            '', // Lote (en blanco para fábrica)
-            '', '', // Inicio: Tº, Tiempo
+            '', // Tª entrada (en blanco para fábrica)
             '', '', // Punto Inflección: Tº, Tiempo
             '', '', // Etapa Amarilla: Tº, Tiempo
             '', '', // Etapa Marrón: Tº, Tiempo
@@ -343,7 +342,6 @@ export const renderArbitradeDaySheet = (
          tableBody.push([
             `${i}`,
             '', '', '',
-            '', '',
             '', '',
             '', '',
             '', '',
@@ -385,7 +383,6 @@ export const renderArbitradeDaySheet = (
          [
             { content: '', colSpan: 1, styles: { fillColor: [255, 238, 0] } },
             { content: 'TUESTE DE CAFÉ', colSpan: 3, styles: { halign: 'center', fillColor: [255, 238, 0] } },
-            { content: 'INICIO', colSpan: 2, styles: { halign: 'center', fillColor: [255, 238, 0] } },
             { content: 'PUNTO INFLECCIÓN', colSpan: 2, styles: { halign: 'center', fillColor: [255, 238, 0] } },
             { content: 'ETAPA AMARILLA', colSpan: 2, styles: { halign: 'center', fillColor: [255, 238, 0] } },
             { content: 'ETAPA MARRÓN', colSpan: 2, styles: { halign: 'center', fillColor: [255, 238, 0] } },
@@ -397,9 +394,7 @@ export const renderArbitradeDaySheet = (
             { content: '', styles: { fillColor: [255, 238, 0] } },
             { content: 'Variedad', styles: { halign: 'center', fillColor: [255, 238, 0] } },
             { content: 'Cantidad (Kg)', styles: { halign: 'center', fillColor: [255, 238, 0] } },
-            { content: 'Lote', styles: { halign: 'center', fillColor: [255, 238, 0] } },
-            { content: 'Tº', styles: { halign: 'center', fillColor: [255, 238, 0] } },
-            { content: 'Tiempo', styles: { halign: 'center', fillColor: [255, 238, 0] } },
+            { content: 'Tª entrada', styles: { halign: 'center', fillColor: [255, 238, 0] } },
             { content: 'Tº', styles: { halign: 'center', fillColor: [255, 238, 0] } },
             { content: 'Tiempo', styles: { halign: 'center', fillColor: [255, 238, 0] } },
             { content: 'Tº', styles: { halign: 'center', fillColor: [255, 238, 0] } },
@@ -436,20 +431,18 @@ export const renderArbitradeDaySheet = (
          0: { cellWidth: 8, halign: 'center', fontStyle: 'bold' },
          1: { cellWidth: 36, halign: 'left', fontStyle: 'bold' },
          2: { cellWidth: 21, halign: 'center', fontStyle: 'bold' },
-         3: { cellWidth: 18, halign: 'center' },
-         4: { cellWidth: 13, halign: 'center' },
-         5: { cellWidth: 17, halign: 'center' },
-         6: { cellWidth: 13, halign: 'center' },
-         7: { cellWidth: 17, halign: 'center' },
-         8: { cellWidth: 13, halign: 'center' },
-         9: { cellWidth: 17, halign: 'center' },
-         10: { cellWidth: 13, halign: 'center' },
-         11: { cellWidth: 17, halign: 'center' },
-         12: { cellWidth: 13, halign: 'center' },
-         13: { cellWidth: 17, halign: 'center' },
-         14: { cellWidth: 13, halign: 'center' },
-         15: { cellWidth: 17, halign: 'center' },
-         16: { cellWidth: 14, halign: 'center', fontStyle: 'bold' }
+         3: { cellWidth: 20, halign: 'center' },
+         4: { cellWidth: 16, halign: 'center' },
+         5: { cellWidth: 20, halign: 'center' },
+         6: { cellWidth: 16, halign: 'center' },
+         7: { cellWidth: 20, halign: 'center' },
+         8: { cellWidth: 16, halign: 'center' },
+         9: { cellWidth: 20, halign: 'center' },
+         10: { cellWidth: 16, halign: 'center' },
+         11: { cellWidth: 20, halign: 'center' },
+         12: { cellWidth: 16, halign: 'center' },
+         13: { cellWidth: 20, halign: 'center' },
+         14: { cellWidth: 12, halign: 'center', fontStyle: 'bold' }
       }
    });
 
