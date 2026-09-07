@@ -426,7 +426,7 @@ export const renderArbitradeDaySheet = (
    });
 
    // =========================================================================
-   // PÁGINA 2: RESUMEN DE CAFÉ VERDE, TOSTADO Y EMPAQUETADO
+   // PÁGINA 2: RESUMEN DE CAFÉ VERDE, TOSTADO Y EMPAQUETADO (Campos en blanco con títulos en negrita)
    // =========================================================================
    doc.addPage('a4', 'landscape');
 
@@ -447,55 +447,37 @@ export const renderArbitradeDaySheet = (
       doc.text(`FECHA: ${day.scheduledDate} (DÍA #${day.dayIndex})`, contentWidth + margin - 4, 16.5, { align: 'right' });
    }
 
-   let arabicaGreen = 0;
-   let robustaGreen = 0;
-   allBatches.forEach(b => {
-      if (b.origin.toLowerCase().includes('robusta')) {
-         robustaGreen += b.greenKg;
-      } else {
-         arabicaGreen += b.greenKg;
-      }
-   });
-
-   const arabicaRoasted = Number((arabicaGreen * 0.83).toFixed(1));
-   const robustaRoasted = Number((robustaGreen * 0.83).toFixed(1));
-
    const blocks = day.blocks || [];
    const prod1 = blocks[0] ? `${blocks[0].profileName.toUpperCase()}` : 'MAURICE TIMANFAYA';
-   const prod1Kg = blocks[0] ? `${blocks[0].targetKg} kg` : '';
-
    const prod2 = blocks[1] ? `${blocks[1].profileName.toUpperCase()}` : 'MAURICE LAURSILVA';
-   const prod2Kg = blocks[1] ? `${blocks[1].targetKg} kg` : '';
-
    const prod3 = blocks[2] ? `${blocks[2].profileName.toUpperCase()}` : 'MAURICE PINZÓN AZUL';
-   const prod3Kg = blocks[2] ? `${blocks[2].targetKg} kg` : '';
 
    const topTableHead = [
       [
-         { content: 'TOTAL KG CAFÉ VERDE', colSpan: 1, styles: { fillColor: [255, 238, 0], halign: 'center' } },
-         { content: 'TOTAL KG CAFÉ TOSTADO', colSpan: 1, styles: { fillColor: [255, 238, 0], halign: 'center' } },
-         { content: prod1, colSpan: 3, styles: { fillColor: [255, 238, 0], halign: 'center' } }
+         { content: 'TOTAL KG CAFÉ VERDE', colSpan: 1, styles: { fillColor: [255, 238, 0], halign: 'center', fontStyle: 'bold' } },
+         { content: 'TOTAL KG CAFÉ TOSTADO', colSpan: 1, styles: { fillColor: [255, 238, 0], halign: 'center', fontStyle: 'bold' } },
+         { content: prod1, colSpan: 3, styles: { fillColor: [255, 238, 0], halign: 'center', fontStyle: 'bold' } }
       ]
    ];
 
    const topTableBody = [
       [
-         `Arábica: ${arabicaGreen > 0 ? arabicaGreen + ' kg' : ''}`,
-         `Arábica: ${arabicaRoasted > 0 ? arabicaRoasted + ' kg' : ''}`,
-         { content: `TOTAL KG. EMPAQUETADOS: ${prod1Kg}`, styles: { halign: 'left' } },
-         { content: 'Nº LOTE:', styles: { halign: 'left' } },
-         { content: 'FECHA DE CADUCIDAD:', styles: { halign: 'left' } }
+         { content: 'Arábica:', styles: { fontStyle: 'bold', halign: 'left' } },
+         { content: 'Arábica:', styles: { fontStyle: 'bold', halign: 'left' } },
+         { content: 'TOTAL KG. EMPAQUETADOS:', styles: { fontStyle: 'bold', halign: 'left' } },
+         { content: 'Nº LOTE:', styles: { fontStyle: 'bold', halign: 'left' } },
+         { content: 'FECHA DE CADUCIDAD:', styles: { fontStyle: 'bold', halign: 'left' } }
       ],
       [
          { content: '', colSpan: 2, styles: { fillColor: [255, 255, 255] } },
          { content: prod2, colSpan: 3, styles: { fillColor: [255, 238, 0], halign: 'center', fontStyle: 'bold' } }
       ],
       [
-         `Robusta: ${robustaGreen > 0 ? robustaGreen + ' kg' : ''}`,
-         `Robusta: ${robustaRoasted > 0 ? robustaRoasted + ' kg' : ''}`,
-         { content: `TOTAL KG. EMPAQUETADOS: ${prod2Kg}`, styles: { halign: 'left' } },
-         { content: 'Nº LOTE:', styles: { halign: 'left' } },
-         { content: 'FECHA DE CADUCIDAD:', styles: { halign: 'left' } }
+         { content: 'Robusta:', styles: { fontStyle: 'bold', halign: 'left' } },
+         { content: 'Robusta:', styles: { fontStyle: 'bold', halign: 'left' } },
+         { content: 'TOTAL KG. EMPAQUETADOS:', styles: { fontStyle: 'bold', halign: 'left' } },
+         { content: 'Nº LOTE:', styles: { fontStyle: 'bold', halign: 'left' } },
+         { content: 'FECHA DE CADUCIDAD:', styles: { fontStyle: 'bold', halign: 'left' } }
       ],
       [
          { content: '', colSpan: 2, styles: { fillColor: [255, 255, 255] } },
@@ -503,9 +485,9 @@ export const renderArbitradeDaySheet = (
       ],
       [
          { content: '', colSpan: 2, styles: { fillColor: [255, 255, 255] } },
-         { content: `TOTAL KG. EMPAQUETADOS: ${prod3Kg}`, styles: { halign: 'left' } },
-         { content: 'Nº LOTE:', styles: { halign: 'left' } },
-         { content: 'FECHA DE CADUCIDAD:', styles: { halign: 'left' } }
+         { content: 'TOTAL KG. EMPAQUETADOS:', styles: { fontStyle: 'bold', halign: 'left' } },
+         { content: 'Nº LOTE:', styles: { fontStyle: 'bold', halign: 'left' } },
+         { content: 'FECHA DE CADUCIDAD:', styles: { fontStyle: 'bold', halign: 'left' } }
       ]
    ];
 
