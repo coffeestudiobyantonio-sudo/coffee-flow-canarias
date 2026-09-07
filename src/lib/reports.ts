@@ -320,9 +320,10 @@ export const renderArbitradeDaySheet = (
       doc.text(`FECHA: ${day.scheduledDate} (DÍA #${day.dayIndex})`, contentWidth + margin - 4, 16.5, { align: 'right' });
    }
 
-   // Tabla de 12 filas
+   // Tabla dinámica: Mínimo 12 filas o el total de tandas si hay más (ej. 13, 14, 16 tandas)
+   const totalRows = Math.max(12, allBatches.length);
    const tableBody: any[] = [];
-   for (let i = 1; i <= 12; i++) {
+   for (let i = 1; i <= totalRows; i++) {
       const batch = allBatches[i - 1];
       if (batch) {
          tableBody.push([
@@ -353,9 +354,32 @@ export const renderArbitradeDaySheet = (
       }
    }
 
+   // Altura de fila y padding dinámicos para que todas las tandas (hasta 16-18) quepan nítidas en la página 1
+   let cellHeight = 11;
+   let fontSize = 8;
+   let cellPadding = 2;
+
+   if (totalRows >= 18) {
+      cellHeight = 8.6;
+      fontSize = 7;
+      cellPadding = 1.0;
+   } else if (totalRows >= 16) {
+      cellHeight = 9.6;
+      fontSize = 7.5;
+      cellPadding = 1.3;
+   } else if (totalRows >= 14) {
+      cellHeight = 10.2;
+      fontSize = 7.5;
+      cellPadding = 1.6;
+   } else if (totalRows >= 13) {
+      cellHeight = 10.6;
+      fontSize = 8;
+      cellPadding = 1.8;
+   }
+
    autoTable(doc, {
       startY: 22,
-      margin: { left: margin, right: margin },
+      margin: { left: margin, right: margin, top: 10, bottom: 8 },
       tableWidth: contentWidth,
       head: [
          [
@@ -403,8 +427,9 @@ export const renderArbitradeDaySheet = (
          textColor: [0, 0, 0],
          lineColor: [0, 0, 0],
          lineWidth: 0.35,
-         fontSize: 8,
-         minCellHeight: 11,
+         fontSize,
+         minCellHeight: cellHeight,
+         cellPadding,
          valign: 'middle'
       },
       columnStyles: {
@@ -452,7 +477,7 @@ export const renderArbitradeDaySheet = (
 
    const blocks = day.blocks || [];
    const prod1 = blocks[0] ? `${blocks[0].profileName.toUpperCase()}` : 'MAURICE TIMANFAYA';
-   const prod2 = blocks[1] ? `${blocks[1].profileName.toUpperCase()}` : 'MAURICE LAURSILVA';
+   const prod2 = blocks[1] ? `${blocks[1].profileName.toUpperCase()}` : 'MAURICE LAURISILVA';
    const prod3 = blocks[2] ? `${blocks[2].profileName.toUpperCase()}` : 'MAURICE PINZÓN AZUL';
 
    const topTableHead = [
