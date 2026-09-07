@@ -836,12 +836,8 @@ export const generateSummaryPlanReport = (
       }
    };
 
-   const getKgPerBox = (_format: string): number => {
-      return 10; // 10 kilos cada caja para todos los formatos
-   };
-
    // -------------------------------------------------------------------------
-   // PÁGINA 1: PORTADA EJECUTIVA Y LOGÍSTICA DE PALLETS
+   // PÁGINA 1: PORTADA EJECUTIVA Y LOGÍSTICA DE EXPEDICIÓN
    // -------------------------------------------------------------------------
    doc.setFillColor(30, 34, 43);
    doc.rect(0, 0, 210, 30, 'F');
@@ -851,7 +847,7 @@ export const generateSummaryPlanReport = (
    doc.text('COFFEE FLOW - PLAN GENERAL DE TUESTE', 15, 13);
    doc.setTextColor(255, 255, 255);
    doc.setFontSize(8.5);
-   doc.text(`PLANIFICACIÓN MENSUAL, APROVISIONAMIENTO Y LOGÍSTICA DE PALLETS | ${monthStr || 'MES COMPLETO'}`, 15, 22);
+   doc.text(`PLANIFICACIÓN MENSUAL, APROVISIONAMIENTO Y LOGÍSTICA DE EXPEDICIÓN | ${monthStr || 'MES COMPLETO'}`, 15, 22);
 
    let yOffset = 36;
 
@@ -890,19 +886,41 @@ export const generateSummaryPlanReport = (
       });
    });
 
-   // Cajas y Pallets Globales
+   // Cajas y Jaulas Globales según operativa Canarias & Península
    let totalGlobalBoxes = 0;
-   Object.values(globalBlocks).forEach(b => {
-      const kgBox = getKgPerBox(b.format);
-      totalGlobalBoxes += b.totalKg / kgBox;
-   });
+   let totalGlobalJaulas = 0;
+
+   if (demands && demands.length > 0) {
+      demands.forEach(d => {
+         const isGC = (d.delegation || '').toLowerCase().includes('gran canaria');
+         const isTimanfaya1kg = (d.profileName || '').toLowerCase().includes('timanfaya') && d.format === '1000g';
+         const isAlicanto250 = (d.profileName || '').toLowerCase().includes('alicanto') && d.format === '250g';
+
+         if (isGC) {
+            if (isTimanfaya1kg) {
+               totalGlobalJaulas += (d.kgRequested || 0) / 400;
+            } else if (isAlicanto250) {
+               totalGlobalBoxes += (d.kgRequested || 0) / 10;
+            }
+         } else {
+            // Fuera de Gran Canaria (Tenerife y Península): todo en cajas (10 kg por caja)
+            totalGlobalBoxes += (d.kgRequested || 0) / 10;
+         }
+      });
+   } else {
+      // Fallback
+      Object.values(globalBlocks).forEach(b => {
+         totalGlobalBoxes += b.totalKg / 10;
+      });
+   }
+
    const totalGlobalPallets = totalGlobalBoxes / BOXES_PER_PALLET;
 
-   // Resumen Ejecutivo (KPIs con Pallets y Cajas)
+   // Resumen Ejecutivo (KPIs con Cajas reales, Pallets y Jaulas GC)
    const kpiRows = [
       ['Jornadas Programadas:', `${days.length} Días de Tueste`, 'Total Café Tostado:', `${globalTotalRoasted.toLocaleString()} kg`],
       ['Total Café Verde:', `${globalTotalGreen.toLocaleString()} kg`, 'Total Sacos Verde:', `${Object.values(globalGreenByOrigin).reduce((acc: number, v: any) => acc + v.sacks, 0)} sacos`],
-      ['Cajas Totales Estimadas:', `${Math.round(totalGlobalBoxes).toLocaleString()} cajas (10 kg/cj)`, 'Pallets Totales Estimados:', `${totalGlobalPallets.toFixed(1)} pallets (48 cj/pal = 480 kg)`]
+      ['Cajas a Fabricar (10kg):', `${Math.round(totalGlobalBoxes).toLocaleString()} cajas`, 'Expedición Pallets / Jaulas:', `${totalGlobalPallets.toFixed(1)} pal (48c) + ${totalGlobalJaulas.toFixed(1)} jlas GC`]
    ];
 
    autoTable(doc, {
@@ -955,24 +973,38 @@ export const generateSummaryPlanReport = (
    doc.setFontSize(9.5);
    doc.setFont('helvetica', 'bold');
    doc.setTextColor(40, 40, 40);
-   doc.text('2. LOGÍSTICA DE PRODUCCIÓN: PALLETS Y CAJAS TOTALES POR GAMA (48 Cajas / Pallet):', 15, yOffset);
+   doc.text('2. LOGÍSTICA DE PRODUCCIÓN: PALLETS Y CAJAS TOTALES POR GAMA:', 15, yOffset);
    yOffset += 2.5;
 
    const productLogisticsRows = Object.values(globalBlocks).map(p => {
       const weightPerPkg = getFormatWeight(p.format);
       const unitsPerBox = getUnitsPerBox(p.format);
-      const kgPerBox = getKgPerBox(p.format);
       const totalPackages = Math.round(p.totalKg / weightPerPkg);
-      const boxes = p.totalKg / kgPerBox;
-      const pallets = boxes / BOXES_PER_PALLET;
+      const isTimanfaya1kg = p.profileName.toLowerCase().includes('timanfaya') && p.format === '1000g';
+
+      let boxesText = `${Math.round(p.totalKg / 10)} cj (${unitsPerBox} ud/cj)`;
+      let palletsText = `${(p.totalKg / 480).toFixed(2)} pal`;
+
+      if (isTimanfaya1kg && demands && demands.length > 0) {
+         // Desglose de Timanfaya 1kg entre Jaulas GC y Cajas Tenerife
+         const tfDemand = demands.find(d => (d.delegation || '').toLowerCase().includes('tenerife') && (d.profileName || '').toLowerCase().includes('timanfaya'));
+         const tfKg = tfDemand ? (tfDemand.kgRequested || 400) : 400; // Por defecto 40 cj = 400kg
+         const gcKg = Math.max(0, p.totalKg - tfKg);
+         const tfBoxes = Math.round(tfKg / 10);
+         const gcJaulas = (gcKg / 400).toFixed(1);
+         const tfPal = (tfBoxes / BOXES_PER_PALLET).toFixed(2);
+
+         boxesText = `${tfBoxes} cj TF (10ud) + ${gcKg}kg GC`;
+         palletsText = `${gcJaulas} jlas GC (400k) + ${tfPal} pal TF`;
+      }
 
       return [
          p.profileName,
          p.format,
          `${p.totalKg.toLocaleString()} kg`,
          totalPackages.toLocaleString(),
-         `${Math.round(boxes)} cj (${unitsPerBox} ud/cj)`,
-         `${pallets.toFixed(2)} pal (${Math.floor(pallets)} pal + ${Math.round(boxes % BOXES_PER_PALLET)} cj)`,
+         boxesText,
+         palletsText,
          p.days.map(d => `Día ${d}`).join(', ')
       ];
    });
@@ -980,18 +1012,18 @@ export const generateSummaryPlanReport = (
    autoTable(doc, {
       startY: yOffset,
       margin: { left: 15, right: 15 },
-      head: [['Gama / Perfil', 'Formato', 'Total Tostado', 'Paquetes', 'Cajas (10kg/cj)', 'Pallets Totales (48 cj/pal)', 'Jornadas']] as any,
+      head: [['Gama / Perfil', 'Formato', 'Total Tostado', 'Paquetes', 'Cajas (10kg)', 'Pallets (48c) / Jaulas', 'Jornadas']] as any,
       body: productLogisticsRows as any,
       theme: 'striped',
       headStyles: { fillColor: [217, 119, 6], fontSize: 7.5, textColor: [255, 255, 255] },
       styles: { fontSize: 7.5, cellPadding: 1.5 },
       columnStyles: {
-         0: { fontStyle: 'bold', cellWidth: 44 },
-         1: { cellWidth: 16 },
-         2: { fontStyle: 'bold', cellWidth: 22 },
-         3: { cellWidth: 20 },
-         4: { cellWidth: 28 },
-         5: { fontStyle: 'bold', cellWidth: 32 },
+         0: { fontStyle: 'bold', cellWidth: 42 },
+         1: { cellWidth: 15 },
+         2: { fontStyle: 'bold', cellWidth: 20 },
+         3: { cellWidth: 18 },
+         4: { cellWidth: 30 },
+         5: { fontStyle: 'bold', cellWidth: 37 },
          6: { cellWidth: 18 }
       }
    });
@@ -1002,28 +1034,63 @@ export const generateSummaryPlanReport = (
    doc.setFontSize(9.5);
    doc.setFont('helvetica', 'bold');
    doc.setTextColor(40, 40, 40);
-   doc.text('3. DISTRIBUCIÓN Y PALLETS POR GAMA Y DELEGACIÓN (48 Cajas / Pallet):', 15, yOffset);
+   doc.text('3. DISTRIBUCIÓN Y PALLETS POR GAMA Y DELEGACIÓN (Logística Canarias & Península):', 15, yOffset);
    yOffset += 2.5;
 
    const delegationRows: any[] = [];
-   const delegationSummary: { [key: string]: { kg: number, boxes: number, pallets: number } } = {};
+   const delegationSummary: { [key: string]: { kg: number, boxes: number, pallets: number, jaulas: number } } = {};
 
    if (demands && demands.length > 0) {
       demands.forEach(d => {
          const kg = d.kgRequested || 0;
          const fmt = d.format || '1000g';
          const weightPerPkg = getFormatWeight(fmt);
-                  const kgPerBox = getKgPerBox(fmt);
          const packages = Math.round(kg / weightPerPkg);
-         const boxes = kg / kgPerBox;
-         const pallets = boxes / BOXES_PER_PALLET;
 
-         // Regla logística Canarias: Gran Canaria en jaulas locales salvo Alicanto 250g
          const isGC = (d.delegation || '').toLowerCase().includes('gran canaria');
+         const isTenerife = (d.delegation || '').toLowerCase().includes('tenerife');
+         const isTimanfaya1kg = (d.profileName || '').toLowerCase().includes('timanfaya') && fmt === '1000g';
          const isAlicanto250 = (d.profileName || '').toLowerCase().includes('alicanto') && fmt === '250g';
-         let packagingNote = 'Pallet / Cajas';
+
+         let boxesCount = 0;
+         let boxesCol = '';
+         let palletsCol = '';
+         let packagingNote = '';
+
          if (isGC) {
-            packagingNote = isAlicanto250 ? 'Cajas (Excepción GC)' : 'Jaulas Locales (Sin Cajas)';
+            if (isTimanfaya1kg) {
+               const jaulas = (kg / 400).toFixed(1);
+               boxesCol = '0 cj (Jaulas)';
+               palletsCol = `${jaulas} jaulas`;
+               packagingNote = 'Jaulas 400 kg (Local GC)';
+            } else if (isAlicanto250) {
+               boxesCount = Math.round(kg / 10);
+               const pallets = boxesCount / BOXES_PER_PALLET;
+               boxesCol = `${boxesCount} cj`;
+               palletsCol = `${pallets.toFixed(2)} pal`;
+               packagingNote = 'Cajas (Excepción GC)';
+            } else {
+               boxesCol = '0 cj (Jaulas)';
+               palletsCol = '--';
+               packagingNote = 'Jaulas Locales (Sin Cajas)';
+            }
+         } else if (isTenerife) {
+            boxesCount = Math.round(kg / 10);
+            const pallets = boxesCount / BOXES_PER_PALLET;
+            boxesCol = `${boxesCount} cj`;
+            palletsCol = `${pallets.toFixed(2)} pal`;
+            if (isTimanfaya1kg) {
+               packagingNote = 'Cajas (Envío Tenerife)';
+            } else {
+               packagingNote = 'Pallet / Cajas (Tenerife)';
+            }
+         } else {
+            // Península / otras delegaciones
+            boxesCount = Math.round(kg / 10);
+            const pallets = boxesCount / BOXES_PER_PALLET;
+            boxesCol = `${boxesCount} cj`;
+            palletsCol = `${pallets.toFixed(2)} pal`;
+            packagingNote = 'Pallet / Cajas';
          }
 
          delegationRows.push([
@@ -1032,28 +1099,32 @@ export const generateSummaryPlanReport = (
             fmt,
             `${kg.toLocaleString()} kg`,
             packages.toLocaleString(),
-            `${Math.round(boxes)} cj`,
-            `${pallets.toFixed(2)} pal`,
+            boxesCol,
+            palletsCol,
             packagingNote
          ]);
 
          const delKey = d.delegation || 'CENTRAL';
          if (!delegationSummary[delKey]) {
-            delegationSummary[delKey] = { kg: 0, boxes: 0, pallets: 0 };
+            delegationSummary[delKey] = { kg: 0, boxes: 0, pallets: 0, jaulas: 0 };
          }
          delegationSummary[delKey].kg += kg;
-         delegationSummary[delKey].boxes += boxes;
-         delegationSummary[delKey].pallets += pallets;
+         delegationSummary[delKey].boxes += boxesCount;
+         if (boxesCount > 0) {
+            delegationSummary[delKey].pallets += boxesCount / BOXES_PER_PALLET;
+         }
+         if (isGC && isTimanfaya1kg) {
+            delegationSummary[delKey].jaulas += kg / 400;
+         }
       });
    } else {
-      // Si no hay demandas explícitas, mostrar distribución proporcional por gamas planificadas
+      // Fallback
       Object.values(globalBlocks).forEach(b => {
          const kg = b.totalKg;
          const fmt = b.format;
          const weightPerPkg = getFormatWeight(fmt);
-         const kgPerBox = getKgPerBox(fmt);
          const packages = Math.round(kg / weightPerPkg);
-         const boxes = kg / kgPerBox;
+         const boxes = Math.round(kg / 10);
          const pallets = boxes / BOXES_PER_PALLET;
 
          delegationRows.push([
@@ -1062,7 +1133,7 @@ export const generateSummaryPlanReport = (
             fmt,
             `${kg.toLocaleString()} kg`,
             packages.toLocaleString(),
-            `${Math.round(boxes)} cj`,
+            `${boxes} cj`,
             `${pallets.toFixed(2)} pal`,
             'Pallet / Cajas'
          ]);
@@ -1072,20 +1143,20 @@ export const generateSummaryPlanReport = (
    autoTable(doc, {
       startY: yOffset,
       margin: { left: 15, right: 15 },
-      head: [['Delegación', 'Gama Solicitada', 'Formato', 'Kg Pedidos', 'Paquetes', 'Cajas (10kg)', 'Pallets (48c)', 'Tipo Expedición']] as any,
+      head: [['Delegación', 'Gama Solicitada', 'Formato', 'Kg Pedidos', 'Paquetes', 'Cajas (10k)', 'Pallets / Jla', 'Tipo Expedición']] as any,
       body: delegationRows as any,
       theme: 'grid',
       headStyles: { fillColor: [40, 40, 40], fontSize: 7.5 },
       styles: { fontSize: 7, cellPadding: 1.4 },
       columnStyles: {
-         0: { fontStyle: 'bold', fillColor: [248, 248, 248], cellWidth: 26 },
-         1: { fontStyle: 'bold', cellWidth: 42 },
-         2: { cellWidth: 15 },
-         3: { fontStyle: 'bold', cellWidth: 20 },
-         4: { cellWidth: 18 },
-         5: { cellWidth: 16 },
-         6: { fontStyle: 'bold', textColor: [217, 119, 6], cellWidth: 20 },
-         7: { cellWidth: 23, fontSize: 6.5 }
+         0: { fontStyle: 'bold', fillColor: [248, 248, 248], cellWidth: 24 },
+         1: { fontStyle: 'bold', cellWidth: 40 },
+         2: { cellWidth: 14 },
+         3: { fontStyle: 'bold', cellWidth: 18 },
+         4: { cellWidth: 16 },
+         5: { cellWidth: 18 },
+         6: { fontStyle: 'bold', textColor: [217, 119, 6], cellWidth: 22 },
+         7: { cellWidth: 28, fontSize: 6.5 }
       }
    });
 
@@ -1097,7 +1168,12 @@ export const generateSummaryPlanReport = (
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(80, 80, 80);
       const delSummaryText = Object.entries(delegationSummary)
-         .map(([del, data]) => `${del.toUpperCase()}: ${data.kg.toLocaleString()} kg (${Math.round(data.boxes)} cj = ${data.pallets.toFixed(1)} pal)`)
+         .map(([del, data]) => {
+            const parts = [];
+            if (data.boxes > 0) parts.push(`${Math.round(data.boxes)} cj = ${data.pallets.toFixed(1)} pal`);
+            if (data.jaulas > 0) parts.push(`${data.jaulas.toFixed(1)} jlas (400k)`);
+            return `${del.toUpperCase()}: ${data.kg.toLocaleString()} kg (${parts.join(' + ') || 'Jaulas locales'})`;
+         })
          .join('   |   ');
       doc.text(`Totales Expedición: ${delSummaryText}`, 15, yOffset);
    }
