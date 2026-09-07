@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { MasterProfile, DailyRoastOrder, RoastTask, OrderCategory } from '../App';
-import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, Zap, Lock, Boxes, Calendar, ArrowUp, ArrowDown, History, CheckCircle2, Eye, EyeOff } from 'lucide-react';
-import { generateDailyProductionReport, generatePackagingOrderReport, generatePalletShippingReport, generateRoastingPlanReport, generateSingleDayPlanReport } from '../lib/reports';
+import { Database, Settings, Cpu, QrCode, Plus, Package, Target, CheckCircle, Flame, Trash2, ClipboardList, AlertTriangle, FileText, FileSpreadsheet, Zap, Lock, Boxes, Calendar, ArrowUp, ArrowDown, History, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { generateDailyProductionReport, generatePackagingOrderReport, generatePalletShippingReport, generateSummaryPlanReport, generateSingleDaySummaryReport, generateArbitradePlanReport, generateSingleDayArbitradeReport } from '../lib/reports';
 import { ROASTING_MACHINES } from '../App';
 import { createDailyOrder, deleteDailyOrder, purgeAllProductionData, fetchPlannerDemands, createPlannerDemand, deletePlannerDemand, fetchPlannerDays, createPlannerDay, deletePlannerDay, purgePlannerDays, updatePlannerDemandStatus, fetchMonthlySurplus, createMonthlySurplus, deleteMonthlySurplus, fetchMonthlyHistory, saveMonthlyHistory, deleteMonthlyHistory, getOriginSackWeight } from '../lib/api';
 import type { MonthlyPlanHistory } from '../lib/api';
@@ -958,11 +958,18 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
                                              <div className="flex items-center space-x-2 flex-wrap gap-2">
                                                 <button
-                                                   onClick={() => generateRoastingPlanReport(record.days, masterProfiles, record.month)}
-                                                   className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase px-4 py-2 rounded-xl flex items-center shadow transition-all active:scale-95"
-                                                   title="Descargar Plan Completo PDF"
+                                                   onClick={() => generateSummaryPlanReport(record.days, masterProfiles, record.month)}
+                                                   className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase px-3.5 py-2 rounded-xl flex items-center shadow transition-all active:scale-95"
+                                                   title="Descargar Plan Resumido PDF (Formato Anterior)"
                                                 >
-                                                   <FileText className="w-4 h-4 mr-1.5" /> Exportar PDF
+                                                   <FileText className="w-4 h-4 mr-1.5" /> Plan Resumido
+                                                </button>
+                                                <button
+                                                   onClick={() => generateArbitradePlanReport(record.days, masterProfiles, record.month)}
+                                                   className="bg-amber-600 hover:bg-amber-500 text-white text-xs font-black uppercase px-3.5 py-2 rounded-xl flex items-center shadow transition-all active:scale-95"
+                                                   title="Descargar Fichas Oficiales Arbitrade PDF (Formato Oficial)"
+                                                >
+                                                   <FileSpreadsheet className="w-4 h-4 mr-1.5" /> Fichas Arbitrade
                                                 </button>
                                                 <button
                                                    onClick={() => setExpandedHistoryId(isExpanded ? null : record.id)}
@@ -1024,12 +1031,22 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                                          </div>
                                                          <div className="flex justify-between items-center pt-2 border-t border-dashboard-border">
                                                             <span className="text-xs font-mono font-bold text-white">Total: {day.totalKg} kg</span>
-                                                            <button
-                                                               onClick={() => generateSingleDayPlanReport(day, masterProfiles)}
-                                                               className="text-[10px] bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white px-2.5 py-1 rounded font-bold uppercase transition-all flex items-center"
-                                                            >
-                                                               <FileText className="w-3 h-3 mr-1" /> Ficha PDF
-                                                            </button>
+                                                            <div className="flex items-center space-x-1">
+                                                               <button
+                                                                  onClick={() => generateSingleDayArbitradeReport(day, masterProfiles)}
+                                                                  className="text-[9px] bg-amber-600/10 hover:bg-amber-600 text-amber-400 hover:text-white px-2 py-1 rounded font-bold uppercase transition-all flex items-center"
+                                                                  title="Ficha Oficial Arbitrade (2 Páginas)"
+                                                               >
+                                                                  <FileSpreadsheet className="w-3 h-3 mr-1" /> Arbitrade
+                                                               </button>
+                                                               <button
+                                                                  onClick={() => generateSingleDaySummaryReport(day, masterProfiles)}
+                                                                  className="text-[9px] bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white px-2 py-1 rounded font-bold uppercase transition-all flex items-center"
+                                                                  title="Ficha Resumida (1 Página)"
+                                                               >
+                                                                  <FileText className="w-3 h-3 mr-1" /> Resumida
+                                                               </button>
+                                                            </div>
                                                          </div>
                                                       </div>
                                                    ))}
@@ -1457,19 +1474,31 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                        Descarga las hojas de trabajo en PDF para operar directamente en fábrica a mano.
                                     </p>
                                  </div>
-                                 <div className="flex items-center space-x-3">
+                                 <div className="flex items-center space-x-2 flex-wrap gap-2">
                                     <button 
                                        onClick={() => setShowValidateModal(true)}
-                                       className="bg-green-600 hover:bg-green-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center shadow-lg transition-all active:scale-95 border border-green-400/30"
+                                       className="bg-green-600 hover:bg-green-500 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center shadow-lg transition-all active:scale-95 border border-green-400/30"
                                        title="Validar y archivar en el histórico mensual"
                                     >
                                        <CheckCircle2 className="w-4 h-4 mr-2" /> Validar Planificación
                                     </button>
+
+                                    {/* Pestaña / Botón 1: Formato Anterior Resumido */}
                                     <button 
-                                       onClick={() => generateRoastingPlanReport(plannedDays, masterProfiles, selectedMonth)}
-                                       className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center shadow-lg transition-all active:scale-95"
+                                       onClick={() => generateSummaryPlanReport(plannedDays, masterProfiles, selectedMonth)}
+                                       className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center shadow-lg transition-all active:scale-95"
+                                       title="Plan General Resumido: Portada ejecutiva, aprovisionamiento mensual de verde y fichas compactas de cada jornada"
                                     >
-                                       <FileText className="w-4 h-4 mr-2" /> Exportar Plan Completo PDF
+                                       <FileText className="w-4 h-4 mr-2" /> Plan Resumido PDF (Anterior)
+                                    </button>
+
+                                    {/* Pestaña / Botón 2: Formato Oficial Arbitrade Canarias */}
+                                    <button 
+                                       onClick={() => generateArbitradePlanReport(plannedDays, masterProfiles, selectedMonth)}
+                                       className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center shadow-lg transition-all active:scale-95"
+                                       title="Fichas Técnicas Oficiales de Arbitrade Canarias: 2 páginas A4 horizontal por jornada"
+                                    >
+                                       <FileSpreadsheet className="w-4 h-4 mr-2" /> Fichas Arbitrade PDF (Oficial)
                                     </button>
                                  </div>
                               </div>
@@ -1562,13 +1591,20 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                                 <span className="text-white font-black">{day.totalKg} kg</span>
                                              </div>
                                              
-                                             <div className="flex space-x-2 pt-1">
+                                             <div className="flex space-x-1.5 pt-1">
                                                 <button 
-                                                   onClick={() => generateSingleDayPlanReport(day, masterProfiles)}
-                                                   title="Descargar Ficha de Planta (PDF)"
-                                                   className="flex-1 py-2 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg text-[10px] font-black uppercase tracking-wider border border-blue-500/20 flex items-center justify-center transition-all"
+                                                   onClick={() => generateSingleDayArbitradeReport(day, masterProfiles)}
+                                                   title="Descargar Ficha Oficial Arbitrade (2 Páginas A4 Horizontal)"
+                                                   className="flex-1 py-2 bg-amber-600/10 hover:bg-amber-600 text-amber-400 hover:text-white rounded-lg text-[9px] font-black uppercase tracking-wider border border-amber-500/20 flex items-center justify-center transition-all"
                                                 >
-                                                   <FileText className="w-3 h-3 mr-1" /> Ficha PDF
+                                                   <FileSpreadsheet className="w-3 h-3 mr-1" /> Arbitrade (2P)
+                                                </button>
+                                                <button 
+                                                   onClick={() => generateSingleDaySummaryReport(day, masterProfiles)}
+                                                   title="Descargar Ficha Resumida de Planta (Formato Anterior A4 Vertical)"
+                                                   className="flex-1 py-2 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg text-[9px] font-black uppercase tracking-wider border border-blue-500/20 flex items-center justify-center transition-all"
+                                                >
+                                                   <FileText className="w-3 h-3 mr-1" /> Resumida (1P)
                                                 </button>
                                                 <button 
                                                    onClick={() => handleLaunchDay(day)} 
