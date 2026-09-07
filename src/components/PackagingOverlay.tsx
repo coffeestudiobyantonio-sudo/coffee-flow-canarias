@@ -133,39 +133,40 @@ export const PackagingOverlay: React.FC<PackagingOverlayProps> = ({ task, onClos
        const kg_500g = customTotalKg * ((formatSplit['500g'] || 0) / 100);
        const kg_250g = customTotalKg * ((formatSplit['250g'] || 0) / 100);
 
-       const bx_1 = Math.floor(kg_1kg / 12);
-       const bx_500 = Math.floor(kg_500g / 12);
-       const bx_250 = Math.floor(kg_250g / 12);
+       const bx_1 = Math.floor(kg_1kg / 10);
+       const bx_500 = Math.floor(kg_500g / 10);
+       const bx_250 = Math.floor(kg_250g / 10);
 
        const totalBoxes = bx_1 + bx_500 + bx_250;
+       const estimatedPallets = (totalBoxes / 48).toFixed(2);
 
        summary = (
           <div className="space-y-4">
              <div className="bg-[#1e222b] p-4 rounded-xl border border-dashboard-border">
-                <span className="text-xs font-bold text-gray-500 uppercase">Salida en Cajas (Península)</span>
+                <span className="text-xs font-bold text-gray-500 uppercase">Salida en Cajas (Península & Tenerife)</span>
                 <div className="flex flex-col space-y-2 mt-2">
                    {bx_1 > 0 && (
                       <div className="flex justify-between items-center text-sm">
-                         <span className="text-white">Formato 1kg (12kg/cj):</span>
+                         <span className="text-white">Formato 1kg (10kg/cj - 10 paquetes):</span>
                          <span className="font-mono text-green-400">{bx_1} Cajas</span>
                       </div>
                    )}
                    {bx_500 > 0 && (
                       <div className="flex justify-between items-center text-sm">
-                         <span className="text-white">Formato 500g (12kg/cj):</span>
+                         <span className="text-white">Formato 500g (10kg/cj - 20 paquetes):</span>
                          <span className="font-mono text-green-400">{bx_500} Cajas</span>
                       </div>
                    )}
                    {bx_250 > 0 && (
                       <div className="flex justify-between items-center text-sm">
-                         <span className="text-white">Formato 250g (12kg/cj):</span>
+                         <span className="text-white">Formato 250g (10kg/cj - 40 paquetes):</span>
                          <span className="font-mono text-green-400">{bx_250} Cajas</span>
                       </div>
                    )}
                 </div>
                 <div className="mt-4 pt-4 border-t border-white/5 flex justify-between items-center">
                    <span className="text-xs font-black text-gray-400 uppercase">Total Logística:</span>
-                   <span className="text-lg font-black text-white">{totalBoxes} Cajas Totales</span>
+                   <span className="text-sm font-black text-white">{totalBoxes} Cajas ({estimatedPallets} Pallets de 48cj)</span>
                 </div>
              </div>
           </div>

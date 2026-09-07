@@ -886,41 +886,169 @@ export const generateSummaryPlanReport = (
       });
    });
 
-   // Cajas y Jaulas Globales según operativa Canarias & Península
-   let totalGlobalBoxes = 0;
-   let totalGlobalJaulas = 0;
+   // -------------------------------------------------------------------------
+   // NORMALIZACIÓN LOGÍSTICA: REGLA DE CANARIAS Y PENÍNSULA
+   // - Tueste en Las Palmas (Gran Canaria).
+   // - Timanfaya 1 kg: Todos los meses, 800 kg son para Tenerife (en cajas de 10 kg = 80 cj = 1.67 pal).
+   // - El resto de Timanfaya 1 kg se consume en Gran Canaria en jaulas de 400 kg (0 cajas).
+   // - Gran Canaria no utiliza cajas de cartón excepto para Maurice Alicanto 250 g (40 pk/cj = 10 kg).
+   // - Resto de delegaciones (Tenerife y Península): siempre en cajas de 10 kg y pallets de 48 cajas (480 kg).
+   // -------------------------------------------------------------------------
 
-   if (demands && demands.length > 0) {
-      demands.forEach(d => {
-         const isGC = (d.delegation || '').toLowerCase().includes('gran canaria');
-         const isTimanfaya1kg = (d.profileName || '').toLowerCase().includes('timanfaya') && d.format === '1000g';
-         const isAlicanto250 = (d.profileName || '').toLowerCase().includes('alicanto') && d.format === '250g';
+   interface NormalizedDemandItem {
+      delegation: string;
+      profileName: string;
+      format: string;
+      kg: number;
+      packages: number;
+      boxesCount: number;
+      palletsCount: number;
+      jaulasCount: number;
+      packagingNote: string;
+      isJaulas: boolean;
+   }
 
-         if (isGC) {
-            if (isTimanfaya1kg) {
-               totalGlobalJaulas += (d.kgRequested || 0) / 400;
-            } else if (isAlicanto250) {
-               totalGlobalBoxes += (d.kgRequested || 0) / 10;
-            }
-         } else {
-            // Fuera de Gran Canaria (Tenerife y Península): todo en cajas (10 kg por caja)
-            totalGlobalBoxes += (d.kgRequested || 0) / 10;
-         }
-      });
-   } else {
-      // Fallback
+   const normalizedDemands: NormalizedDemandItem[] = [];
+
+   // Obtenemos demandas base
+   const rawDemands = (demands && demands.length > 0)
+      ? demands.filter(d => d.status !== 'COMPLETED' && d.status !== 'REVIEWED')
+      : [];
+
+   // Si no hay demandas explícitas, sintetizamos a partir de los bloques de producción calculados
+   if (rawDemands.length === 0) {
       Object.values(globalBlocks).forEach(b => {
-         totalGlobalBoxes += b.totalKg / 10;
+         rawDemands.push({
+            id: `SYNTH-${b.profileName}`,
+            delegation: 'Gran Canaria',
+            profileName: b.profileName,
+            format: b.format,
+            kgRequested: b.totalKg,
+            totalPackages: Math.round(b.totalKg / getFormatWeight(b.format))
+         });
       });
    }
 
+   // 1. Separar Timanfaya 1kg del resto
+   const timanfayaDemands = rawDemands.filter(d => 
+      (d.profileName || '').toLowerCase().includes('timanfaya') && (d.format === '1000g' || !d.format)
+   );
+   const otherDemands = rawDemands.filter(d => 
+      !((d.profileName || '').toLowerCase().includes('timanfaya') && (d.format === '1000g' || !d.format))
+   );
+
+   if (timanfayaDemands.length > 0) {
+      const totalTimanfayaKg = timanfayaDemands.reduce((sum, d) => sum + (d.kgRequested || 0), 0);
+      const existingTfDemand = timanfayaDemands.find(d => (d.delegation || '').toLowerCase().includes('tenerife'));
+      // Fijo mensual: 800 kg para Tenerife (o el valor especificado si hay una demanda concreta)
+      const tfKg = existingTfDemand ? (existingTfDemand.kgRequested || 800) : 800;
+      const gcKg = Math.max(0, totalTimanfayaKg - tfKg);
+
+      // Tenerife: 800 kg en cajas (80 cajas, 1.67 pallets)
+      const tfBoxes = Math.round(tfKg / 10);
+      const tfPallets = tfBoxes / BOXES_PER_PALLET;
+      normalizedDemands.push({
+         delegation: 'Tenerife',
+         profileName: timanfayaDemands[0].profileName || 'MAURICE TIMANFAYA 1 KG',
+         format: '1000g',
+         kg: tfKg,
+         packages: tfKg,
+         boxesCount: tfBoxes,
+         palletsCount: tfPallets,
+         jaulasCount: 0,
+         packagingNote: 'Cajas (Envío Tenerife - 80 cj)',
+         isJaulas: false
+      });
+
+      // Gran Canaria: Resto en jaulas de 400 kg (0 cajas)
+      if (gcKg > 0) {
+         const gcJaulas = gcKg / 400;
+         normalizedDemands.push({
+            delegation: 'Gran Canaria',
+            profileName: timanfayaDemands[0].profileName || 'MAURICE TIMANFAYA 1 KG',
+            format: '1000g',
+            kg: gcKg,
+            packages: gcKg,
+            boxesCount: 0,
+            palletsCount: 0,
+            jaulasCount: gcJaulas,
+            packagingNote: 'Jaulas 400 kg (Local GC)',
+            isJaulas: true
+         });
+      }
+   }
+
+   // 2. Procesar el resto de demandas
+   otherDemands.forEach(d => {
+      const kg = d.kgRequested || 0;
+      const fmt = d.format || '1000g';
+      const weightPerPkg = getFormatWeight(fmt);
+      const packages = Math.round(kg / weightPerPkg);
+
+      const delLower = (d.delegation || '').toLowerCase();
+      const isGC = delLower.includes('gran canaria') || delLower === 'canarias' || delLower === 'las palmas';
+      const isTF = delLower.includes('tenerife');
+      const isAlicanto250 = (d.profileName || '').toLowerCase().includes('alicanto') && fmt === '250g';
+
+      if (isGC) {
+         if (isAlicanto250) {
+            const boxes = Math.round(kg / 10);
+            const pallets = boxes / BOXES_PER_PALLET;
+            normalizedDemands.push({
+               delegation: 'Gran Canaria',
+               profileName: d.profileName || 'GAMA',
+               format: fmt,
+               kg,
+               packages,
+               boxesCount: boxes,
+               palletsCount: pallets,
+               jaulasCount: 0,
+               packagingNote: 'Cajas (Excepción GC)',
+               isJaulas: false
+            });
+         } else {
+            const jaulas = kg / 400;
+            normalizedDemands.push({
+               delegation: 'Gran Canaria',
+               profileName: d.profileName || 'GAMA',
+               format: fmt,
+               kg,
+               packages,
+               boxesCount: 0,
+               palletsCount: 0,
+               jaulasCount: jaulas,
+               packagingNote: 'Jaulas Locales (Sin Cajas)',
+               isJaulas: true
+            });
+         }
+      } else {
+         const boxes = Math.round(kg / 10);
+         const pallets = boxes / BOXES_PER_PALLET;
+         normalizedDemands.push({
+            delegation: d.delegation || 'CENTRAL',
+            profileName: d.profileName || 'GAMA',
+            format: fmt,
+            kg,
+            packages,
+            boxesCount: boxes,
+            palletsCount: pallets,
+            jaulasCount: 0,
+            packagingNote: isTF ? 'Pallet / Cajas (Tenerife)' : 'Pallet / Cajas',
+            isJaulas: false
+         });
+      }
+   });
+
+   // Totales Globales
+   const totalGlobalBoxes = normalizedDemands.reduce((acc, item) => acc + item.boxesCount, 0);
+   const totalGlobalJaulas = normalizedDemands.reduce((acc, item) => acc + item.jaulasCount, 0);
    const totalGlobalPallets = totalGlobalBoxes / BOXES_PER_PALLET;
 
    // Resumen Ejecutivo (KPIs con Cajas reales, Pallets y Jaulas GC)
    const kpiRows = [
       ['Jornadas Programadas:', `${days.length} Días de Tueste`, 'Total Café Tostado:', `${globalTotalRoasted.toLocaleString()} kg`],
       ['Total Café Verde:', `${globalTotalGreen.toLocaleString()} kg`, 'Total Sacos Verde:', `${Object.values(globalGreenByOrigin).reduce((acc: number, v: any) => acc + v.sacks, 0)} sacos`],
-      ['Cajas a Fabricar (10kg):', `${Math.round(totalGlobalBoxes).toLocaleString()} cajas`, 'Expedición Pallets / Jaulas:', `${totalGlobalPallets.toFixed(1)} pal (48c) + ${totalGlobalJaulas.toFixed(1)} jlas GC`]
+      ['Cajas a Fabricar (10kg):', `${Math.round(totalGlobalBoxes).toLocaleString()} cajas`, 'Expedición Pallets / Jaulas:', `${totalGlobalPallets.toFixed(2)} pal (48c) + ${totalGlobalJaulas.toFixed(1)} jlas GC`]
    ];
 
    autoTable(doc, {
@@ -985,17 +1113,18 @@ export const generateSummaryPlanReport = (
       let boxesText = `${Math.round(p.totalKg / 10)} cj (${unitsPerBox} ud/cj)`;
       let palletsText = `${(p.totalKg / 480).toFixed(2)} pal`;
 
-      if (isTimanfaya1kg && demands && demands.length > 0) {
+      if (isTimanfaya1kg) {
          // Desglose de Timanfaya 1kg entre Jaulas GC y Cajas Tenerife
-         const tfDemand = demands.find(d => (d.delegation || '').toLowerCase().includes('tenerife') && (d.profileName || '').toLowerCase().includes('timanfaya'));
-         const tfKg = tfDemand ? (tfDemand.kgRequested || 400) : 400; // Por defecto 40 cj = 400kg
-         const gcKg = Math.max(0, p.totalKg - tfKg);
+         // Regla fija: 800 kg mensuales para Tenerife (80 cj, 1.67 pal) y el resto en jaulas de 400kg para Gran Canaria
+         const tfDemand = normalizedDemands.find(d => d.delegation.toLowerCase().includes('tenerife') && d.profileName.toLowerCase().includes('timanfaya'));
+         const tfKg = tfDemand ? tfDemand.kg : 800;
          const tfBoxes = Math.round(tfKg / 10);
-         const gcJaulas = (gcKg / 400).toFixed(1);
          const tfPal = (tfBoxes / BOXES_PER_PALLET).toFixed(2);
+         const gcKg = Math.max(0, p.totalKg - tfKg);
+         const gcJaulas = (gcKg / 400).toFixed(1);
 
          boxesText = `${tfBoxes} cj TF (10ud) + ${gcKg}kg GC`;
-         palletsText = `${gcJaulas} jlas GC (400k) + ${tfPal} pal TF`;
+         palletsText = `${gcJaulas} jlas GC (400k) + ${tfPal} pal TF (80 cj)`;
       }
 
       return [
@@ -1037,108 +1166,28 @@ export const generateSummaryPlanReport = (
    doc.text('3. DISTRIBUCIÓN Y PALLETS POR GAMA Y DELEGACIÓN (Logística Canarias & Península):', 15, yOffset);
    yOffset += 2.5;
 
-   const delegationRows: any[] = [];
+   const delegationRows = normalizedDemands.map(item => [
+      item.delegation,
+      item.profileName,
+      item.format,
+      `${item.kg.toLocaleString()} kg`,
+      item.packages.toLocaleString(),
+      item.isJaulas ? '0 cj (Jaulas)' : `${item.boxesCount} cj`,
+      item.isJaulas ? `${item.jaulasCount.toFixed(1)} jaulas` : `${item.palletsCount.toFixed(2)} pal`,
+      item.packagingNote
+   ]);
+
    const delegationSummary: { [key: string]: { kg: number, boxes: number, pallets: number, jaulas: number } } = {};
-
-   if (demands && demands.length > 0) {
-      demands.forEach(d => {
-         const kg = d.kgRequested || 0;
-         const fmt = d.format || '1000g';
-         const weightPerPkg = getFormatWeight(fmt);
-         const packages = Math.round(kg / weightPerPkg);
-
-         const isGC = (d.delegation || '').toLowerCase().includes('gran canaria');
-         const isTenerife = (d.delegation || '').toLowerCase().includes('tenerife');
-         const isTimanfaya1kg = (d.profileName || '').toLowerCase().includes('timanfaya') && fmt === '1000g';
-         const isAlicanto250 = (d.profileName || '').toLowerCase().includes('alicanto') && fmt === '250g';
-
-         let boxesCount = 0;
-         let boxesCol = '';
-         let palletsCol = '';
-         let packagingNote = '';
-
-         if (isGC) {
-            if (isTimanfaya1kg) {
-               const jaulas = (kg / 400).toFixed(1);
-               boxesCol = '0 cj (Jaulas)';
-               palletsCol = `${jaulas} jaulas`;
-               packagingNote = 'Jaulas 400 kg (Local GC)';
-            } else if (isAlicanto250) {
-               boxesCount = Math.round(kg / 10);
-               const pallets = boxesCount / BOXES_PER_PALLET;
-               boxesCol = `${boxesCount} cj`;
-               palletsCol = `${pallets.toFixed(2)} pal`;
-               packagingNote = 'Cajas (Excepción GC)';
-            } else {
-               boxesCol = '0 cj (Jaulas)';
-               palletsCol = '--';
-               packagingNote = 'Jaulas Locales (Sin Cajas)';
-            }
-         } else if (isTenerife) {
-            boxesCount = Math.round(kg / 10);
-            const pallets = boxesCount / BOXES_PER_PALLET;
-            boxesCol = `${boxesCount} cj`;
-            palletsCol = `${pallets.toFixed(2)} pal`;
-            if (isTimanfaya1kg) {
-               packagingNote = 'Cajas (Envío Tenerife)';
-            } else {
-               packagingNote = 'Pallet / Cajas (Tenerife)';
-            }
-         } else {
-            // Península / otras delegaciones
-            boxesCount = Math.round(kg / 10);
-            const pallets = boxesCount / BOXES_PER_PALLET;
-            boxesCol = `${boxesCount} cj`;
-            palletsCol = `${pallets.toFixed(2)} pal`;
-            packagingNote = 'Pallet / Cajas';
-         }
-
-         delegationRows.push([
-            d.delegation || 'CENTRAL',
-            d.profileName || 'GAMA',
-            fmt,
-            `${kg.toLocaleString()} kg`,
-            packages.toLocaleString(),
-            boxesCol,
-            palletsCol,
-            packagingNote
-         ]);
-
-         const delKey = d.delegation || 'CENTRAL';
-         if (!delegationSummary[delKey]) {
-            delegationSummary[delKey] = { kg: 0, boxes: 0, pallets: 0, jaulas: 0 };
-         }
-         delegationSummary[delKey].kg += kg;
-         delegationSummary[delKey].boxes += boxesCount;
-         if (boxesCount > 0) {
-            delegationSummary[delKey].pallets += boxesCount / BOXES_PER_PALLET;
-         }
-         if (isGC && isTimanfaya1kg) {
-            delegationSummary[delKey].jaulas += kg / 400;
-         }
-      });
-   } else {
-      // Fallback
-      Object.values(globalBlocks).forEach(b => {
-         const kg = b.totalKg;
-         const fmt = b.format;
-         const weightPerPkg = getFormatWeight(fmt);
-         const packages = Math.round(kg / weightPerPkg);
-         const boxes = Math.round(kg / 10);
-         const pallets = boxes / BOXES_PER_PALLET;
-
-         delegationRows.push([
-            'PLANTA CENTRAL',
-            b.profileName,
-            fmt,
-            `${kg.toLocaleString()} kg`,
-            packages.toLocaleString(),
-            `${boxes} cj`,
-            `${pallets.toFixed(2)} pal`,
-            'Pallet / Cajas'
-         ]);
-      });
-   }
+   normalizedDemands.forEach(item => {
+      const delKey = item.delegation;
+      if (!delegationSummary[delKey]) {
+         delegationSummary[delKey] = { kg: 0, boxes: 0, pallets: 0, jaulas: 0 };
+      }
+      delegationSummary[delKey].kg += item.kg;
+      delegationSummary[delKey].boxes += item.boxesCount;
+      delegationSummary[delKey].pallets += item.palletsCount;
+      delegationSummary[delKey].jaulas += item.jaulasCount;
+   });
 
    autoTable(doc, {
       startY: yOffset,
@@ -1170,7 +1219,7 @@ export const generateSummaryPlanReport = (
       const delSummaryText = Object.entries(delegationSummary)
          .map(([del, data]) => {
             const parts = [];
-            if (data.boxes > 0) parts.push(`${Math.round(data.boxes)} cj = ${data.pallets.toFixed(1)} pal`);
+            if (data.boxes > 0) parts.push(`${Math.round(data.boxes)} cj = ${data.pallets.toFixed(2)} pal`);
             if (data.jaulas > 0) parts.push(`${data.jaulas.toFixed(1)} jlas (400k)`);
             return `${del.toUpperCase()}: ${data.kg.toLocaleString()} kg (${parts.join(' + ') || 'Jaulas locales'})`;
          })

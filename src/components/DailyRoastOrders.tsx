@@ -52,7 +52,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
    const [demands, setDemands] = useState<DelegationDemand[]>([]);
    const [plannedDays, setPlannedDays] = useState<DailyPlan[]>([]);
    const [newDemand, setNewDemand] = useState<Partial<DelegationDemand>>({
-      delegation: 'Canarias',
+      delegation: 'Gran Canaria',
       format: '1000g',
       kgRequested: 1890,
       totalPackages: 1890
@@ -482,7 +482,8 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
       });
       
       // Reset input maintaining format and sync
-      const defaultKg = 1890;
+      const isTimanfayaTf = (newDemand.delegation || '').toLowerCase().includes('tenerife') && (newDemand.profileName || '').toLowerCase().includes('timanfaya');
+      const defaultKg = isTimanfayaTf ? 800 : 1890;
       setNewDemand(prev => ({ 
          ...prev, 
          kgRequested: defaultKg, 
@@ -1278,7 +1279,15 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                               {demands.map((d) => (
                                  <tr key={d.id} className="hover:bg-white/5 transition-colors">
                                     <td className="px-6 py-4">
-                                       <span className="bg-coffee-accent/10 px-2 py-1 rounded text-[10px] font-bold text-coffee-light border border-coffee-accent/20 uppercase tracking-widest">{d.delegation}</span>
+                                       <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black border uppercase tracking-wider ${
+                                          d.delegation?.toLowerCase().includes('tenerife')
+                                             ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                                             : d.delegation?.toLowerCase().includes('gran canaria')
+                                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                                : 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                                       }`}>
+                                          {d.delegation}
+                                       </span>
                                     </td>
                                     <td className="px-6 py-4 font-black text-white">{d.profileName}</td>
                                     <td className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">{d.format}</td>
@@ -1297,7 +1306,17 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                                           <span className="text-gray-600 text-[9px] font-black uppercase tracking-widest">Pendiente</span>
                                        )}
                                     </td>
-                                    <td className="px-6 py-4 font-mono font-bold text-white">{d.kgRequested} kg</td>
+                                    <td className="px-6 py-4 font-mono font-bold text-white">
+                                       <div>{d.kgRequested} kg</div>
+                                       <div className="text-[10px] text-gray-400 font-sans font-normal">
+                                          {d.profileName?.toLowerCase().includes('timanfaya')
+                                             ? d.delegation?.toLowerCase().includes('tenerife')
+                                                ? '80 cj (1.67 pal) Cajas'
+                                                : `${((d.kgRequested || 0)/400).toFixed(1)} jaulas (400k)`
+                                             : `${Math.round((d.kgRequested || 0)/10)} cj (${((d.kgRequested || 0)/480).toFixed(2)} pal)`
+                                          }
+                                       </div>
+                                    </td>
                                     <td className="px-6 py-4 text-center">
                                        <button 
                                           onClick={() => handleRemoveDemand(d.id)}
@@ -1314,85 +1333,123 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
                      </div>
 
                      {/* Add Demand Form */}
-                     <form onSubmit={handleAddDemand} className="bg-[#14161a] p-6 rounded-xl border border-dashboard-border flex flex-col lg:flex-row items-end gap-4 shadow-inner">
-                        <div className="flex-1 w-full relative">
-                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Delegación Destino</label>
-                           <select required value={newDemand.delegation || ''} onChange={e => setNewDemand({...newDemand, delegation: e.target.value})}
-                                   className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-coffee-light font-bold">
-                              <option value="" disabled>-- Selecciona... --</option>
-                              <option value="Madrid">Madrid</option>
-                              <option value="Barcelona">Barcelona</option>
-                              <option value="Valencia">Valencia</option>
-                              <option value="Málaga">Málaga</option>
-                              <option value="Granada">Granada</option>
-                              <option value="Canarias">Canarias</option>
-                           </select>
-                        </div>
-                        <div className="flex-1 w-full">
-                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Perfil Requerido</label>
-                           <select required value={newDemand.profileName || ''} 
-                                   onChange={e => {
-                                      const pName = e.target.value;
-                                      let detectedFormat = newDemand.format || '1000g';
-                                      
-                                      // Automatic format detection (More robust matching)
-                                      const normalizedName = pName.toLowerCase();
-                                      if (normalizedName.includes('250')) detectedFormat = '250g';
-                                      else if (normalizedName.includes('500')) detectedFormat = '500g';
-                                      else if (normalizedName.includes('450')) detectedFormat = '450g';
-                                      else if (normalizedName.includes('1 kg') || normalizedName.includes('1000')) detectedFormat = '1000g';
+                     <form onSubmit={handleAddDemand} className="bg-[#14161a] p-6 rounded-xl border border-dashboard-border flex flex-col gap-4 shadow-inner">
+                        <div className="flex flex-col lg:flex-row items-end gap-4 w-full">
+                           <div className="flex-1 w-full relative">
+                              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Delegación Destino</label>
+                              <select required value={newDemand.delegation || ''} 
+                                      onChange={e => {
+                                         const del = e.target.value;
+                                         const isTimanfaya = (newDemand.profileName || '').toLowerCase().includes('timanfaya');
+                                         if (del === 'Tenerife' && isTimanfaya) {
+                                            setNewDemand(prev => ({
+                                               ...prev,
+                                               delegation: del,
+                                               kgRequested: 800,
+                                               totalPackages: 800
+                                            }));
+                                         } else {
+                                            setNewDemand(prev => ({ ...prev, delegation: del }));
+                                         }
+                                      }}
+                                      className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-coffee-light font-bold">
+                                 <option value="" disabled>-- Selecciona... --</option>
+                                 <option value="Gran Canaria">Gran Canaria (Planta Las Palmas)</option>
+                                 <option value="Tenerife">Tenerife</option>
+                                 <option value="Madrid">Madrid</option>
+                                 <option value="Barcelona">Barcelona</option>
+                                 <option value="Valencia">Valencia</option>
+                                 <option value="Málaga">Málaga</option>
+                                 <option value="Granada">Granada</option>
+                                 <option value="Canarias">Canarias (Otras Islas)</option>
+                              </select>
+                           </div>
+                           <div className="flex-1 w-full">
+                              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Perfil Requerido</label>
+                              <select required value={newDemand.profileName || ''} 
+                                      onChange={e => {
+                                         const pName = e.target.value;
+                                         let detectedFormat = newDemand.format || '1000g';
+                                         
+                                         // Automatic format detection (More robust matching)
+                                         const normalizedName = pName.toLowerCase();
+                                         if (normalizedName.includes('250')) detectedFormat = '250g';
+                                         else if (normalizedName.includes('500')) detectedFormat = '500g';
+                                         else if (normalizedName.includes('450')) detectedFormat = '450g';
+                                         else if (normalizedName.includes('1 kg') || normalizedName.includes('1000')) detectedFormat = '1000g';
 
-                                      const weight = getFormatWeight(detectedFormat);
-                                      setNewDemand(prev => ({
-                                         ...prev,
-                                         profileName: pName,
-                                         format: detectedFormat as any,
-                                         totalPackages: Math.round((prev.kgRequested || 0) / weight)
-                                      }));
-                                   }}
-                                   className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-coffee-light font-bold">
-                              <option value="" disabled>Selecciona...</option>
-                              {masterProfiles.map(p => <option key={p?.name} value={p?.name}>{p?.name}</option>)}
-                           </select>
+                                         const isTimanfaya = normalizedName.includes('timanfaya');
+                                         const isTenerife = (newDemand.delegation || '').toLowerCase().includes('tenerife');
+                                         const targetKg = (isTimanfaya && isTenerife) ? 800 : (newDemand.kgRequested || 1890);
+
+                                         const weight = getFormatWeight(detectedFormat);
+                                         setNewDemand(prev => ({
+                                            ...prev,
+                                            profileName: pName,
+                                            format: detectedFormat as any,
+                                            kgRequested: targetKg,
+                                            totalPackages: Math.round(targetKg / weight)
+                                         }));
+                                      }}
+                                      className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-coffee-light font-bold">
+                                 <option value="" disabled>Selecciona...</option>
+                                 {masterProfiles.map(p => <option key={p?.name} value={p?.name}>{p?.name}</option>)}
+                              </select>
+                           </div>
+                           <div className="w-full lg:w-40 relative">
+                              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Formato</label>
+                              <select required value={newDemand.format} 
+                                      onChange={e => {
+                                         const newFmt = e.target.value as any;
+                                         const weight = getFormatWeight(newFmt);
+                                         setNewDemand(prev => ({
+                                            ...prev,
+                                            format: newFmt,
+                                            totalPackages: Math.round((prev.kgRequested || 0) / weight)
+                                         }));
+                                      }}
+                                      className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-blue-400 focus:outline-none focus:border-blue-500 font-bold font-mono">
+                                 <option value="250g">250g</option>
+                                 <option value="450g">450g</option>
+                                 <option value="500g">500g</option>
+                                 <option value="1000g">1000g</option>
+                                 <option value="2KG">2KG</option>
+                                 <option value="GRANEL">GRANEL</option>
+                              </select>
+                           </div>
+                           <div className="w-full lg:w-40 relative">
+                              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Total Kilos</label>
+                              <input type="number" required min="1" step="0.1"
+                                     value={newDemand.kgRequested || ''} 
+                                     onChange={e => syncKgAndPackages('KG', Number(e.target.value), newDemand.format || '1000g')}
+                                     className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white font-mono focus:outline-none focus:border-coffee-light" />
+                           </div>
+                           <div className="w-full lg:w-40 relative">
+                              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Total Paquetes</label>
+                              <input type="number" required min="1" step="1"
+                                     value={newDemand.totalPackages || ''} 
+                                     onChange={e => syncKgAndPackages('PKG', Number(e.target.value), newDemand.format || '1000g')}
+                                     className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-yellow-500 font-mono focus:outline-none focus:border-yellow-500" />
+                           </div>
+                           <button type="submit" className="w-full lg:w-auto px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold tracking-widest uppercase rounded-lg border border-gray-600 transition-colors">
+                              Añadir
+                           </button>
                         </div>
-                        <div className="w-full lg:w-40 relative">
-                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Formato</label>
-                           <select required value={newDemand.format} 
-                                   onChange={e => {
-                                      const newFmt = e.target.value as any;
-                                      const weight = getFormatWeight(newFmt);
-                                      setNewDemand(prev => ({
-                                         ...prev,
-                                         format: newFmt,
-                                         totalPackages: Math.round((prev.kgRequested || 0) / weight)
-                                      }));
-                                   }}
-                                   className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-blue-400 focus:outline-none focus:border-blue-500 font-bold font-mono">
-                              <option value="250g">250g</option>
-                              <option value="450g">450g</option>
-                              <option value="500g">500g</option>
-                              <option value="1000g">1000g</option>
-                              <option value="2KG">2KG</option>
-                              <option value="GRANEL">GRANEL</option>
-                           </select>
-                        </div>
-                        <div className="w-full lg:w-40 relative">
-                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Total Kilos</label>
-                           <input type="number" required min="1" step="0.1"
-                                  value={newDemand.kgRequested || ''} 
-                                  onChange={e => syncKgAndPackages('KG', Number(e.target.value), newDemand.format || '1000g')}
-                                  className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-white font-mono focus:outline-none focus:border-coffee-light" />
-                        </div>
-                        <div className="w-full lg:w-40 relative">
-                           <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Total Paquetes</label>
-                           <input type="number" required min="1" step="1"
-                                  value={newDemand.totalPackages || ''} 
-                                  onChange={e => syncKgAndPackages('PKG', Number(e.target.value), newDemand.format || '1000g')}
-                                  className="w-full bg-[#1e222b] border border-dashboard-border rounded-lg px-4 py-3 text-yellow-500 font-mono focus:outline-none focus:border-yellow-500" />
-                        </div>
-                        <button type="submit" className="w-full lg:w-auto px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold tracking-widest uppercase rounded-lg border border-gray-600 transition-colors">
-                           Añadir
-                        </button>
+
+                        {/* Logistics Note for Timanfaya in Canarias */}
+                        {newDemand.profileName?.toLowerCase().includes('timanfaya') && (
+                           <div className="w-full text-xs font-bold pt-1">
+                              {newDemand.delegation?.toLowerCase().includes('tenerife') ? (
+                                 <div className="text-blue-300 bg-blue-500/10 border border-blue-500/20 px-3.5 py-2 rounded-lg flex items-center">
+                                    📦 <span className="ml-2 font-black text-white">Logística Tenerife:</span> Cuota mensual fija de 800 kg (800 paquetes = 80 cajas de cartón de 10kg = 1.67 pallets de 48 cjs).
+                                 </div>
+                              ) : (
+                                 <div className="text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3.5 py-2 rounded-lg flex items-center">
+                                    🧺 <span className="ml-2 font-black text-white">Logística Gran Canaria (Planta):</span> Envasado local en jaulas metálicas de 400 kg (400 paquetes, sin cajas).
+                                 </div>
+                              )}
+                           </div>
+                        )}
                      </form>
                   </div>
 
