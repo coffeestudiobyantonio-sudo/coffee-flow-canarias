@@ -958,7 +958,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
                                              <div className="flex items-center space-x-2 flex-wrap gap-2">
                                                 <button
-                                                   onClick={() => generateSummaryPlanReport(record.days, masterProfiles, record.month)}
+                                                   onClick={() => generateSummaryPlanReport(record.days, masterProfiles, record.month, record.demands || demands)}
                                                    className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase px-3.5 py-2 rounded-xl flex items-center shadow transition-all active:scale-95"
                                                    title="Descargar Plan Resumido PDF (Formato Anterior)"
                                                 >
@@ -1485,7 +1485,7 @@ const DailyRoastOrders: React.FC<DailyRoastOrdersProps> = ({ masterProfiles, roa
 
                                     {/* Pestaña / Botón 1: Formato Anterior Resumido */}
                                     <button 
-                                       onClick={() => generateSummaryPlanReport(plannedDays, masterProfiles, selectedMonth)}
+                                       onClick={() => generateSummaryPlanReport(plannedDays, masterProfiles, selectedMonth, demands)}
                                        className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center shadow-lg transition-all active:scale-95"
                                        title="Plan General Resumido: Portada ejecutiva, aprovisionamiento mensual de verde y fichas compactas de cada jornada"
                                     >

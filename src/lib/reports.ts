@@ -805,7 +805,12 @@ export const generateSingleDaySummaryReport = (day: DailyPlan, masterProfiles: M
    doc.save(`FICHA_RESUMIDA_PLANTA_DIA_${day.dayIndex}_${dayLabel}.pdf`);
 };
 
-export const generateSummaryPlanReport = (days: DailyPlan[], masterProfiles: MasterProfile[], monthStr?: string) => {
+export const generateSummaryPlanReport = (
+   days: DailyPlan[],
+   masterProfiles: MasterProfile[],
+   monthStr?: string,
+   demands: any[] = []
+) => {
    const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -818,7 +823,27 @@ export const generateSummaryPlanReport = (days: DailyPlan[], masterProfiles: Mas
       year: 'numeric' 
    });
 
-   // PÁGINA 1: PORTADA EJECUTIVA Y APROVISIONAMIENTO
+   const BOXES_PER_PALLET = 40;
+
+   const getUnitsPerBox = (format: string): number => {
+      switch (format) {
+         case '1000g': return 10;
+         case '500g': return 20;
+         case '450g': return 20;
+         case '250g': return 40;
+         case '2KG': return 5;
+         default: return 10;
+      }
+   };
+
+   const getKgPerBox = (format: string): number => {
+      const weight = getFormatWeight(format);
+      return Number((weight * getUnitsPerBox(format)).toFixed(2));
+   };
+
+   // -------------------------------------------------------------------------
+   // PÁGINA 1: PORTADA EJECUTIVA Y LOGÍSTICA DE PALLETS
+   // -------------------------------------------------------------------------
    doc.setFillColor(30, 34, 43);
    doc.rect(0, 0, 210, 30, 'F');
    doc.setTextColor(217, 119, 6);
@@ -826,10 +851,10 @@ export const generateSummaryPlanReport = (days: DailyPlan[], masterProfiles: Mas
    doc.setFont('helvetica', 'bold');
    doc.text('COFFEE FLOW - PLAN GENERAL DE TUESTE', 15, 13);
    doc.setTextColor(255, 255, 255);
-   doc.setFontSize(9);
-   doc.text(`PLANIFICACIÓN MENSUAL Y APROVISIONAMIENTO DE CAFÉ VERDE | ${monthStr || 'MES COMPLETO'}`, 15, 22);
+   doc.setFontSize(8.5);
+   doc.text(`PLANIFICACIÓN MENSUAL, APROVISIONAMIENTO Y LOGÍSTICA DE PALLETS | ${monthStr || 'MES COMPLETO'}`, 15, 22);
 
-   let yOffset = 38;
+   let yOffset = 36;
 
    let globalTotalRoasted = 0;
    let globalTotalGreen = 0;
@@ -866,10 +891,19 @@ export const generateSummaryPlanReport = (days: DailyPlan[], masterProfiles: Mas
       });
    });
 
-   // Resumen Ejecutivo
+   // Cajas y Pallets Globales
+   let totalGlobalBoxes = 0;
+   Object.values(globalBlocks).forEach(b => {
+      const kgBox = getKgPerBox(b.format);
+      totalGlobalBoxes += b.totalKg / kgBox;
+   });
+   const totalGlobalPallets = totalGlobalBoxes / BOXES_PER_PALLET;
+
+   // Resumen Ejecutivo (KPIs con Pallets y Cajas)
    const kpiRows = [
-      ['Jornadas de Producción:', `${days.length} Días de Tueste`, 'Total Café Tostado Neto:', `${globalTotalRoasted.toFixed(1)} kg`],
-      ['Total Café Verde Necesario:', `${globalTotalGreen.toFixed(1)} kg`, 'Total Sacos Verde:', `${Object.values(globalGreenByOrigin).reduce((acc: number, v: any) => acc + v.sacks, 0)} sacos`]
+      ['Jornadas Programadas:', `${days.length} Días de Tueste`, 'Total Café Tostado:', `${globalTotalRoasted.toLocaleString()} kg`],
+      ['Total Café Verde:', `${globalTotalGreen.toLocaleString()} kg`, 'Total Sacos Verde:', `${Object.values(globalGreenByOrigin).reduce((acc: number, v: any) => acc + v.sacks, 0)} sacos`],
+      ['Cajas Totales Estimadas:', `${Math.round(totalGlobalBoxes).toLocaleString()} cajas`, 'Pallets Totales Estimados:', `${totalGlobalPallets.toFixed(1)} pallets (40 cj/pal)`]
    ];
 
    autoTable(doc, {
@@ -877,23 +911,23 @@ export const generateSummaryPlanReport = (days: DailyPlan[], masterProfiles: Mas
       margin: { left: 15, right: 15 },
       body: kpiRows as any,
       theme: 'grid',
-      styles: { fontSize: 8.5, cellPadding: 2 },
+      styles: { fontSize: 8, cellPadding: 1.8 },
       columnStyles: {
-         0: { fontStyle: 'bold', fillColor: [240, 240, 240], cellWidth: 48 },
-         1: { fontStyle: 'bold', textColor: [217, 119, 6], cellWidth: 42 },
-         2: { fontStyle: 'bold', fillColor: [240, 240, 240], cellWidth: 48 },
-         3: { fontStyle: 'bold', textColor: [30, 120, 30], cellWidth: 42 }
+         0: { fontStyle: 'bold', fillColor: [240, 240, 240], cellWidth: 46 },
+         1: { fontStyle: 'bold', textColor: [217, 119, 6], cellWidth: 44 },
+         2: { fontStyle: 'bold', fillColor: [240, 240, 240], cellWidth: 46 },
+         3: { fontStyle: 'bold', textColor: [30, 120, 30], cellWidth: 44 }
       }
    });
 
-   yOffset = (doc as any).lastAutoTable.finalY + 8;
+   yOffset = (doc as any).lastAutoTable.finalY + 6;
 
-   // Tabla 1: Aprovisionamiento de Café Verde por Origen
-   doc.setFontSize(10);
+   // 1. Tabla 1: Aprovisionamiento de Café Verde por Origen
+   doc.setFontSize(9.5);
    doc.setFont('helvetica', 'bold');
    doc.setTextColor(40, 40, 40);
    doc.text('1. APROVISIONAMIENTO DE CAFÉ VERDE (Necesidades de Almacén / Compras):', 15, yOffset);
-   yOffset += 3;
+   yOffset += 2.5;
 
    const greenRows = Object.entries(globalGreenByOrigin).map(([origin, val]: any) => {
       const pct = globalTotalGreen > 0 ? ((val.kg / globalTotalGreen) * 100).toFixed(1) : '0';
@@ -912,37 +946,166 @@ export const generateSummaryPlanReport = (days: DailyPlan[], masterProfiles: Mas
       head: [['Origen / Variedad', 'Peso por Saco', 'Kg Verde Requerido', 'Total Sacos Necesarios', '% del Consumo']] as any,
       body: greenRows as any,
       theme: 'striped',
-      headStyles: { fillColor: [40, 40, 40], fontSize: 8 },
-      styles: { fontSize: 8, cellPadding: 1.8 }
+      headStyles: { fillColor: [40, 40, 40], fontSize: 7.5 },
+      styles: { fontSize: 7.5, cellPadding: 1.5 }
    });
 
-   yOffset = (doc as any).lastAutoTable.finalY + 8;
+   yOffset = (doc as any).lastAutoTable.finalY + 6;
 
-   // Tabla 2: Gamas y Formatos Mensuales
-   doc.setFontSize(10);
+   // 2. Tabla 2: Pallets Totales por Gama a Hacer
+   doc.setFontSize(9.5);
    doc.setFont('helvetica', 'bold');
    doc.setTextColor(40, 40, 40);
-   doc.text('2. DESGLOSE MENSUAL POR GAMA Y FORMATO:', 15, yOffset);
-   yOffset += 3;
+   doc.text('2. LOGÍSTICA DE PRODUCCIÓN: PALLETS Y CAJAS TOTALES POR GAMA:', 15, yOffset);
+   yOffset += 2.5;
 
-   const productRows = Object.values(globalBlocks).map(p => [
-      p.profileName,
-      p.format,
-      `${p.totalKg.toFixed(1)} kg`,
-      p.days.map(d => `Día ${d}`).join(', ')
-   ]);
+   const productLogisticsRows = Object.values(globalBlocks).map(p => {
+      const weightPerPkg = getFormatWeight(p.format);
+      const unitsPerBox = getUnitsPerBox(p.format);
+      const kgPerBox = getKgPerBox(p.format);
+      const totalPackages = Math.round(p.totalKg / weightPerPkg);
+      const boxes = p.totalKg / kgPerBox;
+      const pallets = boxes / BOXES_PER_PALLET;
+
+      return [
+         p.profileName,
+         p.format,
+         `${p.totalKg.toLocaleString()} kg`,
+         totalPackages.toLocaleString(),
+         `${Math.round(boxes)} cj (${unitsPerBox} ud/cj)`,
+         `${pallets.toFixed(2)} pal (${Math.floor(pallets)} pal + ${Math.round(boxes % BOXES_PER_PALLET)} cj)`,
+         p.days.map(d => `Día ${d}`).join(', ')
+      ];
+   });
 
    autoTable(doc, {
       startY: yOffset,
       margin: { left: 15, right: 15 },
-      head: [['Gama / Perfil', 'Formato', 'Total Tostado Previsto', 'Jornadas de Fabricación']] as any,
-      body: productRows as any,
+      head: [['Gama / Perfil', 'Formato', 'Total Tostado', 'Paquetes', 'Cajas Estimadas', 'Pallets Totales (40 cj/pal)', 'Jornadas']] as any,
+      body: productLogisticsRows as any,
       theme: 'striped',
-      headStyles: { fillColor: [80, 80, 80], fontSize: 8 },
-      styles: { fontSize: 8, cellPadding: 1.8 }
+      headStyles: { fillColor: [217, 119, 6], fontSize: 7.5, textColor: [255, 255, 255] },
+      styles: { fontSize: 7.5, cellPadding: 1.5 },
+      columnStyles: {
+         0: { fontStyle: 'bold', cellWidth: 44 },
+         1: { cellWidth: 16 },
+         2: { fontStyle: 'bold', cellWidth: 22 },
+         3: { cellWidth: 20 },
+         4: { cellWidth: 28 },
+         5: { fontStyle: 'bold', cellWidth: 32 },
+         6: { cellWidth: 18 }
+      }
    });
 
-   // PÁGINAS SIGUIENTES: HOJA DE TRABAJO DE CADA DÍA
+   yOffset = (doc as any).lastAutoTable.finalY + 6;
+
+   // 3. Tabla 3: Pallets Totales por Gama por Delegación
+   doc.setFontSize(9.5);
+   doc.setFont('helvetica', 'bold');
+   doc.setTextColor(40, 40, 40);
+   doc.text('3. DISTRIBUCIÓN Y PALLETS POR GAMA Y DELEGACIÓN:', 15, yOffset);
+   yOffset += 2.5;
+
+   const delegationRows: any[] = [];
+   const delegationSummary: { [key: string]: { kg: number, boxes: number, pallets: number } } = {};
+
+   if (demands && demands.length > 0) {
+      demands.forEach(d => {
+         const kg = d.kgRequested || 0;
+         const fmt = d.format || '1000g';
+         const weightPerPkg = getFormatWeight(fmt);
+                  const kgPerBox = getKgPerBox(fmt);
+         const packages = Math.round(kg / weightPerPkg);
+         const boxes = kg / kgPerBox;
+         const pallets = boxes / BOXES_PER_PALLET;
+
+         // Regla logística Canarias: Gran Canaria en jaulas locales salvo Alicanto 250g
+         const isGC = (d.delegation || '').toLowerCase().includes('gran canaria');
+         const isAlicanto250 = (d.profileName || '').toLowerCase().includes('alicanto') && fmt === '250g';
+         let packagingNote = 'Pallet / Cajas';
+         if (isGC) {
+            packagingNote = isAlicanto250 ? 'Cajas (Excepción GC)' : 'Jaulas Locales (Sin Cajas)';
+         }
+
+         delegationRows.push([
+            d.delegation || 'CENTRAL',
+            d.profileName || 'GAMA',
+            fmt,
+            `${kg.toLocaleString()} kg`,
+            packages.toLocaleString(),
+            `${Math.round(boxes)} cj`,
+            `${pallets.toFixed(2)} pal`,
+            packagingNote
+         ]);
+
+         const delKey = d.delegation || 'CENTRAL';
+         if (!delegationSummary[delKey]) {
+            delegationSummary[delKey] = { kg: 0, boxes: 0, pallets: 0 };
+         }
+         delegationSummary[delKey].kg += kg;
+         delegationSummary[delKey].boxes += boxes;
+         delegationSummary[delKey].pallets += pallets;
+      });
+   } else {
+      // Si no hay demandas explícitas, mostrar distribución proporcional por gamas planificadas
+      Object.values(globalBlocks).forEach(b => {
+         const kg = b.totalKg;
+         const fmt = b.format;
+         const weightPerPkg = getFormatWeight(fmt);
+         const kgPerBox = getKgPerBox(fmt);
+         const packages = Math.round(kg / weightPerPkg);
+         const boxes = kg / kgPerBox;
+         const pallets = boxes / BOXES_PER_PALLET;
+
+         delegationRows.push([
+            'PLANTA CENTRAL',
+            b.profileName,
+            fmt,
+            `${kg.toLocaleString()} kg`,
+            packages.toLocaleString(),
+            `${Math.round(boxes)} cj`,
+            `${pallets.toFixed(2)} pal`,
+            'Pallet / Cajas'
+         ]);
+      });
+   }
+
+   autoTable(doc, {
+      startY: yOffset,
+      margin: { left: 15, right: 15 },
+      head: [['Delegación', 'Gama Solicitada', 'Formato', 'Kg Pedidos', 'Paquetes', 'Cajas', 'Pallets (40c)', 'Tipo Expedición']] as any,
+      body: delegationRows as any,
+      theme: 'grid',
+      headStyles: { fillColor: [40, 40, 40], fontSize: 7.5 },
+      styles: { fontSize: 7, cellPadding: 1.4 },
+      columnStyles: {
+         0: { fontStyle: 'bold', fillColor: [248, 248, 248], cellWidth: 26 },
+         1: { fontStyle: 'bold', cellWidth: 42 },
+         2: { cellWidth: 15 },
+         3: { fontStyle: 'bold', cellWidth: 20 },
+         4: { cellWidth: 18 },
+         5: { cellWidth: 16 },
+         6: { fontStyle: 'bold', textColor: [217, 119, 6], cellWidth: 20 },
+         7: { cellWidth: 23, fontSize: 6.5 }
+      }
+   });
+
+   yOffset = (doc as any).lastAutoTable.finalY + 4;
+
+   // Resumen inline por delegación
+   if (Object.keys(delegationSummary).length > 0) {
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(80, 80, 80);
+      const delSummaryText = Object.entries(delegationSummary)
+         .map(([del, data]) => `${del.toUpperCase()}: ${data.kg.toLocaleString()} kg (${Math.round(data.boxes)} cj = ${data.pallets.toFixed(1)} pal)`)
+         .join('   |   ');
+      doc.text(`Totales Expedición: ${delSummaryText}`, 15, yOffset);
+   }
+
+   // -------------------------------------------------------------------------
+   // PÁGINAS SIGUIENTES: HOJA DE TRABAJO INDIVIDUAL DE CADA DÍA
+   // -------------------------------------------------------------------------
    days.forEach(day => {
       doc.addPage();
       renderDayWorksheet(doc, day, masterProfiles, today);
