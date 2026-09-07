@@ -123,7 +123,7 @@ export const generatePackagingOrderReport = (orders: DailyRoastOrder[], demands:
    doc.text('ARBITRADE - ORDEN DE ENVASADO Y LOGÍSTICA', 15, 15);
    doc.setTextColor(255, 255, 255);
    doc.setFontSize(10);
-   doc.text(`PLAN DE ENVASADO - JORNADA ${today} | 1 Caja = 12kg | 1 Pallet = 40 Cajas`, 15, 22);
+   doc.text(`PLAN DE ENVASADO - JORNADA ${today} | 1 Caja = 10kg | 1 Pallet = 48 Cajas (480kg)`, 15, 22);
 
    const packagingTasks = orders.flatMap(o => o.tasks.filter(t => t.type === 'BLEND'));
 
@@ -134,8 +134,8 @@ export const generatePackagingOrderReport = (orders: DailyRoastOrder[], demands:
       
       const totalKg = t.targetWeightKg;
       const packages = Math.round(totalKg / weight);
-      const boxes = totalKg / 12;
-      const pallets = boxes / 40;
+      const boxes = totalKg / 10;
+      const pallets = boxes / 48;
 
       // Find delegation from demands
       let delegation = 'STOCK / PROPIA';
@@ -167,7 +167,7 @@ export const generatePackagingOrderReport = (orders: DailyRoastOrder[], demands:
 
    autoTable(doc, {
       startY: 40,
-      head: [['#', 'Delegación', 'Gama', 'Formato', 'Total Kg', 'Paquetes', 'Cajas (12kg)', 'Pallets (40c)', 'Silos']],
+      head: [['#', 'Delegación', 'Gama', 'Formato', 'Total Kg', 'Paquetes', 'Cajas (10kg)', 'Pallets (48c)', 'Silos']],
       body: tableRows,
       headStyles: { fillColor: [30, 34, 43], fontSize: 9 },
       styles: { fontSize: 9, halign: 'center' },
@@ -220,7 +220,7 @@ export const generatePalletShippingReport = (orders: DailyRoastOrder[], demands:
       doc.text(`DELEGACIÓN: ${delegation}`, 15, currentY);
       currentY += 5;
 
-      // Group into pallets (480kg per pallet = 40 boxes of 12kg)
+      // Group into pallets (480kg per pallet = 48 boxes of 10kg)
       const PALLET_CAPACITY_KG = 480;
       let pallets: { kg: number, items: { name: string, kg: number }[] }[] = [{ kg: 0, items: [] }];
 
@@ -244,7 +244,7 @@ export const generatePalletShippingReport = (orders: DailyRoastOrder[], demands:
 
       const palletRows = pallets.map((p, idx) => [
          `PALLET #${idx + 1}`,
-         p.items.map(i => `${i.name}: ${Math.ceil(i.kg / 12)} cj (${i.kg.toFixed(1)}kg)`).join('\n'),
+         p.items.map(i => `${i.name}: ${Math.ceil(i.kg / 10)} cj (${i.kg.toFixed(1)}kg)`).join('\n'),
          `${p.kg.toFixed(1)} kg`,
          Math.ceil(p.kg / 12).toString() + ' Cajas'
       ]);
@@ -823,7 +823,7 @@ export const generateSummaryPlanReport = (
       year: 'numeric' 
    });
 
-   const BOXES_PER_PALLET = 40;
+   const BOXES_PER_PALLET = 48;
 
    const getUnitsPerBox = (format: string): number => {
       switch (format) {
@@ -836,9 +836,8 @@ export const generateSummaryPlanReport = (
       }
    };
 
-   const getKgPerBox = (format: string): number => {
-      const weight = getFormatWeight(format);
-      return Number((weight * getUnitsPerBox(format)).toFixed(2));
+   const getKgPerBox = (_format: string): number => {
+      return 10; // 10 kilos cada caja para todos los formatos
    };
 
    // -------------------------------------------------------------------------
@@ -903,7 +902,7 @@ export const generateSummaryPlanReport = (
    const kpiRows = [
       ['Jornadas Programadas:', `${days.length} Días de Tueste`, 'Total Café Tostado:', `${globalTotalRoasted.toLocaleString()} kg`],
       ['Total Café Verde:', `${globalTotalGreen.toLocaleString()} kg`, 'Total Sacos Verde:', `${Object.values(globalGreenByOrigin).reduce((acc: number, v: any) => acc + v.sacks, 0)} sacos`],
-      ['Cajas Totales Estimadas:', `${Math.round(totalGlobalBoxes).toLocaleString()} cajas`, 'Pallets Totales Estimados:', `${totalGlobalPallets.toFixed(1)} pallets (40 cj/pal)`]
+      ['Cajas Totales Estimadas:', `${Math.round(totalGlobalBoxes).toLocaleString()} cajas (10 kg/cj)`, 'Pallets Totales Estimados:', `${totalGlobalPallets.toFixed(1)} pallets (48 cj/pal = 480 kg)`]
    ];
 
    autoTable(doc, {
@@ -956,7 +955,7 @@ export const generateSummaryPlanReport = (
    doc.setFontSize(9.5);
    doc.setFont('helvetica', 'bold');
    doc.setTextColor(40, 40, 40);
-   doc.text('2. LOGÍSTICA DE PRODUCCIÓN: PALLETS Y CAJAS TOTALES POR GAMA:', 15, yOffset);
+   doc.text('2. LOGÍSTICA DE PRODUCCIÓN: PALLETS Y CAJAS TOTALES POR GAMA (48 Cajas / Pallet):', 15, yOffset);
    yOffset += 2.5;
 
    const productLogisticsRows = Object.values(globalBlocks).map(p => {
@@ -981,7 +980,7 @@ export const generateSummaryPlanReport = (
    autoTable(doc, {
       startY: yOffset,
       margin: { left: 15, right: 15 },
-      head: [['Gama / Perfil', 'Formato', 'Total Tostado', 'Paquetes', 'Cajas Estimadas', 'Pallets Totales (40 cj/pal)', 'Jornadas']] as any,
+      head: [['Gama / Perfil', 'Formato', 'Total Tostado', 'Paquetes', 'Cajas (10kg/cj)', 'Pallets Totales (48 cj/pal)', 'Jornadas']] as any,
       body: productLogisticsRows as any,
       theme: 'striped',
       headStyles: { fillColor: [217, 119, 6], fontSize: 7.5, textColor: [255, 255, 255] },
@@ -1003,7 +1002,7 @@ export const generateSummaryPlanReport = (
    doc.setFontSize(9.5);
    doc.setFont('helvetica', 'bold');
    doc.setTextColor(40, 40, 40);
-   doc.text('3. DISTRIBUCIÓN Y PALLETS POR GAMA Y DELEGACIÓN:', 15, yOffset);
+   doc.text('3. DISTRIBUCIÓN Y PALLETS POR GAMA Y DELEGACIÓN (48 Cajas / Pallet):', 15, yOffset);
    yOffset += 2.5;
 
    const delegationRows: any[] = [];
@@ -1073,7 +1072,7 @@ export const generateSummaryPlanReport = (
    autoTable(doc, {
       startY: yOffset,
       margin: { left: 15, right: 15 },
-      head: [['Delegación', 'Gama Solicitada', 'Formato', 'Kg Pedidos', 'Paquetes', 'Cajas', 'Pallets (40c)', 'Tipo Expedición']] as any,
+      head: [['Delegación', 'Gama Solicitada', 'Formato', 'Kg Pedidos', 'Paquetes', 'Cajas (10kg)', 'Pallets (48c)', 'Tipo Expedición']] as any,
       body: delegationRows as any,
       theme: 'grid',
       headStyles: { fillColor: [40, 40, 40], fontSize: 7.5 },
